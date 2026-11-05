@@ -1,0 +1,398 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>__PAGE_TITLE__</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=Yomogi&display=swap">
+<style>
+  /* 画面は「動画のコマ」なので画風ごとに 1 つの見た目に固定する（テーマ切替なし） */
+  :root { --page: #101216; --ink: #e8e8e4; --muted: #9a9fa8; --line: #2a2e35; --accent: #ffd54a; color-scheme: dark; }
+  :root.board { --page: #f4f5f2; --ink: #22262b; --muted: #6a6f76; --line: #d5d8d2; --accent: #1f5fbf; color-scheme: light; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body { background: var(--page); color: var(--ink); font: 14px/1.5 "Noto Sans JP", system-ui, sans-serif;
+         padding-block: 12px; padding-left: max(12px, env(safe-area-inset-left, 0px)); padding-right: max(12px, env(safe-area-inset-right, 0px)); }
+  .wrap { max-width: 1080px; margin: 0 auto; display: grid; gap: 10px; }
+  svg#stage { width: 100%; height: auto; display: block; border-radius: 6px; aspect-ratio: 16 / 9; max-width: 100%; }
+  .bar { display: flex; align-items: center; gap: 12px; }
+  .bar button { font: inherit; font-weight: 700; color: var(--ink); background: transparent; border: 1px solid var(--line);
+                border-radius: 999px; padding: 6px 16px; cursor: pointer; min-width: 92px; }
+  .bar button:hover, .bar button:focus-visible { border-color: var(--accent); outline: none; }
+  .bar input[type=range] { flex: 1; min-width: 0; accent-color: var(--accent); }
+  .bar output { font-variant-numeric: tabular-nums; color: var(--muted); min-width: 92px; text-align: right; }
+  .err { color: #e5534b; }
+  @media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto; } }
+</style>
+<script src="https://cdn.jsdelivr.net/npm/elkjs@0.9.3/lib/elk.bundled.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/roughjs@4.6.6/bundled/rough.js"></script>
+</head>
+<body>
+<div class="wrap">
+  <svg id="stage" viewBox="0 0 1280 720" role="img" aria-label="経費申請の流れの解説アニメーション"></svg>
+  <div class="bar">
+    <button id="play" type="button">▶ 再生</button>
+    <input id="seek" type="range" min="0" max="1000" value="0" aria-label="再生位置">
+    <output id="clock">0:00 / 0:00</output>
+  </div>
+  <div id="msg" class="err" hidden></div>
+</div>
+<script>
+// ===== 入力（ビルド時に埋め込む）=====
+const THEME_NAME = "__THEME__";
+const SCENE = __SCENE__;          // 台本（宣言型。座標は書かない）
+const TIMELINE = __TIMELINE__;    // 音声の時刻表（行ごとの start / dur / commas）
+const AUDIO_B64 = "__AUDIO__";    // ナレーション mp3（WebAudio で鳴らす）
+
+// ===== 画風 =====
+const THEMES = {
+  "3b1b": {
+    rough: false, bg: "#14171c", font: '"Noto Sans JP", sans-serif', weight: 500,
+    ink: "#ececea", muted: "#8b919b", edge: "#7d838d", label: "#aab1bb",
+    band: "rgba(255,255,255,0.025)", bandLine: "rgba(255,255,255,0.07)", bandText: "#6d737c",
+    kinds: { actor: "#58c4dd", process: "#83c167", external: "#c59eff" },
+    fillAlpha: 0.13, dot: "#ffd54a", removed: "#fc6255", hl: "#ffd54a",
+    subBg: "rgba(0,0,0,0.55)", subInk: "#f2f2ee", titleInk: "#ececea", glow: true,
+  },
+  board: {
+    rough: true, bg: "#ffffff", font: '"Yomogi", "Noto Sans JP", cursive', weight: 400,
+    ink: "#22262b", muted: "#6a6f76", edge: "#3b4048", label: "#3b4048",
+    band: "rgba(0,0,0,0)", bandLine: "#c9ccd1", bandText: "#8a8f96",
+    kinds: { actor: "#1f5fbf", process: "#2e8b57", external: "#8b4fbf" },
+    fillAlpha: 0.18, dot: "#e8a200", removed: "#d63b2f", hl: "#e8a200",
+    subBg: "rgba(255,255,255,0.92)", subInk: "#22262b", titleInk: "#22262b", glow: false,
+  },
+};
+const T = THEMES[THEME_NAME];
+if (THEME_NAME === "board") document.documentElement.classList.add("board");
+
+// ===== 小道具 =====
+const NS = "http://www.w3.org/2000/svg";
+const svg = document.getElementById("stage");
+function el(tag, attrs = {}, parent) { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); if (parent) parent.appendChild(e); return e; }
+const clamp = (x, a = 0, b = 1) => Math.max(a, Math.min(b, x));
+const smooth = x => { x = clamp(x); return x * x * (3 - 2 * x); };          // Manim の smooth に近い
+const ease = x => { x = clamp(x); return x < .5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2; };
+const mix = (a, b, p) => a + (b - a) * p;
+function hexA(hex, a) { const n = parseInt(hex.slice(1), 16); return `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${a})`; }
+const measureCtx = document.createElement("canvas").getContext("2d");
+function textW(s, size) { measureCtx.font = `${T.weight} ${size}px ${T.font}`; return measureCtx.measureText(s).width; }
+let seedN = 7; const nextSeed = () => (seedN = (seedN * 9301 + 49297) % 233280) + 1;
+const RC = T.rough ? rough.svg(svg) : null;
+
+// 図形の部品: strokes は描き順に線を引き、fills はあとから現れる
+function shapeRect(parent, x, y, w, h, color, fillA) {
+  const g = el("g", {}, parent);
+  if (T.rough) {
+    const node = RC.rectangle(x, y, w, h, { seed: nextSeed(), roughness: 1.3, bowing: 1.2, stroke: color, strokeWidth: 2.2,
+      fill: hexA(color, fillA + 0.12), fillStyle: "hachure", hachureGap: 7, fillWeight: 1.4 });
+    g.appendChild(node);
+  } else {
+    el("rect", { x, y, width: w, height: h, rx: 10, fill: hexA(color, fillA), stroke: "none", "data-fill": 1 }, g);
+    el("rect", { x, y, width: w, height: h, rx: 10, fill: "none", stroke: color, "stroke-width": 2.6, "data-stroke": 1 }, g);
+  }
+  return g;
+}
+function shapeLine(parent, pts, color, width = 2.2) {
+  const g = el("g", {}, parent);
+  if (T.rough) {
+    g.appendChild(RC.linearPath(pts, { seed: nextSeed(), roughness: 1.1, bowing: 0.8, stroke: color, strokeWidth: width }));
+  } else {
+    el("path", { d: "M" + pts.map(p => p.join(",")).join("L"), fill: "none", stroke: color, "stroke-width": width, "stroke-linejoin": "round", "data-stroke": 1 }, g);
+  }
+  return g;
+}
+function arrowHead(parent, tip, from, color) {
+  const ang = Math.atan2(tip[1] - from[1], tip[0] - from[0]), L = 13, W = 6.5;
+  const a = [tip[0] - L * Math.cos(ang) + W * Math.sin(ang), tip[1] - L * Math.sin(ang) - W * Math.cos(ang)];
+  const b = [tip[0] - L * Math.cos(ang) - W * Math.sin(ang), tip[1] - L * Math.sin(ang) + W * Math.cos(ang)];
+  const g = el("g", {}, parent);
+  if (T.rough) g.appendChild(RC.linearPath([a, tip, b], { seed: nextSeed(), roughness: 0.8, stroke: color, strokeWidth: 2.2 }));
+  else el("path", { d: `M${a}L${tip}L${b}Z`, fill: color, stroke: color, "stroke-width": 1 }, g);
+  return g;
+}
+function label(parent, x, y, s, size, color, anchor = "middle", weight = T.weight) {
+  const t = el("text", { x, y, "font-size": size, fill: color, "text-anchor": anchor, "dominant-baseline": "central", "font-family": T.font, "font-weight": weight }, parent);
+  t.textContent = s; return t;
+}
+// 線の描き順アニメーション用に、図形の中の path（rough の線も含む）の長さを測って破線に仕込む
+function prepDraw(g) {
+  const paths = [...g.querySelectorAll("path, rect")].filter(p => p.getAttribute("data-fill") == null && (p.getAttribute("stroke") || "none") !== "none");
+  const items = paths.map(p => { const len = p.getTotalLength ? p.getTotalLength() : 1000; p.style.strokeDasharray = `${len} ${len}`; return { p, len }; });
+  const fills = [...g.querySelectorAll("[data-fill], path")].filter(p => p.getAttribute("data-fill") != null || ((p.getAttribute("stroke") || "none") === "none" && (p.getAttribute("fill") || "none") !== "none"));
+  return { items, fills };
+}
+function setDraw(d, p) { for (const { p: path, len } of d.items) path.style.strokeDashoffset = len * (1 - p); for (const f of d.fills) f.style.opacity = smooth((p - 0.55) / 0.45); }
+
+// ===== 配置（ELK）=====
+const STAGE = { x: 40, y: 110, w: 1200, h: 450 };   // 図を置く枠（題の下・字幕の上）
+const NODE_SIZE = 30, LABEL_SIZE = 21;
+async function layout() {
+  const elk = new ELK();
+  const m = SCENE.map;
+  const graph = {
+    id: "root",
+    layoutOptions: { "elk.algorithm": "layered", "elk.direction": m.direction || "RIGHT", "elk.edgeRouting": "ORTHOGONAL",
+      "elk.layered.spacing.nodeNodeBetweenLayers": "70", "elk.spacing.nodeNode": "56", "elk.spacing.edgeLabel": "6",
+      "elk.layered.spacing.edgeNodeBetweenLayers": "30", "elk.randomSeed": "1", "elk.partitioning.activate": "true",
+      "elk.layered.edgeLabels.sideSelection": "ALWAYS_UP" },
+    children: m.nodes.map(n => ({ id: n.id, width: Math.max(120, textW(n.name, NODE_SIZE) + 52), height: 72,
+      layoutOptions: { "elk.partitioning.partition": String(m.layers.findIndex(l => l.members.includes(n.id))) } })),
+    edges: m.edges.map(e => { const [s, t] = e.id.split(">"); return { id: e.id, sources: [s], targets: [t],
+      labels: [{ text: e.label, width: textW(e.label, LABEL_SIZE) + 10, height: LABEL_SIZE + 6 }] }; }),
+  };
+  const r = await elk.layout(graph);
+  const pad = 56;   // 層の帯の余白ぶん
+  const s = Math.min(STAGE.w / (r.width + pad * 2), STAGE.h / (r.height + pad * 2), 1.45);
+  const ox = STAGE.x + (STAGE.w - (r.width + pad * 2) * s) / 2 + pad * s, oy = STAGE.y + (STAGE.h - (r.height + pad * 2) * s) / 2 + pad * s;
+  return { r, s, ox, oy, pad };
+}
+
+// ===== 組み立て =====
+const E = {};        // 登録簿: id → 要素
+let DURATION = TIMELINE.duration;
+async function build() {
+  svg.innerHTML = "";
+  el("rect", { x: 0, y: 0, width: 1280, height: 720, fill: T.bg }, svg);
+  const defs = el("defs", {}, svg);
+  if (T.glow) { const f = el("filter", { id: "glow", x: "-50%", y: "-50%", width: "200%", height: "200%" }, defs); el("feGaussianBlur", { stdDeviation: 4, result: "b" }, f); const mg = el("feMerge", {}, f); el("feMergeNode", { in: "b" }, mg); el("feMergeNode", { in: "SourceGraphic" }, mg); }
+  const { r, s, ox, oy, pad } = await layout();
+  const world = el("g", { transform: `translate(${ox},${oy}) scale(${s})` }, svg);
+  const m = SCENE.map;
+
+  // 題
+  E.title = { kind: "text", g: label(svg, 70, 72, m.title, 34, T.titleInk, "start", 700) };
+  // 層の帯
+  const bandLayer = el("g", {}, world);
+  m.layers.forEach((L, i) => {
+    const kids = r.children.filter(c => L.members.includes(c.id));
+    const x0 = Math.min(...kids.map(c => c.x)) - 34, x1 = Math.max(...kids.map(c => c.x + c.width)) + 34;
+    const g = el("g", {}, bandLayer);
+    if (T.rough) g.appendChild(RC.rectangle(x0, -pad + 6, x1 - x0, r.height + pad * 2 - 12, { seed: nextSeed(), roughness: 0.6, stroke: T.bandLine, strokeWidth: 1, strokeLineDash: [6, 8] }));
+    else el("rect", { x: x0, y: -pad + 6, width: x1 - x0, height: r.height + pad * 2 - 12, rx: 8, fill: T.band, stroke: T.bandLine, "stroke-width": 1 }, g);
+    label(g, (x0 + x1) / 2, -pad + 28, L.name, 19, T.bandText);
+    E["band:" + L.id] = { kind: "fade", g };
+  });
+  // 辺（先に描いてノードの下に）
+  const edgeLayer = el("g", {}, world), nodeLayer = el("g", {}, world), fxLayer = el("g", {}, world);
+  for (const e of r.edges) {
+    const sec = e.sections[0];
+    const pts = [[sec.startPoint.x, sec.startPoint.y], ...(sec.bendPoints || []).map(b => [b.x, b.y]), [sec.endPoint.x, sec.endPoint.y]];
+    const g = el("g", {}, edgeLayer);
+    const line = shapeLine(g, pts, T.edge);
+    const head = arrowHead(g, pts[pts.length - 1], pts[pts.length - 2], T.edge);
+    const geom = el("path", { d: "M" + pts.map(p => p.join(",")).join("L"), fill: "none", stroke: "none" }, g);
+    const lb = e.labels[0];
+    const lg = el("g", {}, edgeLayer);
+    label(lg, lb.x + lb.width / 2, lb.y + lb.height / 2, lb.text, LABEL_SIZE, T.label);
+    E[e.id] = { kind: "edge", g, line, head, geom, pts, draw: null };
+    E["label:" + e.id] = { kind: "fade", g: lg };
+  }
+  // ノード
+  for (const c of r.children) {
+    const n = m.nodes.find(x => x.id === c.id), color = T.kinds[n.kind] || T.ink;
+    const g = el("g", {}, nodeLayer);
+    const box = shapeRect(g, c.x, c.y, c.width, c.height, color, T.fillAlpha);
+    const t = label(g, c.x + c.width / 2, c.y + c.height / 2 + 1, n.name, NODE_SIZE, T.ink);
+    E[c.id] = { kind: "node", g, box, t, cx: c.x + c.width / 2, cy: c.y + c.height / 2, x: c.x, y: c.y, w: c.width, h: c.height, color };
+  }
+  for (const k in E) if (E[k].kind === "node") E[k].draw = prepDraw(E[k].box);
+  for (const k in E) if (E[k].kind === "edge") { E[k].draw = prepDraw(E[k].line); E[k].len = E[k].geom.getTotalLength(); }
+  E.__fx = fxLayer;
+
+  // 字幕とクレジット（画面の一部として描く。mp4 に書き出しても残る）
+  const subG = el("g", {}, svg);
+  E.__sub = { g: subG, bg: el("rect", { rx: 8, fill: T.subBg }, subG), t1: label(subG, 640, 0, "", 27, T.subInk), t2: label(subG, 640, 0, "", 27, T.subInk) };
+  label(svg, 1250, 700, TIMELINE.credit, 14, T.muted, "end");
+  schedule();
+}
+
+// ===== 台本 → 時刻つきの動作の列 =====
+const DEF = { map_show: 0, dot: 0.5, travel: 1.1, respond: 1.2, dim: 0.5, highlight: 0.5, pulse: 0.7, badge: 0.6 };
+let ACTS = [];
+function schedule() {
+  ACTS = [];
+  const dotState = {};      // 点の現在地（台本を読みながら追う）
+  for (const line of SCENE.lines) {
+    const tl = TIMELINE.lines.find(x => x.id === line.id);
+    let cursor = tl.start + 0.15, prevStart = cursor;
+    for (const op of line.ops) {
+      let start = op.with_prev ? prevStart : cursor;
+      if (op.at !== undefined) start = tl.start + (typeof op.at === "string" && op.at.startsWith("、") ? tl.commas[+op.at.slice(1) - 1] : +op.at);
+      let dur = op.dur ?? DEF[op.op];
+      const act = { ...op, start };
+      if (op.op === "map_show") {
+        // ノードを順に描き、続けて辺と辺のラベルを引く
+        const nodes = SCENE.map.nodes.map(n => n.id), edges = SCENE.map.edges.map(e => e.id);
+        act.parts = [{ id: "title", s: 0, d: 0.8 }, ...SCENE.map.layers.map((L, i) => ({ id: "band:" + L.id, s: 0.1 + i * 0.08, d: 0.6 }))];
+        nodes.forEach((id, i) => act.parts.push({ id, s: 0.3 + i * 0.28, d: 0.8 }));
+        const e0 = 0.3 + nodes.length * 0.28 + 0.3;
+        edges.forEach((id, i) => { act.parts.push({ id, s: e0 + i * 0.22, d: 0.7 }); act.parts.push({ id: "label:" + id, s: e0 + i * 0.22 + 0.5, d: 0.4 }); });
+        dur = e0 + edges.length * 0.22 + 0.9;
+      }
+      if (op.op === "dot") { dotState[op.id] = { edge: op.at_edge, f: 0.14 }; act.pt = pointOn(op.at_edge, 0.14); }
+      if (op.op === "travel") {
+        const cur = dotState[op.dot], poly = [];
+        let node = cur.edge.split(">")[1];
+        poly.push(...sampleEdge(cur.edge, cur.f, 1));
+        const path = op.path[0] === node ? op.path.slice(1) : op.path;
+        for (const nxt of path) { const eid = node + ">" + nxt; poly.push(...sampleEdge(eid, 0, 1)); node = nxt; dotState[op.dot] = { edge: eid, f: 1 }; }
+        if (!path.length) dotState[op.dot] = { edge: cur.edge, f: 1 };
+        act.poly = withLengths(poly); dur = op.dur ?? DEF.travel * Math.max(1, path.length || 1);
+        dotState[op.dot].last = act.poly;
+      }
+      if (op.op === "respond") {
+        const last = dotState[op.from].last.pts.slice().reverse();
+        act.poly = withLengths(offsetPoly(last, -20));  // 辺のラベルは上側にあるので、戻りの矢印は下側に
+      }
+      act.end = start + dur;
+      ACTS.push(act);
+      prevStart = start; cursor = start + dur;
+    }
+  }
+  // 応答の矢印・点・札の DOM を先に作る
+  for (const a of ACTS) {
+    if (a.op === "dot") {
+      const g = el("g", {}, E.__fx);
+      el("circle", { r: 10, fill: T.dot, filter: T.glow ? "url(#glow)" : "", stroke: T.rough ? T.ink : "none", "stroke-width": T.rough ? 1.5 : 0 }, g);
+      const tg = el("g", { transform: "translate(0,-36)" }, g);
+      const w = textW(a.tag, 19) + 20;
+      el("rect", { x: -w / 2, y: -16, width: w, height: 32, rx: 16, fill: T.rough ? "#fff" : "rgba(0,0,0,0.6)", stroke: T.dot, "stroke-width": 1.5 }, tg);
+      label(tg, 0, 0, a.tag, 19, T.rough ? T.ink : T.dot);
+      E[a.id] = { kind: "dot", g };
+    }
+    if (a.op === "respond") {
+      const g = el("g", {}, E.__fx), col = T[a.color] || T.removed;
+      const line = shapeLine(g, a.poly.pts, col, 2.6);
+      const pts = a.poly.pts, head = arrowHead(g, pts[pts.length - 1], pts[pts.length - 2], col);
+      const mid = pts[Math.floor(pts.length / 2)];
+      const lg = el("g", {}, g); label(lg, mid[0], mid[1] + 24, a.label, 17, col, "middle", 700);
+      E[a.id] = { kind: "edge", g, line, head, draw: prepDraw(line), lg };
+    }
+    if (a.op === "badge") {
+      const n = E[a.target], g = el("g", {}, E.__fx), w = textW(a.text, 17) + 24;
+      el("rect", { x: n.cx - w / 2, y: n.y + n.h + 14, width: w, height: 32, rx: 16, fill: T.rough ? "#fff" : "rgba(255,213,74,0.14)", stroke: T.hl, "stroke-width": 1.8 }, g);
+      label(g, n.cx, n.y + n.h + 30, a.text, 17, T.rough ? T.ink : T.hl, "middle", 700);
+      E["badge:" + a.target] = { kind: "fade", g };
+    }
+  }
+}
+function pointOn(eid, f) { const e = E[eid]; const p = e.geom.getPointAtLength(e.len * f); return [p.x, p.y]; }
+function sampleEdge(eid, f0, f1) { const out = []; const n = 40; for (let i = 0; i <= n; i++) out.push(pointOn(eid, mix(f0, f1, i / n))); return out; }
+function withLengths(pts) { const L = [0]; for (let i = 1; i < pts.length; i++) L.push(L[i - 1] + Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1])); return { pts, L, total: L[L.length - 1] }; }
+function along(poly, p) { const d = poly.total * p; let i = poly.L.findIndex(x => x >= d); if (i <= 0) return poly.pts[0]; const a = poly.pts[i - 1], b = poly.pts[i], k = (d - poly.L[i - 1]) / ((poly.L[i] - poly.L[i - 1]) || 1); return [mix(a[0], b[0], k), mix(a[1], b[1], k)]; }
+function offsetPoly(pts, d) {
+  const out = pts.map((p, i) => { const a = pts[Math.max(0, i - 1)], b = pts[Math.min(pts.length - 1, i + 1)]; const dx = b[0] - a[0], dy = b[1] - a[1], L = Math.hypot(dx, dy) || 1; return [p[0] - dy / L * d, p[1] + dx / L * d]; });
+  return out.filter((p, i) => i % 3 === 0 || i === out.length - 1);
+}
+
+// ===== 時刻 t の画面（純粋に t だけで決まる）=====
+function render(t) {
+  // 1. 既定の状態（何も出ていない）
+  const st = {};
+  for (const k in E) if (!k.startsWith("__")) st[k] = { show: 0, dim: 1, pulse: 0, hl: 0, pos: null, label: 0 };
+  // 2. 台本の動作を時刻順に重ねる
+  for (const a of ACTS) {
+    if (t < a.start) continue;
+    const p = clamp((t - a.start) / Math.max(0.001, a.end - a.start));
+    if (a.op === "map_show") for (const pt of a.parts) st[pt.id].show = Math.max(st[pt.id].show, clamp((t - a.start - pt.s) / pt.d));
+    if (a.op === "dot") { st[a.id].show = ease(p); st[a.id].pos = a.pt; }
+    if (a.op === "travel") { st[a.dot].pos = along(a.poly, ease(p)); }
+    if (a.op === "respond") { st[a.id].show = ease(clamp(p / 0.8)); st[a.id].label = smooth((p - 0.6) / 0.4); }
+    if (a.op === "dim") for (const id of a.ids) { st[id].dim = Math.min(st[id].dim, mix(1, 0.22, smooth(p))); if (st["label:" + id]) st["label:" + id].dim = st[id].dim; }
+    if (a.op === "highlight") st[a.target].hl = smooth(p);
+    if (a.op === "pulse") st[a.target].pulse = p < 1 ? Math.sin(Math.PI * p) : 0;
+    if (a.op === "badge") st["badge:" + a.target].show = ease(p);
+  }
+  // 3. 状態を DOM に反映
+  for (const k in st) {
+    const e = E[k], s = st[k]; if (!e) continue;
+    if (e.kind === "node") {
+      setDraw(e.draw, smooth(s.show));
+      e.t.style.opacity = smooth((s.show - 0.35) / 0.5);
+      const sc = 1 + 0.1 * s.pulse;
+      e.g.setAttribute("transform", `translate(${e.cx},${e.cy}) scale(${sc}) translate(${-e.cx},${-e.cy})`);
+      e.g.style.opacity = s.dim;
+      e.box.style.filter = s.pulse > 0.01 && T.glow ? `drop-shadow(0 0 ${8 * s.pulse}px ${T.hl})` : "";
+    } else if (e.kind === "edge") {
+      setDraw(e.draw, smooth(s.show));
+      e.head.style.opacity = smooth((s.show - 0.85) / 0.15);
+      e.g.style.opacity = s.dim;
+      if (e.lg) e.lg.style.opacity = s.label;
+      const col = s.hl > 0 ? T.hl : null;
+      for (const pth of e.g.querySelectorAll("path")) if (!e.lg || !e.lg.contains(pth)) { if (col && e.geom !== pth) { pth.style.stroke = col; if (pth.getAttribute("fill") && pth.getAttribute("fill") !== "none") pth.style.fill = col; pth.style.strokeWidth = 3.2; } else { pth.style.stroke = ""; pth.style.fill = ""; pth.style.strokeWidth = ""; } }
+    } else if (e.kind === "dot") {
+      e.g.style.opacity = s.show; if (s.pos) e.g.setAttribute("transform", `translate(${s.pos[0]},${s.pos[1]})`);
+    } else {
+      e.g.style.opacity = smooth(s.show) * s.dim;
+    }
+  }
+  // 字幕
+  const sub = E.__sub, cur = TIMELINE.lines.find(l => t >= l.start - 0.05 && t < l.start + l.dur + 0.35);
+  if (cur) {
+    const lines = wrapSub(cur.sub);
+    sub.t1.textContent = lines[0]; sub.t2.textContent = lines[1] || "";
+    const h = lines.length * 40 + 18, y0 = 690 - h;
+    sub.t1.setAttribute("y", y0 + 9 + 20); sub.t2.setAttribute("y", y0 + 9 + 60);
+    const w = Math.max(...lines.map(s => textW(s, 27))) + 44;
+    Object.entries({ x: 640 - w / 2, y: y0, width: w, height: h }).forEach(([k, v]) => sub.bg.setAttribute(k, v));
+    sub.g.style.opacity = Math.min(smooth((t - cur.start + 0.05) / 0.2), smooth((cur.start + cur.dur + 0.35 - t) / 0.2));
+  } else sub.g.style.opacity = 0;
+}
+function wrapSub(s) {
+  if (textW(s, 27) < 1100) return [s];
+  const mid = s.length / 2; let best = -1;
+  for (let i = 0; i < s.length; i++) if ("、。".includes(s[i]) && (best < 0 || Math.abs(i - mid) < Math.abs(best - mid))) best = i;
+  return best > 0 ? [s.slice(0, best + 1), s.slice(best + 1)] : [s];
+}
+
+// ===== 再生（WebAudio の時計で画を進める）=====
+let ctx = null, buffer = null, srcNode = null, t0 = 0, pausedAt = 0, playing = false;
+const playBtn = document.getElementById("play"), seek = document.getElementById("seek"), clock = document.getElementById("clock");
+const fmt = s => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
+async function ensureAudio() {
+  if (ctx) return;
+  ctx = new (window.AudioContext || window.webkitAudioContext)();
+  const bin = atob(AUDIO_B64), buf = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) buf[i] = bin.charCodeAt(i);
+  buffer = await ctx.decodeAudioData(buf.buffer);
+}
+function now() { return playing ? ctx.currentTime - t0 : pausedAt; }
+function startAt(off) {
+  if (srcNode) { srcNode.onended = null; try { srcNode.stop(); } catch (e) {} }
+  srcNode = ctx.createBufferSource(); srcNode.buffer = buffer; srcNode.connect(ctx.destination);
+  if (off < buffer.duration) srcNode.start(0, off);
+  t0 = ctx.currentTime - off; playing = true; playBtn.textContent = "❚❚ 一時停止";
+}
+playBtn.onclick = async () => {
+  try {
+    await ensureAudio(); if (ctx.state === "suspended") await ctx.resume();
+    if (playing) { pausedAt = now(); playing = false; if (srcNode) { srcNode.onended = null; srcNode.stop(); } playBtn.textContent = "▶ 再生"; }
+    else startAt(pausedAt >= DURATION - 0.05 ? 0 : pausedAt);
+  } catch (e) { showErr("音声を再生できませんでした: " + e.message); }
+};
+seek.oninput = () => { const tt = seek.value / 1000 * DURATION; if (playing) startAt(tt); else { pausedAt = tt; render(tt); tick(); } };
+function tick() {
+  const t = now();
+  if (playing && t >= DURATION) { playing = false; pausedAt = DURATION; playBtn.textContent = "▶ もう一度"; }
+  render(Math.min(t, DURATION));
+  seek.value = Math.round(Math.min(t, DURATION) / DURATION * 1000);
+  clock.textContent = `${fmt(Math.min(t, DURATION))} / ${fmt(DURATION)}`;
+  if (playing) requestAnimationFrame(tick);
+}
+function showErr(m) { const e = document.getElementById("msg"); e.textContent = m; e.hidden = false; }
+// 止まっている間も、図が出そろった時点のコマを見せる
+(async () => {
+  try {
+    await Promise.race([document.fonts.load(`${T.weight} 24px ${T.font}`), new Promise(r => setTimeout(r, 2500))]);
+    await build();
+    pausedAt = TIMELINE.lines[0].start + TIMELINE.lines[0].dur + 0.2;
+    tick();
+    pausedAt = 0; seek.value = 0;   // 再生は頭から
+    const _play = playBtn.onclick; playBtn.onclick = async () => { _play(); requestAnimationFrame(tick); };
+  } catch (e) { showErr("準備に失敗しました: " + e.message); console.error(e); }
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,100 @@
+<title>解説動画の画風比べ</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700&family=IBM+Plex+Mono:wght@400&display=swap">
+<style>
+  /* 試写室: 上に 4 本を切り替える上映枠、下に比べるための表。飾りは上映枠の縁だけ */
+  :root {
+    --bg: #f3f4f6; --surface: #ffffff; --fg: #1b1f27; --muted: #5d6573; --line: #d9dde4; --accent: #2c5ea8; --screen: #0e1013;
+    --ok: #2f7a4b; --warn: #a2620b; --ng: #b23a30;
+    --font-body: "Zen Kaku Gothic New", "Hiragino Sans", "Noto Sans JP", system-ui, sans-serif;
+    --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+  }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+    --bg: #12151a; --surface: #1a1e25; --fg: #e6e8ec; --muted: #9aa2ae; --line: #2c323c; --accent: #8db4ef; --screen: #06070a;
+    --ok: #6cc28f; --warn: #e0a64a; --ng: #f08a80; color-scheme: dark; } }
+  :root[data-theme="dark"] {
+    --bg: #12151a; --surface: #1a1e25; --fg: #e6e8ec; --muted: #9aa2ae; --line: #2c323c; --accent: #8db4ef; --screen: #06070a;
+    --ok: #6cc28f; --warn: #e0a64a; --ng: #f08a80; color-scheme: dark; }
+  body { background: var(--bg); color: var(--fg); font: 15px/1.7 var(--font-body);
+         padding-block: 24px 48px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+  main { max-width: 1040px; margin: 0 auto; display: grid; gap: 20px; }
+  h1 { font-size: 1.6rem; line-height: 1.3; margin: 0; text-wrap: balance; }
+  h2 { font-size: 1.15rem; margin: 0; }
+  .lead { margin: 6px 0 0; color: var(--muted); max-width: 65ch; }
+  .tabs { display: flex; flex-wrap: wrap; gap: 8px; }
+  .tabs button { font: inherit; font-weight: 500; color: var(--fg); background: var(--surface); border: 1px solid var(--line);
+                 border-radius: 8px; padding: 8px 14px; cursor: pointer; text-align: left; display: grid; gap: 0; }
+  .tabs button small { color: var(--muted); font-size: 12px; font-weight: 400; }
+  .tabs button[aria-selected="true"] { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+  .tabs button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .screen { background: var(--screen); border-radius: 10px; padding: 10px; display: grid; gap: 8px; }
+  .screen iframe { width: 100%; aspect-ratio: 16 / 10.4; border: 0; display: block; max-width: 100%; border-radius: 6px; background: var(--screen); }
+  .screen video { width: 100%; aspect-ratio: 16 / 9; display: block; max-width: 100%; border-radius: 6px; background: #000; }
+  .screen .note { color: #b9bec7; font-size: 13px; margin: 0; }
+  .screen .note a { color: #b9d2ff; }
+  .table-wrap { overflow-x: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; }
+  table { border-collapse: collapse; width: 100%; min-width: 760px; font-size: 14px; }
+  th, td { text-align: left; vertical-align: top; padding: 10px 12px; border-bottom: 1px solid var(--line); }
+  thead th { font-weight: 700; background: var(--surface); position: sticky; top: 0; }
+  tbody th { font-weight: 500; color: var(--muted); white-space: nowrap; }
+  tr:last-child th, tr:last-child td { border-bottom: 0; }
+  .ok { color: var(--ok); font-weight: 700; } .warn { color: var(--warn); font-weight: 700; } .ng { color: var(--ng); font-weight: 700; }
+  .foot { color: var(--muted); font-size: 13px; }
+  code { font-family: var(--font-mono); font-size: 0.92em; }
+</style>
+
+<main>
+  <header>
+    <h1>解説動画の画風比べ</h1>
+    <p class="lead">同じ台本・同じ声（VOICEVOX:ずんだもん、約 28 秒）を、4 つの作り方で描きました。題材は架空の「経費申請が支払われるまで」です。上のボタンで切り替え、再生ボタンから音つきで見てください。</p>
+  </header>
+
+  <div class="tabs" role="tablist" aria-label="作り方">
+    <button role="tab" id="t-manim" aria-selected="true" data-panel="manim">① Manim<small>今の作り（mp4）</small></button>
+    <button role="tab" id="t-3b1b" aria-selected="false" data-panel="svg-3b1b">② SVG プレーヤー<small>3b1b 調</small></button>
+    <button role="tab" id="t-board" aria-selected="false" data-panel="svg-board">③ SVG プレーヤー<small>手描き調</small></button>
+    <button role="tab" id="t-mweb" aria-selected="false" data-panel="manimweb">④ manim-web<small>ブラウザ版 Manim</small></button>
+  </div>
+
+  <section class="screen" aria-live="polite">
+    <div id="stage-slot"></div>
+    <p class="note" id="stage-note"></p>
+  </section>
+
+  <section>
+    <h2>作り方ごとの違い</h2>
+  </section>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th scope="col"></th><th scope="col">① Manim</th><th scope="col">② SVG 3b1b 調</th><th scope="col">③ SVG 手描き調</th><th scope="col">④ manim-web</th></tr></thead>
+      <tbody>
+        <tr><th scope="row">描くもの</th><td>Python が mp4 を書き出す</td><td colspan="2">台本 JSON をブラウザのプレーヤーがその場で描く（②と③は画風の定義だけが違う）</td><td>Manim と同じ書き方で、ブラウザの Canvas に描く</td></tr>
+        <tr><th scope="row">claude.ai で動くか</th><td><span class="warn">未確認</span>（描画の部品をその場でビルドする必要がある）</td><td colspan="2"><span class="ok">動く見込み</span>（サンドボックスで HTML 1 枚を作るだけ。検証済みの WebAudio 再生）</td><td><span class="warn">動く見込み・要確認</span>（HTML 1 枚。ただし本体 約 3.2MB を CDN から読むので、claude.ai の Artifact で読めるかは未確認）</td></tr>
+        <tr><th scope="row">作る時間（この 28 秒）</th><td>手元の CPU で描画 約 2〜3 分（720p）</td><td colspan="2">描画は不要（開いた瞬間に描く）。作るのは HTML 1 枚だけ</td><td>描画は不要。ただし今回は座標と動きを 1 場面ずつ手で書いた（作るのに 7 分ほど）</td></tr>
+        <tr><th scope="row">ファイル</th><td>mp4 0.6MB（720p）</td><td colspan="2">HTML 0.32MB（音声込み）</td><td>HTML 0.31MB（音声込み）＋ライブラリ 約 3.2MB（CDN）</td></tr>
+        <tr><th scope="row">配置</th><td>ELK を Python から呼ぶ。凡例・層の帯の詰め方まで作り込み済み</td><td colspan="2">同じ ELK をブラウザで呼ぶ。凡例などの作り込みはまだ</td><td><span class="warn">手置き</span>（座標を直接書いた。自動配置はない）。人のアイコン・斜めの矢印など自由度は高い</td></tr>
+        <tr><th scope="row">見た目の特徴</th><td>文字が大きく、図が画面いっぱいに広がる。字幕は焼き込み</td><td>線を引く・点が流れる動きは①に近い。文字はやや小さめ</td><td>線がペンで描かれていく。非開発者には親しみやすい</td><td>3b1b の配色と細い線で雰囲気は近い。日本語は画像として貼るので、文字を書き順で描く演出は使えない</td></tr>
+        <tr><th scope="row">途中から見る・mp4</th><td>mp4 なのでどこでも再生できる</td><td colspan="2">どこへでも飛べる（画面が時刻 t だけで決まる）。mp4 はブラウザで書き出す想定（未実装）</td><td>Manim 流の play では途中へ飛べず、②と同じく「時刻 t の関数」を自前で書いて飛べるようにした</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="foot">②③④は見比べ用の試作です。④は 0.x 版（manim-web 0.41.0）で、ドキュメントにない不具合を 3 つ回避しています。台本の書き方（ショット DSL）は①の語彙のうち、全体図・点の移動・戻りの矢印・強調・薄くする・札だけを移しています。</p>
+</main>
+
+<script>
+  const PANELS = {
+    "manim": { html: '<video controls preload="metadata" src="manim.mp4"></video>', note: "Manim で描いた mp4 です。字幕は動画に焼き込まれています。" },
+    "svg-3b1b": { html: '<iframe src="svg-3b1b.html" title="SVG プレーヤー 3b1b 調"></iframe>', note: '枠の中の「▶ 再生」で音が出ます。うまく映らないときは <a href="svg-3b1b.html" target="_blank" rel="noopener">別のタブで開く</a>。' },
+    "svg-board": { html: '<iframe src="svg-board.html" title="SVG プレーヤー 手描き調"></iframe>', note: '枠の中の「▶ 再生」で音が出ます。うまく映らないときは <a href="svg-board.html" target="_blank" rel="noopener">別のタブで開く</a>。' },
+    "manimweb": { html: '<iframe src="manimweb.html" title="manim-web"></iframe>', note: '枠の中の再生ボタンで音が出ます。うまく映らないときは <a href="manimweb.html" target="_blank" rel="noopener">別のタブで開く</a>。' },
+  };
+  const slot = document.getElementById("stage-slot"), note = document.getElementById("stage-note");
+  function show(id) {
+    document.querySelectorAll(".tabs button").forEach(b => b.setAttribute("aria-selected", String(b.dataset.panel === id)));
+    slot.innerHTML = PANELS[id].html; note.innerHTML = PANELS[id].note;
+  }
+  document.querySelectorAll(".tabs button").forEach(b => b.addEventListener("click", () => show(b.dataset.panel)));
+  show("manim");
+</script>

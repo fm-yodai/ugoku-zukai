@@ -1,0 +1,46 @@
+{
+ "title": "経費申請が支払われるまで（見比べ用）",
+ "source_label": "架空の経費精算の流れ（見比べ用サンプル）",
+ "speaker": 3,
+ "speed": 1.1,
+ "credit": "VOICEVOX:ずんだもん",
+ "map": {
+  "kind": "layered",
+  "title": "経費申請の流れ",
+  "direction": "RIGHT",
+  "layers": [
+   {"id": "l_req", "name": "申請する人", "members": ["app"]},
+   {"id": "l_sys", "name": "経費システム", "members": ["sys"]},
+   {"id": "l_apr", "name": "承認する人", "members": ["kacho", "bucho"]},
+   {"id": "l_acc", "name": "支払い", "members": ["keiri"]}
+  ],
+  "nodes": [
+   {"id": "app", "name": "申請者", "kind": "actor"},
+   {"id": "sys", "name": "入力チェック", "kind": "process"},
+   {"id": "kacho", "name": "課長", "kind": "actor"},
+   {"id": "bucho", "name": "部長", "kind": "actor"},
+   {"id": "keiri", "name": "経理", "kind": "external"}
+  ],
+  "edges": [
+   {"id": "app>sys", "label": "申請を送る"},
+   {"id": "sys>kacho", "label": "10万円まで"},
+   {"id": "sys>bucho", "label": "10万円超"},
+   {"id": "kacho>keiri", "label": "承認を通知"},
+   {"id": "bucho>keiri", "label": "承認を通知"}
+  ]
+ },
+ "chapters": [
+  {"id": "c1", "title": "経費申請の流れ", "role": "overview", "lines": [
+   {"id": "c1-1", "sub": "経費の申請が、支払いまでどう進むかを見ていきます。", "say": "経費の申請が、支払いまでどう進むかを見ていきます。", "claim": false,
+    "shot": {"type": "map", "ops": [{"op": "map_show", "nodes": ["app", "sys", "kacho", "bucho", "keiri"], "edges": ["app>sys", "sys>kacho", "sys>bucho", "kacho>keiri", "bucho>keiri"]}]}},
+   {"id": "c1-2", "sub": "申請が届くと、システムはまず入力に抜けがないかを確かめます。", "say": "申請が届くと、システムはまず、入力に抜けがないかを確かめます。", "claim": false,
+    "shot": {"type": "travel", "object": "申請", "ops": [{"op": "dot", "id": "req", "at": "app>sys", "tag": "申請 3万円"}, {"op": "travel", "dot": "req", "path": ["sys"]}]}},
+   {"id": "c1-3", "sub": "抜けがあれば、その場で申請者に差し戻します。", "say": "抜けがあれば、その場で申請者に差し戻します。", "claim": false,
+    "shot": {"type": "travel", "object": "申請", "ops": [{"op": "respond", "from": "req", "label": "差し戻し", "id": "back", "color": "removed"}]}},
+   {"id": "c1-4", "sub": "抜けがなければ、金額で承認者が決まります。10万円までは課長、超えると部長です。", "say": "抜けがなければ、金額で承認者が決まります。じゅうまんえんまでは課長、超えると部長です。", "claim": false,
+    "shot": {"type": "travel", "object": "申請", "ops": [{"op": "dim", "ids": ["back"]}, {"op": "travel", "dot": "req", "path": ["sys", "kacho"]}]}},
+   {"id": "c1-5", "sub": "承認されると経理に通知が届き、支払いの予定に入ります。", "say": "承認されると経理に通知が届き、支払いの予定に入ります。", "claim": false,
+    "shot": {"type": "travel", "object": "申請", "ops": [{"op": "travel", "dot": "req", "path": ["kacho", "keiri"]}]}}
+  ]}
+ ]
+}
