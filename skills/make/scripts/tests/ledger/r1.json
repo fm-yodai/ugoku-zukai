@@ -1,0 +1,6 @@
+{"reviewer": "fact-checker", "phase": "script", "round": 1,
+ "checks": [{"criterion": "S-F1", "verdict": "FAIL", "evidence": "全 2 行の source を読んだ。c1-2 だけ言えない"}],
+ "findings": [{"key": "c1-2:S-F1", "line_id": "c1-2", "criterion": "S-F1", "rule": "FC-overclaim", "severity": "should",
+               "problem": "字幕の「必ず」は auth.ts から言えない", "suggestion": "条件を字幕に足す",
+               "evidence": "src/apps/api/src/middleware/auth.ts:82"}],
+ "rechecks": [], "summary": "1 件 FAIL"}

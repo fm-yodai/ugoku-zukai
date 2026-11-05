@@ -1,0 +1,1 @@
+{"mode":"web","structure":"concept","audience":"a","takeaway":"b","claims":[{"id":"K1","text":"x","source":["a:1"]},{"id":"K2","text":"x","source":["https://e 「q」"]},{"id":"K3","text":"x","source":["https://e 「q」"]}],"diagram":{"type":"none","reason":"r","compared":{"layered":"a","sequence":"b","state":"c"}},"budget":{"max_seconds":100,"parts":[{"role":"question","seconds":10}]}}

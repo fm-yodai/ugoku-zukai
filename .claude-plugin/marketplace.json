@@ -1,0 +1,13 @@
+{
+  "name": "ugoku-zukai",
+  "owner": {
+    "name": "fm-yodai"
+  },
+  "plugins": [
+    {
+      "name": "ugoku-zukai",
+      "source": "./",
+      "description": "題材を自然な日本語ナレーション付きの「動く図解」にする（claude.ai と Claude Code の両方で動く）"
+    }
+  ]
+}

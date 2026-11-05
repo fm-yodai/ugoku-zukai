@@ -1,0 +1,50 @@
+{
+ "c1-1": {
+  "path": "~/evx-next/compare/manim/audio/c1-1-50ce2526d7d5.wav",
+  "duration": 4.107,
+  "sub": "経費の申請が、支払いまでどう進むかを見ていきます。",
+  "chapter": "c1",
+  "commas": [
+   1.574
+  ]
+ },
+ "c1-2": {
+  "path": "~/evx-next/compare/manim/audio/c1-2-9e9dc607c9a0.wav",
+  "duration": 5.355,
+  "sub": "申請が届くと、システムはまず入力に抜けがないかを確かめます。",
+  "chapter": "c1",
+  "commas": [
+   1.56,
+   2.904
+  ]
+ },
+ "c1-3": {
+  "path": "~/evx-next/compare/manim/audio/c1-3-18a19b9eee59.wav",
+  "duration": 3.531,
+  "sub": "抜けがあれば、その場で申請者に差し戻します。",
+  "chapter": "c1",
+  "commas": [
+   1.175
+  ]
+ },
+ "c1-4": {
+  "path": "~/evx-next/compare/manim/audio/c1-4-5acc99a058ca.wav",
+  "duration": 6.741,
+  "sub": "抜けがなければ、金額で承認者が決まります。10万円までは課長、超えると部長です。",
+  "chapter": "c1",
+  "commas": [
+   1.326,
+   3.676,
+   5.466
+  ]
+ },
+ "c1-5": {
+  "path": "~/evx-next/compare/manim/audio/c1-5-6c7098d57799.wav",
+  "duration": 4.789,
+  "sub": "承認されると経理に通知が届き、支払いの予定に入ります。",
+  "chapter": "c1",
+  "commas": [
+   2.84
+  ]
+ }
+}

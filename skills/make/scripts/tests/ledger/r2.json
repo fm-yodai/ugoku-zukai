@@ -1,0 +1,5 @@
+{"reviewer": "fact-checker", "phase": "script", "round": 2,
+ "checks": [{"criterion": "S-F1", "verdict": "PASS", "evidence": "全 2 行の source を読み、直した c1-2 も言える"}],
+ "findings": [],
+ "rechecks": [{"key": "c1-2:S-F1", "verdict": "PASS", "evidence": "直した字幕は auth.ts:82 から言える"}],
+ "summary": "合格"}

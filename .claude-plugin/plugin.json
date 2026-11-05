@@ -1,0 +1,10 @@
+{
+  "name": "ugoku-zukai",
+  "version": "0.1.0",
+  "description": "題材（コード・リポジトリ・PR・Web ページ・文書・題目）を、自然な日本語ナレーション付きの「動く図解」にする。claude.ai / Claude Desktop のチャットでも Claude Code でも動く",
+  "author": {
+    "name": "fm-yodai"
+  },
+  "repository": "https://github.com/fm-yodai/ugoku-zukai",
+  "keywords": ["explainer", "video", "animation", "diagram", "voicevox", "japanese"]
+}

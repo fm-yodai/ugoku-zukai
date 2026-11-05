@@ -1,0 +1,8 @@
+{
+  "_doc": "VOICEVOX のユーザー辞書（criteria S-M4）。tts_voicevox.py が合成の前に、表記（surface）が未登録の語だけを POST /user_dict_word で足す（冪等）。pronunciation はカタカナ、accent_type は音が下がる直前のモーラの位置（0 は平板）。合成を聞いて読みの誤りを見つけたら、ここに足す（英字の語は say のカタカナで書くのが先。ここは漢字の技術用語用）",
+  "words": [
+    {"surface": "冪等", "pronunciation": "ベキトウ", "accent_type": 0, "word_type": "COMMON_NOUN", "priority": 7},
+    {"surface": "認可", "pronunciation": "ニンカ", "accent_type": 1, "word_type": "COMMON_NOUN", "priority": 7},
+    {"surface": "再認証", "pronunciation": "サイニンショウ", "accent_type": 3, "word_type": "COMMON_NOUN", "priority": 7}
+  ]
+}

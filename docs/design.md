@@ -1,7 +1,10 @@
-# explain-video-anywhere v2 設計
+# ugoku-zukai（動く図解）設計
+
+前身は個人用のスキル explain-video-anywhere（v1。Manim＋VOICEVOX の Docker）。
 
 - 作成: 2026-11-05
-- 状態: 下書き（画風・描き方の方針まで合意済み。未決事項は末尾）
+- 状態: 下書き（画風・描き方・名前・公開先まで合意済み。未決事項は末尾）
+- リポジトリ: github.com/fm-yodai/ugoku-zukai（非公開で作り、ライセンス表示が整ったら公開する）
 
 ## 1. 目的
 
@@ -21,7 +24,7 @@
 
 ## 3. 検証で確かめた事実（2026-11-05、claude.ai Team）
 
-検証用スキル `probe/evx-probe` を claude.ai で実行した結果。
+検証用スキル `tools/probe/evx-probe` を claude.ai で実行した結果。
 
 - **サンドボックスの通信**: 許可したドメインにだけ届く方式。届くのは GitHub（release-assets を含む）、PyPI、npm、api.anthropic.com など。Google の API、ElevenLabs、Hugging Face、jsDelivr には届かない
 - **サンドボックスの道具**: ffmpeg・node・npm・uv・日本語フォント（IPA、Noto Sans CJK）がある。chromium・docker・sudo はない。CPU 1 つ、メモリ 4GB
@@ -50,7 +53,7 @@
 
 | | Claude Code | claude.ai / Desktop のチャット |
 |---|---|---|
-| 作り手と評価役 | サブエージェントで分ける（v1 の evx-*。評価役は作り手と別のモデルにする） | サブエージェントがないので、1 つの会話で役を順番に演じる。評価役の番では、作り手の推論を読み返さずに基準ファイルだけで判定するよう指示する |
+| 作り手と評価役 | サブエージェントで分ける（`ugoku-zukai:researcher` など。v1 の evx-* を移したもの。評価役は作り手と別のモデルにする） | サブエージェントがないので、1 つの会話で役を順番に演じる。評価役の番では、作り手の推論を読み返さずに基準ファイルだけで判定するよう指示する |
 | 機械検査 | 同じスクリプトを使う | 同じ |
 | VOICEVOX の導入 | `${CLAUDE_PLUGIN_DATA}` に 1 回だけ入れる | 会話のたびに入れる（約 25 秒） |
 | 配置の検査 | node で行う（下の 6.3） | 同じ（サンドボックスにも node がある） |
@@ -72,7 +75,7 @@
 
 ### 5.2 プレーヤー（標準と抜け道）
 
-試作は `compare/svg/player_template.html` にある。
+試作は `prototypes/compare/svg/player_template.html` にある。
 
 - **HTML 1 枚**: 台本 JSON・画風・音声（mp3 の base64）を埋め込む。外部から読むのは elkjs と（手描き調なら）rough.js だけで、どちらも版を固定する。claude.ai で CDN から読めない場合に備え、同梱して直接埋め込む形も用意する（elkjs は約 1.5MB）
 - **画面は時刻 t だけで決まる**: 毎フレーム「既定の状態 → 台本の動作を時刻順に重ねる → DOM に反映」で描く。どこへでも飛べ、mp4 にも同じコマが書き出せる
@@ -140,23 +143,27 @@ v1 は Manim の中で、重なりやはみ出しを機械で検査していた�
 - 声と口調はインタビューで決める。非開発者向けの社内資料では「です・ます」の落ち着いた声を勧める。ずんだもんは語尾が「〜のだ」になる
 - クレジット（例「VOICEVOX:ずんだもん」）は、画面と再生ページの両方に出す
 
-## 8. プラグインの構成（案）
+## 8. プラグインの構成
 
 ```
-evx-next/
-├─ .claude-plugin/plugin.json
-├─ skills/explain-video/
+ugoku-zukai/
+├─ .claude-plugin/plugin.json       プラグインの定義
+├─ .claude-plugin/marketplace.json  単体で入れるためのマーケットプレイス定義（claude plugin marketplace add fm-yodai/ugoku-zukai）
+├─ skills/make/                     本体スキル（/ugoku-zukai:make、「動く図解にして」）
 │   ├─ SKILL.md            進行役。環境の判定と、両環境の手順
-│   ├─ references/         v1 の基準・構成の型・文章の規則・ショット DSL（新しいプレーヤー向けに改める）・manim-web.md
-│   ├─ player/             プレーヤー本体（共通 JS）・テーマ・ビルド用スクリプト
-│   ├─ scripts/            setup_voice.py・tts.py・lint・check_theme・layout_check（node）・ledger.py・build_player.py
-│   └─ assets/             禁止語・読みの辞書の初期値
-├─ agents/                 evx-* （Claude Code 用。チャットでは使われない）
-└─ tools/build_claude_ai_zip.py   claude.ai 用の zip を作る（frontmatter を name と description だけにする）
+│   ├─ references/         v1 の基準・構成の型・文章の規則（移植済み）。ショット DSL・manim-web.md は M1・M5 で書く
+│   ├─ player/             プレーヤー本体（共通 JS）・テーマ（M1）
+│   ├─ scripts/            ledger.py・check_contract.py（移植済み）。setup_voice.py・tts.py・lint・check_theme・layout_check・build_player.py（M1〜M3）
+│   └─ assets/             禁止語・読みの辞書の初期値（移植済み）
+├─ agents/                 researcher / writer / animator / fact-checker / writing-reviewer / director（v1 から移植。Manim 依存の記述は M3 で書き換える）
+├─ prototypes/compare/     画風の見比べと SVG プレーヤーの試作
+├─ tools/probe/            claude.ai の検証用スキル
+├─ tools/build_claude_ai_zip.py   claude.ai 用の zip を作る（frontmatter を name と description だけにする。agents は入れない）
+└─ docs/design.md          この文書
 ```
 
 - **学びの記録**: 使うたびに学んだこと（禁止語・読み・op の提案・較正の例）は `${CLAUDE_PLUGIN_DATA}` に書き、配布する初期値と重ねて読む。claude.ai ではスキルのフォルダに書き込めないので、会話の最後に「足すべき項目」として報告するに留める
-- **パス**: スクリプトのパスは `${CLAUDE_SKILL_DIR}` で書く。エージェント名には `<プラグイン名>:` の接頭辞が付く
+- **パス**: スクリプトのパスは `${CLAUDE_PLUGIN_ROOT}/skills/make/...` で書く。エージェントの `tools:` の中でこの変数が展開されるかはドキュメントに書かれていないので、M3 で確かめる。エージェント名には `ugoku-zukai:` の接頭辞が付く
 
 ## 9. v1 から引き継ぐもの・やめるもの
 
@@ -164,13 +171,21 @@ evx-next/
 |---|---|
 | 成功基準（criteria/）、構成の型、文章の規則、契約と台帳（ledger.py）、check_contract.py、lint_storyboard.py の大半、禁止語、読みの辞書、評価役の作り | Manim（shot_scene.py・explainer_kit.py・render.sh・layout_check.py の Manim 依存部分）、Docker の VOICEVOX、ffmpeg での字幕焼き込み |
 
-## 10. 未決事項
+## 10. 決まったこと・未決事項
 
-1. **v1 の扱い**: 別の場所で作り、完成後に置き換えるか、併存させるか
-2. **公開先**: 社内のマーケットプレイス（fm-plugins）か、一般公開か
-3. **mp4 の書き出しに使うライブラリ**: Mediabunny が第一候補。ライセンスは MPL-2.0
-4. **既定の声**: 非開発者向けに、ずんだもん以外を既定にするか
-5. **ライブラリの読み込み**: claude.ai の Artifact で、jsDelivr から elkjs と manim-web を読めるかは未確認。ダメなら同梱する
+決まったこと（2026-11-05）:
+
+- 名前は ugoku-zukai、スキル名は make
+- このプラグイン単体で、fm-yodai のアカウントから公開する（最初は非公開）
+- v1 は手元に残したまま別のリポジトリで作る
+
+未決:
+
+1. **リポジトリのライセンス**: 公開する前に決める
+2. **mp4 の書き出しに使うライブラリ**: Mediabunny が第一候補。ライセンスは MPL-2.0
+3. **既定の声**: 非開発者向けに、ずんだもん以外を既定にするか
+4. **ライブラリの読み込み**: claude.ai の Artifact で、jsDelivr から elkjs と manim-web を読めるかは未確認。読めなければ同梱する
+5. **v1 から乗り換える時期**: 同じ題材で v1 と同等以上の動画が作れたら乗り換える
 
 ## 11. 進め方（案）
 

@@ -16,3 +16,4 @@ compare/manim/timeline.json
 compare/manim/render.log
 compare/svg/out/
 probe/*.zip
+dist/
