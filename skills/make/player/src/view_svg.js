@@ -1,0 +1,309 @@
+// ugoku-zukai プレーヤー: コマ（UZ.frame の結果）を SVG に写す。DOM に触るのはこのファイルだけ
+(function (UZ) {
+  "use strict";
+  const NS = "http://www.w3.org/2000/svg";
+  const { clamp, smooth, ease, outBack } = UZ;
+  const C = UZ.color;
+
+  function el(tag, attrs, parent) {
+    const e = document.createElementNS(NS, tag);
+    if (attrs) for (const k in attrs) if (attrs[k] != null) e.setAttribute(k, attrs[k]);
+    if (parent) parent.appendChild(e);
+    return e;
+  }
+  const ptsD = pts => "M" + pts.map(p => `${p[0].toFixed(1)},${p[1].toFixed(1)}`).join("L");
+  const GLYPH = {
+    check: "M-7,0 L-2,5 L8,-6",
+    cross: "M-6,-6 L6,6 M6,-6 L-6,6",
+    question: "M-4,-5 C-4,-10 6,-10 6,-4 C6,0 1,0 1,4 M1,8.5 L1,9",
+    dot: "M0,0 L0,0",
+  };
+
+  class View {
+    constructor(svg, M) {
+      this.svg = svg; this.M = M; this.S = M.S; this.subtitles = true;
+      this.els = {};
+      svg.setAttribute("viewBox", "0 0 1280 720");
+      svg.innerHTML = "";
+      const S = this.S, th = M.theme;
+      this.font = S.font;
+      el("rect", { x: 0, y: 0, width: 1280, height: 720, fill: S.bg }, svg);
+      const defs = el("defs", null, svg);
+      if (th.shape.glow) {
+        const f = el("filter", { id: "uz-glow", x: "-40%", y: "-40%", width: "180%", height: "180%" }, defs);
+        el("feGaussianBlur", { stdDeviation: 5, result: "b" }, f);
+        const mg = el("feMerge", null, f); el("feMergeNode", { in: "b" }, mg); el("feMergeNode", { in: "SourceGraphic" }, mg);
+      }
+      if (th.shape.shadow) {
+        const f = el("filter", { id: "uz-shadow", x: "-20%", y: "-20%", width: "140%", height: "160%" }, defs);
+        el("feDropShadow", { dx: 0, dy: 2, stdDeviation: 3, "flood-color": "#1d2433", "flood-opacity": 0.12 }, f);
+      }
+      // 章の題
+      const H = UZ.AREA.header;
+      this.header = el("g", null, svg);
+      this.headerBar = el("rect", { x: H.x, y: H.y + 12, width: 5, height: 32, rx: 2, fill: S.accent }, this.header);
+      this.headerT = this.text(this.header, [""], H.x + 20, H.y + H.h / 2, 30, { weight: S.bold, color: S.ink, anchor: "start" });
+      this.headerT2 = this.text(this.header, [""], H.x + 20, H.y + H.h / 2, 30, { weight: S.bold, color: S.ink, anchor: "start" });
+      // 図
+      this.figG = {};
+      for (const F of Object.values(M.figs)) this.buildFig(F);
+      this.capG = el("g", null, svg);
+      this.capEls = {};
+      for (const sc of M.scenes) for (const c of sc.captions) {
+        const k = sc.id + c.fig;
+        this.capEls[k] = this.text(this.capG, [c.text], c.x, c.y, 21, { weight: 500, color: S.muted });
+      }
+      this.customG = el("g", null, svg);
+      this.customs = (M.customs || []);
+      // 右上の札
+      this.badge = el("g", null, svg);
+      this.badgeR = el("rect", { y: 36, height: 38, rx: 19, fill: C.rgba(S.accent, 0.14), stroke: S.accent, "stroke-width": 1.5 }, this.badge);
+      this.badgeT = this.text(this.badge, [""], 0, 55, 19, { weight: S.bold, color: S.ink });
+      // 字幕
+      const sub = th.subtitle || {};
+      this.sub = el("g", null, svg);
+      this.subR = el("rect", { rx: 10, fill: sub.bg || "rgba(0,0,0,0.6)" }, this.sub);
+      this.subT = this.text(this.sub, [""], 640, 0, 27, { color: sub.ink || S.ink, weight: 500 });
+      // クレジット（常に出す）
+      this.text(svg, [M.credit], 1262, 711, 13, { color: S.muted, anchor: "end" });
+      // 終わりの札
+      this.endG = el("g", null, svg);
+      this.text(this.endG, UZ.wrap(M.title, 40, 1000, S.bold, 2), 640, 320, 40, { weight: S.bold, color: S.ink });
+      this.text(this.endG, ["音声: " + M.credit], 640, 410, 22, { color: S.muted });
+    }
+
+    text(parent, lines, x, y, size, o = {}) {
+      const lineH = o.lineH || Math.round(size * 1.38);
+      const t = el("text", { x, "font-size": size, "font-family": this.font, "font-weight": o.weight || 400, fill: o.color || this.S.ink,
+        "text-anchor": o.anchor || "middle", "dominant-baseline": "central" }, parent);
+      if (o.halo) { t.setAttribute("stroke", this.S.bg); t.setAttribute("stroke-width", 6); t.setAttribute("stroke-linejoin", "round"); t.setAttribute("paint-order", "stroke"); }
+      t._lineH = lineH; t._x = x; t._y = y;
+      this.setLines(t, lines);
+      return t;
+    }
+    setLines(t, lines) {
+      while (t.firstChild) t.removeChild(t.firstChild);
+      const n = lines.length;
+      lines.forEach((s, i) => { const sp = el("tspan", { x: t._x, y: t._y - (n - 1) * t._lineH / 2 + i * t._lineH }, t); sp.textContent = s; });
+    }
+    textSpec(parent, T, o = {}) {
+      return this.text(parent, T.lines, T.x, T.y, T.size, { weight: T.weight, color: o.color || T.color, anchor: T.anchor, lineH: T.lineH, halo: o.halo });
+    }
+
+    buildFig(F) {
+      const S = this.S, g = el("g", null, this.svg);
+      const L = { back: el("g", null, g), edge: el("g", null, g), box: el("g", null, g), fx: el("g", null, g) };
+      this.figG[F.id] = g;
+      const glow = this.M.theme.shape.glow, shadow = this.M.theme.shape.shadow;
+      for (const it of Object.values(F.items)) {
+        const E = { it };
+        if (it.kind === "box") {
+          E.g = el("g", null, L.box);
+          const sw = S.stroke;
+          const mk = (fill, stroke, extra) => {
+            if (it.shape === "ellipse") return el("ellipse", { cx: it.x + it.w / 2, cy: it.y + it.h / 2, rx: it.w / 2, ry: it.h / 2, fill, stroke, "stroke-width": sw, ...extra }, E.g);
+            if (it.shape === "store") {
+              const ry = 9, x = it.x, y = it.y, w = it.w, h = it.h;
+              const d = `M${x},${y + ry} A${w / 2},${ry} 0 0 1 ${x + w},${y + ry} L${x + w},${y + h - ry} A${w / 2},${ry} 0 0 1 ${x},${y + h - ry} Z M${x},${y + ry} A${w / 2},${ry} 0 0 0 ${x + w},${y + ry}`;
+              return el("path", { d, fill, stroke, "stroke-width": sw, ...extra }, E.g);
+            }
+            return el("rect", { x: it.x, y: it.y, width: it.w, height: it.h, rx: it.r, fill, stroke, "stroke-width": sw, ...extra }, E.g);
+          };
+          E.fill = mk(it.fill, "none", shadow ? { filter: "url(#uz-shadow)" } : {});
+          if (it.header) E.head = el("path", { d: `M${it.x},${it.y + it.header.h} V${it.y + it.r} Q${it.x},${it.y} ${it.x + it.r},${it.y} H${it.x + it.w - it.r} Q${it.x + it.w},${it.y} ${it.x + it.w},${it.y + it.r} V${it.y + it.header.h} Z`, fill: it.header.fill }, E.g);
+          E.stroke = mk("none", it.stroke, { pathLength: 1, "stroke-dasharray": "1 1" });
+          if (glow) E.stroke.setAttribute("filter", "url(#uz-glow)");
+          E.texts = (it.texts || []).map(T => this.textSpec(E.g, T));
+          if (it.life) E.life = el("path", { d: ptsD(it.life.pts), stroke: S.line, "stroke-width": 2, "stroke-dasharray": "6 6", fill: "none" }, L.back);
+        } else if (it.kind === "edge") {
+          E.g = el("g", null, it.isReply ? L.fx : L.edge);
+          E.line = el("path", { d: ptsD(it.pts), fill: "none", stroke: it.stroke, "stroke-width": it.width, "stroke-linejoin": "round", "stroke-linecap": "round",
+            ...(it.dashed ? { "stroke-dasharray": "7 6" } : { pathLength: 1, "stroke-dasharray": "1 1" }) }, E.g);
+          if (it.head) {
+            const n = it.pts.length, tip = it.pts[n - 1], from = it.pts[n - 2];
+            const ang = Math.atan2(tip[1] - from[1], tip[0] - from[0]), Lh = 12, Wh = 6;
+            const a = [tip[0] - Lh * Math.cos(ang) + Wh * Math.sin(ang), tip[1] - Lh * Math.sin(ang) - Wh * Math.cos(ang)];
+            const b = [tip[0] - Lh * Math.cos(ang) - Wh * Math.sin(ang), tip[1] - Lh * Math.sin(ang) + Wh * Math.cos(ang)];
+            E.head = el("path", { d: `M${a}L${tip}L${b}Z`, fill: it.stroke, stroke: it.stroke, "stroke-width": 1, "stroke-linejoin": "round" }, E.g);
+          }
+          if (it.label) E.label = this.textSpec(it.isReply ? E.g : L.fx, it.label, { halo: true });
+        } else if (it.kind === "text") {
+          E.g = el("g", null, L.box);
+          if (it.rowBox) E.hl = el("rect", { x: it.rowBox.x, y: it.rowBox.y, width: it.rowBox.w, height: it.rowBox.h, rx: 8, fill: C.rgba(S.accent, 0.12), opacity: 0 }, E.g);
+          if (it.bullet) {
+            if (it.bullet.kind === "num") {
+              el("circle", { cx: it.bullet.x, cy: it.bullet.y, r: it.bullet.r, fill: C.rgba(S.accent, 0.16), stroke: S.accent, "stroke-width": 2 }, E.g);
+              this.text(E.g, [String(it.bullet.n)], it.bullet.x, it.bullet.y, 19, { weight: S.bold, color: S.ink });
+            } else el("circle", { cx: it.bullet.x, cy: it.bullet.y, r: it.bullet.r, fill: S.accent }, E.g);
+          }
+          if (it.glyph) this.glyph(E.g, it.glyph.kind, it.glyph.x, it.glyph.y, it.glyph.color, 0.85);
+          E.texts = (it.texts || []).map(T => this.textSpec(E.g, T));
+          if (it.staticMark) this.glyph(E.g, it.staticMark.kind, it.staticMark.x, it.staticMark.y, it.staticMark.kind === "cross" ? S.bad : it.staticMark.kind === "question" ? S.warn : S.good, 1);
+        } else if (it.kind === "rect") {
+          E.g = el("g", null, L.back);
+          E.bg = el("rect", { x: it.x, y: it.y, width: it.w, height: it.h, rx: it.r, fill: it.fill === "none" ? C.rgba(S.accent, 0) : it.fill }, E.g);
+          if (it.rule) E.rule = el("path", { d: `M${it.x},${it.y + it.h} H${it.x + it.w}`, stroke: S.line, "stroke-width": 1.2 }, E.g);
+          E.texts = (it.texts || []).map(T => this.textSpec(E.g, T));
+        } else if (it.kind === "band") {
+          E.g = el("g", null, L.back);
+          el("rect", { x: it.x, y: it.y, width: it.w, height: it.h, rx: it.r, fill: C.rgba(S.ink, 0.03), stroke: S.line, "stroke-width": 1.2 }, E.g);
+          E.texts = (it.texts || []).map(T => this.textSpec(E.g, T));
+        } else if (it.kind === "frame") {
+          E.g = el("g", null, L.back);
+          E.stroke = el("rect", { x: it.x, y: it.y, width: it.w, height: it.h, rx: it.r, fill: C.rgba(it.stroke, 0.04), stroke: C.rgba(it.stroke, 0.7), "stroke-width": 1.6, "stroke-dasharray": "8 6" }, E.g);
+          E.texts = (it.texts || []).map(T => this.textSpec(E.g, T));
+        } else if (it.kind === "mark") {
+          E.g = el("g", null, L.fx);
+          E.bgc = el("circle", { cx: 0, cy: 0, r: 15, fill: S.bg, stroke: S.good, "stroke-width": 2.4 }, E.g);
+          E.path = el("path", { d: GLYPH.check, fill: "none", stroke: S.good, "stroke-width": 3.4, "stroke-linecap": "round", "stroke-linejoin": "round" }, E.g);
+        } else if (it.kind === "note") {
+          E.g = el("g", null, L.fx);
+          if (it.link) E.link = el("path", { d: ptsD(it.link), stroke: S.accent, "stroke-width": 1.5, "stroke-dasharray": "3 4", fill: "none" }, E.g);
+          E.texts = it.texts.map(T => this.textSpec(E.g, T, { halo: true }));
+        } else if (it.kind === "dot") {
+          E.g = el("g", null, L.fx);
+          el("circle", { r: it.r, fill: it.color, filter: glow ? "url(#uz-glow)" : null, stroke: glow ? null : S.bg, "stroke-width": glow ? null : 2 }, E.g);
+          E.pill = el("g", { transform: "translate(0,-30)" }, E.g);
+          E.pillR = el("rect", { y: -15, height: 30, rx: 15, fill: S.bg, stroke: it.color, "stroke-width": 1.6 }, E.pill);
+          E.pillT = this.text(E.pill, [""], 0, 0, 17, { weight: S.bold, color: S.ink });
+        } else {
+          continue;
+        }
+        this.els[it.key] = E;
+      }
+    }
+    glyph(parent, kind, x, y, color, scale) {
+      const g = el("g", { transform: `translate(${x},${y}) scale(${scale})` }, parent);
+      if (kind === "dot") el("circle", { r: 4, fill: color }, g);
+      else el("path", { d: GLYPH[kind] || GLYPH.check, fill: "none", stroke: color, "stroke-width": 3.2, "stroke-linecap": "round", "stroke-linejoin": "round" }, g);
+      return g;
+    }
+
+    render(t) {
+      const M = this.M, S = this.S, fr = UZ.frame(M, t);
+      for (const [fid, g] of Object.entries(this.figG)) {
+        const f = fr.figs[fid];
+        g.style.opacity = f.opacity;
+        g.style.display = f.opacity < 0.002 ? "none" : "";
+        if (f.place) g.setAttribute("transform", `translate(${f.place.ox.toFixed(2)},${f.place.oy.toFixed(2)}) scale(${f.place.s.toFixed(4)})`);
+      }
+      for (const [key, E] of Object.entries(this.els)) {
+        const it = E.it, s = fr.st[key] || { show: 0, dim: 1, pulse: 0, off: [0, 0] };
+        const show = s.show, dim = s.dim;
+        const op = (x) => (x * dim).toFixed(3);
+        const off = s.off || [0, 0];
+        if (it.kind === "box") {
+          const draw = smooth(clamp(show / 0.75));
+          E.stroke.setAttribute("stroke-dashoffset", (1 - draw).toFixed(4));
+          E.stroke.style.opacity = op(show > 0 ? 1 : 0);
+          const fillO = smooth((show - 0.35) / 0.55);
+          E.fill.style.opacity = op(fillO); if (E.head) E.head.style.opacity = op(fillO);
+          for (const tx of E.texts) tx.style.opacity = op(smooth((show - 0.45) / 0.5));
+          if (E.life) E.life.style.opacity = op(smooth((show - 0.5) / 0.5) * 0.9);
+          const sc = 1 + 0.07 * (s.pulse || 0);
+          const cx = it.x + it.w / 2, cy = it.y + it.h / 2;
+          E.g.setAttribute("transform", `translate(${off[0]},${off[1]}) translate(${cx},${cy}) scale(${sc}) translate(${-cx},${-cy})`);
+          const col = s.tint ? C.mix(s.tintFrom || it.stroke, s.tint, s.tintP) : (s.pulse > 0.01 ? C.mix(it.stroke, S.accent, s.pulse) : it.stroke);
+          E.stroke.setAttribute("stroke", col);
+          E.stroke.setAttribute("stroke-width", S.stroke + 1.6 * (s.pulse || 0));
+          if (s.text != null && E.texts[0]) this.relabel(E.texts[0], it.texts[0], s);
+        } else if (it.kind === "edge") {
+          if (it.dashed) E.line.style.opacity = op(smooth(show));
+          else { E.line.setAttribute("stroke-dashoffset", (1 - smooth(clamp(show / 0.9))).toFixed(4)); E.line.style.opacity = op(show > 0 ? 1 : 0); }
+          if (E.head) E.head.style.opacity = op(smooth((show - 0.85) / 0.15));
+          if (E.label) E.label.style.opacity = op(smooth((show - 0.7) / 0.3));
+          let col = s.tint ? C.mix(s.tintFrom || it.stroke, s.tint, s.tintP) : it.stroke;
+          if (s.pulse > 0.01) col = C.mix(col, S.accent, s.pulse);
+          E.line.setAttribute("stroke", col); if (E.head) { E.head.setAttribute("fill", col); E.head.setAttribute("stroke", col); }
+          E.line.setAttribute("stroke-width", it.width + (s.tint ? 1 * s.tintP : 0) + 1.5 * (s.pulse || 0));
+          if (s.text != null && E.label) this.relabel(E.label, it.label, s);
+        } else if (it.kind === "text") {
+          E.g.style.opacity = op(smooth(show));
+          const dy = (1 - ease(show)) * 10;
+          const sc = 1 + 0.04 * (s.pulse || 0);
+          const b = it.bbox, cx = b.x + b.w / 2, cy = b.y + b.h / 2;
+          E.g.setAttribute("transform", `translate(${off[0]},${off[1] + dy}) translate(${cx},${cy}) scale(${sc}) translate(${-cx},${-cy})`);
+          if (E.hl) E.hl.setAttribute("opacity", (s.pulse || 0).toFixed(3));
+          if (s.text != null && E.texts[0]) this.relabel(E.texts[0], it.texts[0], s);
+          if (s.tint && E.texts[0]) E.texts[0].setAttribute("fill", C.mix(it.texts[0].color || S.ink, s.tint, s.tintP));
+        } else if (it.kind === "rect") {
+          E.g.style.opacity = op(smooth(show));
+          if (it.fill === "none") E.bg.setAttribute("fill", C.rgba(s.tint || S.accent, 0.16 * Math.max(s.pulse || 0, s.tint ? s.tintP : 0)));
+        } else if (it.kind === "band" || it.kind === "frame") {
+          E.g.style.opacity = op(smooth(show));
+        } else if (it.kind === "mark") {
+          const kind = s.mark || "check", col = kind === "cross" ? S.bad : kind === "question" ? S.warn : S.good;
+          E.path.setAttribute("d", GLYPH[kind]); E.path.setAttribute("stroke", col); E.bgc.setAttribute("stroke", col);
+          const sc = outBack(show) * (1 + 0.15 * (s.markPop || 0));
+          E.g.setAttribute("transform", `translate(${it.x},${it.y}) scale(${Math.max(0, sc).toFixed(3)})`);
+          E.g.style.opacity = op(clamp(show * 2));
+        } else if (it.kind === "note") {
+          E.g.style.opacity = op(smooth(show));
+        } else if (it.kind === "dot") {
+          E.g.style.opacity = op(show);
+          if (s.pos) E.g.setAttribute("transform", `translate(${s.pos[0].toFixed(1)},${s.pos[1].toFixed(1)})`);
+          const label = s.labelText || "";
+          if (E._label !== label) { E._label = label; this.setLines(E.pillT, [label]); const w = UZ.textW(label, 17, 700) + 22; E.pillR.setAttribute("x", -w / 2); E.pillR.setAttribute("width", w); }
+          // 札は箱の外を動いている間だけ出す
+          const inBox = s.pos && Object.values(M.figs[it.fig].items).some(o => o.kind === "box" && UZ.inside(s.pos, o.bbox, -2));
+          E.pill.style.opacity = label && !inBox ? 1 : 0;
+        }
+      }
+      // 章の題
+      const h = fr.header;
+      this.setLines(this.headerT, [h.text]); this.headerT.style.opacity = h.opacity;
+      this.headerBar.style.opacity = h.text ? Math.max(h.opacity, h.prev ? h.prev.opacity : 0) : (h.prev && h.prev.text ? h.prev.opacity : 0);
+      if (h.prev) { this.setLines(this.headerT2, [h.prev.text]); this.headerT2.style.opacity = h.prev.opacity; } else this.headerT2.style.opacity = 0;
+      // 図の題（2 つ並べるとき）
+      for (const k in this.capEls) this.capEls[k].style.opacity = 0;
+      for (const c of fr.captions) { const e = this.capEls[fr.scene.id + c.fig]; if (e) e.style.opacity = c.opacity; }
+      // 札
+      const bd = fr.badge;
+      if (bd.text) {
+        if (this._badge !== bd.text) { this._badge = bd.text; const w = UZ.textW(bd.text, 19, 700) + 36; this.badgeR.setAttribute("x", 1224 - w); this.badgeR.setAttribute("width", w); this.badgeT._x = 1224 - w / 2; this.setLines(this.badgeT, [bd.text]); }
+        this.badge.style.opacity = bd.show;
+      } else this.badge.style.opacity = 0;
+      // 字幕
+      if (fr.sub && this.subtitles) {
+        if (this._sub !== fr.sub.id) {
+          this._sub = fr.sub.id;
+          const lines = UZ.splitBalanced(fr.sub.text, 27, UZ.AREA.sub.w - 40);
+          const lh = 40, hgt = lines.length * lh + 20, y0 = 700 - hgt - 6;
+          this.subT._y = y0 + hgt / 2; this.setLines(this.subT, lines);
+          const w = Math.max(...lines.map(s2 => UZ.textW(s2, 27, 500))) + 48;
+          this.subR.setAttribute("x", 640 - w / 2); this.subR.setAttribute("y", y0); this.subR.setAttribute("width", w); this.subR.setAttribute("height", hgt);
+        }
+        this.sub.style.opacity = fr.sub.opacity;
+      } else this.sub.style.opacity = 0;
+      // 終わりの札
+      this.endG.style.opacity = fr.end;
+      // custom（台本の下の層: 毎コマ呼ぶ）
+      this.renderCustoms(fr);
+      return fr;
+    }
+    relabel(tEl, spec, s) {
+      const want = s.textP < 0.5 ? (s.textFrom != null ? s.textFrom : spec.lines.join("")) : s.text;
+      if (tEl._cur !== want) { tEl._cur = want; this.setLines(tEl, [want]); }
+      tEl.style.opacity = (Math.abs(s.textP - 0.5) * 2).toFixed(3);
+    }
+    renderCustoms(fr) {
+      const M = this.M;
+      if (!this._customs) {
+        this._customs = {};
+        for (const a of M.acts) if (a.verb === "custom") {
+          const c = { g: el("g", null, this.customG), fn: null };
+          try { c.fn = new Function("return (" + M.sb.custom[a.a.custom] + ")")(); } catch (e) { console.error("custom の読み込みに失敗", a.a.custom, e); }
+          this._customs[a.key] = c;
+        }
+      }
+      for (const [key, c] of Object.entries(this._customs)) {
+        const p = fr.customs[key];
+        c.g.style.display = p == null ? "none" : "";
+        if (p == null || !c.fn) continue;
+        while (c.g.firstChild) c.g.removeChild(c.g.firstChild);
+        try { c.fn({ g: c.g, p, t: fr.t, el, S: this.S, UZ, area: UZ.AREA.body }); } catch (e) { console.error("custom の実行に失敗", e); }
+      }
+    }
+  }
+  UZ.View = View;
+})(globalThis.UZ = globalThis.UZ || {});

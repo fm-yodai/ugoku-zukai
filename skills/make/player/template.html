@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<!--UZ:HEAD-->
+<title>__TITLE__</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+__FONT_LINK__
+<style>
+  :root { --page: #f4f5f7; --ink: #1d2433; --muted: #5d6676; --line: #d3d8e0; --accent: #1a5fd0; --err: #b3261e; }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --page: #121418; --ink: #e9eaec; --muted: #9aa1ab; --line: #2c3139; --accent: #7fb0ff; --err: #ff8a80; color-scheme: dark; } }
+  :root[data-theme="dark"] { --page: #121418; --ink: #e9eaec; --muted: #9aa1ab; --line: #2c3139; --accent: #7fb0ff; --err: #ff8a80; color-scheme: dark; }
+  body { background: var(--page); color: var(--ink); font: 14px/1.6 "Noto Sans JP", system-ui, sans-serif;
+         padding-block: 12px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+  .uz-wrap { max-width: 1100px; margin: 0 auto; display: grid; gap: 10px; }
+  .uz-stage { width: 100%; height: auto; display: block; aspect-ratio: 16 / 9; max-width: 100%; border-radius: 8px; box-shadow: 0 1px 0 var(--line); }
+  .uz-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .uz-bar button { font: inherit; font-weight: 700; color: var(--ink); background: transparent; border: 1px solid var(--line); border-radius: 999px; padding: 6px 16px; cursor: pointer; min-width: 96px; }
+  .uz-bar button:hover, .uz-bar button:focus-visible { border-color: var(--accent); outline: none; }
+  .uz-bar input[type=range] { flex: 1; min-width: 160px; accent-color: var(--accent); }
+  .uz-bar output { font-variant-numeric: tabular-nums; color: var(--muted); min-width: 92px; text-align: right; }
+  .uz-bar label { color: var(--muted); display: flex; align-items: center; gap: 6px; cursor: pointer; }
+  .uz-note { color: var(--muted); font-size: 12px; }
+  .uz-err { color: var(--err); white-space: pre-wrap; }
+</style>
+<!--UZ:HEAD_END-->
+</head>
+<body>
+<!--UZ:BODY-->
+<div class="uz-wrap" id="uz-player">
+  <svg class="uz-stage" id="uz-stage" role="img" aria-label="__TITLE__"></svg>
+  <div class="uz-bar">
+    <button id="uz-play" type="button">▶ 再生</button>
+    <input id="uz-seek" type="range" min="0" max="1000" value="0" aria-label="再生位置">
+    <output id="uz-clock">0:00 / 0:00</output>
+    <label><input id="uz-subs" type="checkbox" checked> 字幕</label>
+  </div>
+  <div class="uz-note" id="uz-note"></div>
+  <div class="uz-err" id="uz-err" hidden></div>
+</div>
+<script>/*UZ:ELK*/</script>
+<script>/*UZ:CORE*/</script>
+<script>
+const UZ_DATA = /*UZ:DATA*/null;
+(function () {
+  "use strict";
+  const $ = id => document.getElementById(id);
+  const fmt = s => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
+  const showErr = m => { const e = $("uz-err"); e.textContent = m; e.hidden = false; };
+  UZ.ELK = window.ELK;
+  let M, view, ctx = null, buffer = null, src = null, t0 = 0, pausedAt = 0, playing = false, wallT0 = 0;
+  const hasAudio = !!UZ_DATA.audio;
+  // 時計: 音声があれば WebAudio の時計、なければ performance.now()（チャットのプレビューでは audio 要素が使えないため）
+  const now = () => !playing ? pausedAt : hasAudio ? ctx.currentTime - t0 : (performance.now() - wallT0) / 1000;
+  async function ensureAudio() {
+    if (!hasAudio || ctx) return;
+    ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const bin = atob(UZ_DATA.audio), buf = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) buf[i] = bin.charCodeAt(i);
+    buffer = await ctx.decodeAudioData(buf.buffer);
+  }
+  function startAt(off) {
+    if (hasAudio) {
+      if (src) { src.onended = null; try { src.stop(); } catch (e) {} }
+      src = ctx.createBufferSource(); src.buffer = buffer; src.connect(ctx.destination);
+      if (off < buffer.duration) src.start(0, off);
+      t0 = ctx.currentTime - off;
+    } else wallT0 = performance.now() - off * 1000;
+    playing = true; $("uz-play").textContent = "❚❚ 一時停止";
+    requestAnimationFrame(tick);
+  }
+  function pause() {
+    pausedAt = now(); playing = false;
+    if (src) { src.onended = null; try { src.stop(); } catch (e) {} }
+    $("uz-play").textContent = "▶ 再生";
+  }
+  function tick() {
+    const D = M.duration, t = Math.min(now(), D);
+    if (playing && now() >= D) { pause(); pausedAt = D; $("uz-play").textContent = "▶ もう一度"; }
+    view.render(t);
+    $("uz-seek").value = Math.round(t / D * 1000);
+    $("uz-clock").textContent = `${fmt(t)} / ${fmt(D)}`;
+    if (playing) requestAnimationFrame(tick);
+  }
+  $("uz-play").onclick = async () => {
+    try {
+      await ensureAudio();
+      if (ctx && ctx.state === "suspended") await ctx.resume();
+      if (playing) pause(); else startAt(pausedAt >= M.duration - 0.05 ? 0 : pausedAt);
+    } catch (e) { showErr("音声を再生できませんでした: " + e.message); }
+  };
+  $("uz-seek").oninput = () => { const t = $("uz-seek").value / 1000 * M.duration; if (playing) startAt(t); else { pausedAt = t; tick(); } };
+  $("uz-subs").onchange = () => { view.subtitles = $("uz-subs").checked; view._sub = null; tick(); };
+  document.addEventListener("keydown", e => { if (e.code === "Space" && e.target === document.body) { e.preventDefault(); $("uz-play").click(); } });
+  UZ.player = { seek(t) { pausedAt = t; tick(); }, get model() { return M; } };
+  (async () => {
+    try {
+      if (document.fonts && document.fonts.load) await Promise.race([document.fonts.load(`500 24px ${UZ_DATA.theme.font.family}`), new Promise(r => setTimeout(r, 2500))]);
+      M = await UZ.build(UZ_DATA.storyboard, UZ_DATA.theme, UZ_DATA.timeline);
+      if (M.errors.length) { showErr("台本に誤りがあります:\n" + M.errors.join("\n")); return; }
+      view = new UZ.View($("uz-stage"), M);
+      if (!hasAudio) $("uz-note").textContent = "音声なし（時刻は文字数からの見積もり）";
+      // 止まっている間は、最初の図が出そろったコマを見せる
+      const firstFull = M.scenes.length > 1 ? M.scenes[1].start + 0.01 : M.duration / 2;
+      pausedAt = M.scenes[0].figs.some(f => !M.figs[f].autoShow) ? (M.timeline.lines[0].start + M.timeline.lines[0].dur) : Math.min(firstFull - 0.4, 3);
+      tick(); pausedAt = 0; $("uz-seek").value = 0; $("uz-clock").textContent = `0:00 / ${fmt(M.duration)}`;
+      document.dispatchEvent(new CustomEvent("uz-ready"));
+    } catch (e) { showErr("準備に失敗しました: " + e.message); console.error(e); }
+  })();
+})();
+</script>
+<!--UZ:BODY_END-->
+</body>
+</html>

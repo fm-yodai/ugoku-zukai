@@ -1,0 +1,57 @@
+{
+  "format": "ugoku-zukai/2",
+  "title": "下の層と 2 つの図の並べ方",
+  "voice": { "speaker": 3, "speed": 1.1 },
+  "figures": {
+    "flow": {
+      "type": "graph",
+      "title": "申請の流れ",
+      "nodes": [
+        { "id": "app", "label": "申請者", "role": "actor" },
+        { "id": "sys", "label": "精算サービス", "role": "process" },
+        { "id": "keiri", "label": "経理", "role": "external" }
+      ],
+      "edges": [
+        { "from": "app", "to": "sys", "label": "申請" },
+        { "from": "sys", "to": "keiri", "label": "仕訳を連携" }
+      ]
+    },
+    "kpi": {
+      "type": "table",
+      "title": "1 件あたりの時間",
+      "columns": [ { "id": "step", "label": "作業" }, { "id": "now", "label": "いま" }, { "id": "after", "label": "導入後" } ],
+      "rows": [
+        { "id": "k1", "cells": ["申請", "15分", "3分"] },
+        { "id": "k2", "cells": ["承認", "2日", "半日"] },
+        { "id": "k3", "cells": ["仕訳", "10分", "0分"] }
+      ]
+    },
+    "free": {
+      "type": "canvas",
+      "title": "下の層で描く",
+      "shapes": [
+        { "id": "box1", "shape": "rect", "x": 160, "y": 170, "w": 220, "h": 110, "role": "actor", "text": "紙の領収書" },
+        { "id": "box2", "shape": "ellipse", "x": 800, "y": 160, "w": 240, "h": 130, "role": "added", "text": "写真のデータ" },
+        { "id": "arr", "shape": "arrow", "points": [[390, 225], [790, 225]], "text": "スマホで撮る" },
+        { "id": "cap", "shape": "text", "x": 592, "y": 380, "text": "台本に座標を書けば、決まった語彙にない絵も描ける", "size": 22 }
+      ]
+    }
+  },
+  "custom": {
+    "ring": "({ g, p, el, S, area }) => { const r = 40 + 30 * p; el('circle', { cx: area.x + area.w / 2, cy: area.y + area.h / 2 + 10, r, fill: 'none', stroke: S.accent, 'stroke-width': 3, opacity: 1 - p }, g); }"
+  },
+  "scenes": [
+    { "id": "s1", "figure": ["flow", "kpi"], "title": "流れと効果を並べる", "lines": [
+      { "id": "l1", "text": "{a}左に流れを、{b}右に一件あたりの時間を並べます。",
+        "do": [ { "at": "a", "show": "flow" }, { "at": "b", "show": "kpi" }, { "badge": "1 / 2" } ] },
+      { "id": "l2", "text": "{a}承認にかかる時間は、{b}二日から半日に縮みます。",
+        "do": [ { "at": "a", "focus": ["k2"] }, { "at": "b", "relabel": "k2.after", "text": "半日！" }, { "at": "b", "tint": "k2", "as": "good" } ] }
+    ]},
+    { "id": "s2", "figure": "free", "lines": [
+      { "id": "l3", "text": "決まった語彙にない絵は、{a}座標を書いて描きます。",
+        "do": [ { "badge": "2 / 2" }, { "at": "a", "show": ["box1", "arr", "box2"] } ] },
+      { "id": "l4", "text": "{a}箱を動かしたり、{b}自分で書いた関数で描いたりもできます。",
+        "do": [ { "at": "a", "move": "box1", "by": [0, -90] }, { "at": "b", "custom": "ring", "dur": 1.6 }, { "show": "cap" } ] }
+    ]}
+  ]
+}

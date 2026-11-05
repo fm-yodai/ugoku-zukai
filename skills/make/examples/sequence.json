@@ -1,0 +1,35 @@
+{
+  "format": "ugoku-zukai/2",
+  "title": "打刻が給与に届くまで",
+  "voice": { "speaker": 3, "speed": 1.1 },
+  "figures": {
+    "seq": {
+      "type": "sequence",
+      "title": "打刻から給与計算まで",
+      "participants": [
+        { "id": "staff", "label": "社員", "role": "actor" },
+        { "id": "app", "label": "打刻アプリ", "role": "process" },
+        { "id": "kintai", "label": "勤怠システム", "role": "store" },
+        { "id": "kyuyo", "label": "給与システム", "role": "external" }
+      ],
+      "messages": [
+        { "id": "m1", "from": "staff", "to": "app", "label": "出勤を打刻" },
+        { "id": "m2", "from": "app", "to": "kintai", "label": "打刻の時刻を送る" },
+        { "id": "m3", "from": "kintai", "to": "kintai", "label": "残業を集計" },
+        { "id": "m4", "from": "kintai", "to": "app", "label": "受け付けた", "reply": true },
+        { "id": "m5", "from": "kintai", "to": "kyuyo", "label": "月末に勤務実績を渡す" }
+      ]
+    }
+  },
+  "scenes": [
+    { "id": "s1", "figure": "seq", "lines": [
+      { "id": "l1", "text": "{a}登場するのは、社員と三つのシステムです。", "do": [ { "at": "a", "show": ["staff", "app", "kintai", "kyuyo"] } ] },
+      { "id": "l2", "text": "社員が{a}出勤を打刻すると、アプリは{b}その時刻を勤怠システムに送ります。",
+        "do": [ { "at": "a", "show": "m1" }, { "at": "b", "show": "m2" } ] },
+      { "id": "l3", "text": "勤怠システムは{a}残業を集計して、{b}受け付けたことを返します。",
+        "do": [ { "at": "a", "show": "m3" }, { "at": "a", "note": "m3", "text": "毎日の夜に実行" }, { "at": "b", "show": "m4" } ] },
+      { "id": "l4", "text": "そして{a}月末に、勤務の実績が給与システムへ渡ります。",
+        "do": [ { "at": "a", "show": "m5" }, { "pulse": "kyuyo" }, { "focus": ["kintai", "kyuyo", "m5"] } ] }
+    ]}
+  ]
+}

@@ -1,0 +1,37 @@
+{
+  "format": "ugoku-zukai/2",
+  "title": "申請の状態の移り変わり",
+  "voice": { "speaker": 3, "speed": 1.1 },
+  "figures": {
+    "st": {
+      "type": "graph",
+      "title": "申請の状態",
+      "direction": "right",
+      "nodes": [
+        { "id": "draft", "label": "下書き", "shape": "round", "role": "muted" },
+        { "id": "wait", "label": "承認待ち", "shape": "round", "role": "actor" },
+        { "id": "back", "label": "差し戻し", "shape": "round", "role": "removed" },
+        { "id": "done", "label": "承認済み", "shape": "round", "role": "added" },
+        { "id": "paid", "label": "支払い済み", "shape": "round", "role": "store" }
+      ],
+      "edges": [
+        { "from": "draft", "to": "wait", "label": "提出" },
+        { "from": "wait", "to": "back", "label": "差し戻す" },
+        { "from": "back", "to": "wait", "label": "直して再提出" },
+        { "from": "wait", "to": "done", "label": "承認" },
+        { "from": "done", "to": "paid", "label": "振り込み" }
+      ]
+    }
+  },
+  "scenes": [
+    { "id": "s1", "figure": "st", "lines": [
+      { "id": "l1", "text": "申請には{a}五つの状態があります。", "do": [ { "at": "a", "show": "st" } ] },
+      { "id": "l2", "text": "{a}下書きを提出すると、{b}承認待ちになります。",
+        "do": [ { "at": "a", "trace": ["draft"], "label": "いまの状態" }, { "at": "b", "trace": ["draft", "wait"] } ] },
+      { "id": "l3", "text": "不備があると{a}差し戻しになり、{b}直して出し直せば、また承認待ちに戻ります。",
+        "do": [ { "at": "a", "trace": ["wait", "back"] }, { "at": "b", "trace": ["back", "wait"] }, { "note": "back", "text": "何度でも出し直せる" } ] },
+      { "id": "l4", "text": "承認されると{a}承認済みになり、{b}振り込みが終われば支払い済みです。",
+        "do": [ { "at": "a", "trace": ["wait", "done"] }, { "at": "b", "trace": ["done", "paid"] }, { "mark": "paid", "as": "check" } ] }
+    ]}
+  ]
+}

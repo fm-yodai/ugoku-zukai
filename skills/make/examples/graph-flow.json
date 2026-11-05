@@ -1,0 +1,47 @@
+{
+  "format": "ugoku-zukai/2",
+  "title": "経費精算の承認ルート",
+  "voice": { "speaker": 3, "speed": 1.1 },
+  "figures": {
+    "q": { "type": "title", "text": "経費の申請は、誰の手を通って\n経理に届くのでしょうか", "sub": "金額で変わる承認ルート" },
+    "flow": {
+      "type": "graph",
+      "title": "経費精算の流れ",
+      "direction": "right",
+      "nodes": [
+        { "id": "app", "label": "申請者", "role": "actor" },
+        { "id": "sys", "label": "入力チェック", "role": "process", "sub": "金額・領収書" },
+        { "id": "kacho", "label": "課長", "role": "actor" },
+        { "id": "bucho", "label": "部長", "role": "actor" },
+        { "id": "keiri", "label": "経理", "role": "external" }
+      ],
+      "groups": [ { "id": "approvers", "label": "承認者", "members": ["kacho", "bucho"] } ],
+      "edges": [
+        { "from": "app", "to": "sys", "label": "申請を送る" },
+        { "from": "sys", "to": "kacho", "label": "10万円まで" },
+        { "from": "sys", "to": "bucho", "label": "10万円超" },
+        { "from": "kacho", "to": "keiri", "label": "承認を通知" },
+        { "from": "bucho", "to": "keiri", "label": "承認を通知" }
+      ]
+    }
+  },
+  "scenes": [
+    { "id": "s0", "figure": "q", "lines": [
+      { "id": "l0", "text": "経費の申請は、誰の手を通って経理に届くのでしょうか。", "do": [] }
+    ]},
+    { "id": "s1", "figure": "flow", "lines": [
+      { "id": "l1", "text": "まず全体を見てみましょう。{a}申請者から経理まで、五つの役割がつながっています。",
+        "do": [ { "at": "a", "show": "flow" } ] },
+      { "id": "l2", "text": "{a}申請者が送った申請は、{b}最初に入力チェックを通ります。",
+        "do": [ { "at": "a", "focus": ["app", "sys", "app>sys"] }, { "at": "a", "trace": ["app", "sys"], "label": "申請書" }, { "at": "b", "pulse": "sys" } ] },
+      { "id": "l3", "text": "金額が{a}十万円までなら{b}課長が承認します。",
+        "do": [ { "at": "a", "focus": ["sys", "kacho", "sys>kacho"] }, { "at": "b", "trace": ["sys", "kacho"] }, { "note": "kacho", "text": "多くの申請はここで終わる" } ] },
+      { "id": "l4", "text": "承認されると、{a}経理に通知が届きます。",
+        "do": [ { "at": "a", "focus": ["kacho", "keiri", "kacho>keiri"] }, { "at": "a", "trace": ["kacho", "keiri"] }, { "mark": "keiri", "as": "check" } ] },
+      { "id": "l5", "text": "十万円を超える申請は、{a}課長ではなく{b}部長の承認が要ります。",
+        "do": [ { "at": "a", "unfocus": true }, { "at": "b", "focus": ["sys", "bucho", "sys>bucho"] }, { "at": "b", "tint": "sys>bucho", "as": "warn" } ] },
+      { "id": "l6", "text": "差し戻すときは、{a}理由を添えて申請者に戻します。",
+        "do": [ { "at": "a", "unfocus": true }, { "at": "a", "reply": ["kacho", "sys", "app"], "label": "差し戻し", "as": "bad" } ] }
+    ]}
+  ]
+}

@@ -17,3 +17,6 @@ compare/manim/render.log
 compare/svg/out/
 probe/*.zip
 dist/
+
+# 抽出の検査に使う画像は管理する
+!skills/make/scripts/tests/design/*.png

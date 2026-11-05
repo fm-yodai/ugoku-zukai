@@ -1,0 +1,122 @@
+{
+  "colors": [
+    {
+      "hex": "#0e7c86",
+      "count": 9,
+      "names": [
+        "theme-color"
+      ],
+      "sources": [
+        "examples/design-inputs/kumo-landing.html"
+      ],
+      "contrast_white": 4.95,
+      "contrast_black": 4.25
+    },
+    {
+      "hex": "#1f2a37",
+      "count": 6,
+      "names": [
+        "page-text"
+      ],
+      "sources": [
+        "examples/design-inputs/kumo-landing.html"
+      ],
+      "contrast_white": 14.54,
+      "contrast_black": 1.44
+    },
+    {
+      "hex": "#fbf7f0",
+      "count": 4,
+      "names": [
+        "page-background"
+      ],
+      "sources": [
+        "examples/design-inputs/kumo-landing.html"
+      ],
+      "contrast_white": 1.07,
+      "contrast_black": 19.66
+    },
+    {
+      "hex": "#ffffff",
+      "count": 4,
+      "names": [],
+      "sources": [
+        "examples/design-inputs/kumo-landing.html"
+      ],
+      "contrast_white": 1.0,
+      "contrast_black": 21.0
+    },
+    {
+      "hex": "#5b6573",
+      "count": 2,
+      "names": [],
+      "sources": [
+        "examples/design-inputs/kumo-landing.html"
+      ],
+      "contrast_white": 5.91,
+      "contrast_black": 3.55
+    },
+    {
+      "hex": "#f28c28",
+      "count": 1,
+      "names": [],
+      "sources": [
+        "examples/design-inputs/kumo-landing.html"
+      ],
+      "contrast_white": 2.45,
+      "contrast_black": 8.56
+    },
+    {
+      "hex": "#e6dfd3",
+      "count": 1,
+      "names": [],
+      "sources": [
+        "examples/design-inputs/kumo-landing.html"
+      ],
+      "contrast_white": 1.32,
+      "contrast_black": 15.86
+    },
+    {
+      "hex": "#2f9e5b",
+      "count": 1,
+      "names": [],
+      "sources": [
+        "examples/design-inputs/kumo-landing.html"
+      ],
+      "contrast_white": 3.41,
+      "contrast_black": 6.16
+    },
+    {
+      "hex": "#d64541",
+      "count": 1,
+      "names": [],
+      "sources": [
+        "examples/design-inputs/kumo-landing.html"
+      ],
+      "contrast_white": 4.39,
+      "contrast_black": 4.79
+    },
+    {
+      "hex": "#7a5cc2",
+      "count": 1,
+      "names": [],
+      "sources": [
+        "examples/design-inputs/kumo-landing.html"
+      ],
+      "contrast_white": 5.08,
+      "contrast_black": 4.14
+    }
+  ],
+  "fonts": [
+    {
+      "family": "Zen Kaku Gothic New",
+      "count": 2,
+      "role": [],
+      "sources": [
+        "examples/design-inputs/kumo-landing.html"
+      ]
+    }
+  ],
+  "radius": 12.0,
+  "notes": []
+}

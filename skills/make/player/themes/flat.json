@@ -1,0 +1,33 @@
+{
+  "name": "flat",
+  "label": "フラットな図解",
+  "mode": "light",
+  "colors": {
+    "bg": "#f7f8fa",
+    "surface": "#e8ecf2",
+    "ink": "#1d2433",
+    "muted": "#5a6475",
+    "line": "#c9d0db",
+    "accent": "#1a5fd0",
+    "good": "#1e8a4c",
+    "bad": "#c9362b",
+    "warn": "#b26a00",
+    "roles": {
+      "actor": "#1a5fd0",
+      "process": "#0f8a78",
+      "store": "#b26a00",
+      "external": "#7b4fc4",
+      "muted": "#7a8394",
+      "added": "#1e8a4c",
+      "removed": "#c9362b"
+    }
+  },
+  "font": {
+    "family": "\"BIZ UDPGothic\", \"Noto Sans JP\", \"Hiragino Sans\", \"Yu Gothic\", sans-serif",
+    "weight": 400,
+    "bold": 700,
+    "css": "https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&family=Noto+Sans+JP:wght@400;500;700&display=swap"
+  },
+  "shape": { "radius": 8, "stroke": 2, "fill": "solid", "fillMix": 0.12, "edgeWidth": 2, "glow": false, "shadow": true },
+  "subtitle": { "bg": "rgba(255,255,255,0.94)", "ink": "#1d2433" }
+}
