@@ -39,5 +39,8 @@ case "$w1" in "$rh"/*-this-repo) ;; *) echo "NG: workdir.py の 1 つ目の名�
 case "$w2" in *-this-repo-2) ;; *) echo "NG: workdir.py の 2 つ目が -2 で終わらない: $w2"; fail=1;; esac
 case "$w3" in *-run) ;; *) echo "NG: workdir.py の日本語名が run にならない: $w3"; fail=1;; esac
 rm -rf "$rh"
+# 成功基準と演出の約束に、v1（Manim・ショット DSL）の語が残っていない
+old=$(grep -rnE "lint_storyboard|render\.sh|shot_scene|custom\.py|occupancy|layout_report|map\.kind|\bops\b|Manim" references)
+[ -z "$old" ] || { echo "NG: references に v1 の語が残っている"; echo "$old"; fail=1; }
 [ $fail = 0 ] && echo "M3 の検査: すべて OK" || echo "M3 の検査: NG あり"
 exit $fail

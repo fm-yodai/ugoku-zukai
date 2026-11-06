@@ -32,11 +32,11 @@
 |------|------|
 | `id` | レビュアー内で一意。文章 `W`、事実 `F`、演出 `D` で始める |
 | `line_id` | 対象の行（台本なら `c3-2`、文書なら見出しや段落を特定できる文字列）。全体への指摘は `"*"` |
-| `rule` | 規則の番号。文章 `TW-n`（references/writing/rules.md）、演出 `VG-n`（ugoku-zukai visual-grammar の約束番号）または `VG-layout`、事実は `FC-wrong`（誤り）/ `FC-overclaim`（言い過ぎ）/ `FC-nosource`（根拠が見つからない） |
+| `rule` | 規則の番号。文章 `TW-n`（references/writing/rules.md）、演出 `VG-n`（references/visual-grammar.md の約束番号）、事実は `FC-wrong`（誤り）/ `FC-overclaim`（言い過ぎ）/ `FC-nosource`（根拠が見つからない） |
 | `severity` | `must` か `should`（下の基準） |
 | `problem` | 何が起きているか。読んだ人がどう誤解するかまで書く |
 | `suggestion` | 具体的な直し方。文なら書き換え後の文そのもの |
-| `evidence` | 判断の根拠（`path:line`、規則の例、画像のファイル名とコマ位置） |
+| `evidence` | 判断の根拠（`path:line`、規則の例、画面ならシートのファイル名と行 id（`sheet-02.png` の行 `l7`）） |
 
 ## severity の基準
 
@@ -63,9 +63,11 @@
 
 ## maker-checker 形式（ugoku-zukai）
 
-ugoku-zukai の Phase 1・2・4 では、上の形式に「基準ごとの判定」と「前の周の再確認」を足した次の形式を使う。台帳 `review/ledger.json` に取り込むのは `${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/ledger.py` で、ループの約束は `${CLAUDE_PLUGIN_ROOT}/skills/make/references/loop-protocol.md` が正。
+ugoku-zukai の 2 取材と契約・4 台本・5 画面（フェーズ名 `contract`・`script`・`screen`）では、上の形式に「基準ごとの判定」と「前の周の再確認」を足した次の形式を使う。台帳 `review/ledger.json` に取り込むのは `${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/ledger.py` で、ループの約束は `${CLAUDE_PLUGIN_ROOT}/skills/make/references/loop-protocol.md` が正。
 
 ### checker の出力（`<workdir>/review/<phase>/r<N>/<reviewer>.json`）
+
+チャットで評価役を 1 回にまとめるときは、全基準の判定を `<workdir>/review/<phase>/r<N>/combined.json` に同じ形で書き、`reviewer` を `combined` にする（`../loop-protocol.md` の「チャットでの回し方」）。
 
 ```json
 {
@@ -74,7 +76,7 @@ ugoku-zukai の Phase 1・2・4 では、上の形式に「基準ごとの判定
   "round": 2,
   "checks": [
     {"criterion": "S-F1", "verdict": "FAIL", "evidence": "全 30 行の source を読んだ。c3-2 だけ言えない"},
-    {"criterion": "S-F2", "verdict": "PASS", "evidence": "map の辺 9 本の source をすべて読み、向きが合っている"}
+    {"criterion": "S-F2", "verdict": "PASS", "evidence": "図 flow の辺 9 本の source をすべて読み、向きが合っている"}
   ],
   "findings": [
     {"key": "c3-2:S-F1", "line_id": "c3-2", "criterion": "S-F1", "rule": "FC-overclaim", "severity": "must",

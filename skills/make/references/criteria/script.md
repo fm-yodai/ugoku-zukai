@@ -1,23 +1,24 @@
-# 台本の基準（S-）— Phase 2 台本
+# 台本の基準（S-）— 4 台本
 
-対象は `storyboard.json`（字幕 `sub`・読み `say`・根拠 `source`・ショット `shot`）。図そのものの基準は `structure.md`（G-）で、Phase 2 の director はこちらと G- の両方で判定する。
+対象は `storyboard.json`（場面 `scenes` の各行の字幕 `text`・読み `read`・根拠 `source`・動作 `do`）。形式は `../storyboard.md` が正。図そのものの基準は `structure.md`（G-）で、4 台本の director はこちらと G- の両方で判定する。
 
 | ID | 合格の条件 | 検査 | 重さ |
 |---|---|---|---|
-| S-M1 | lint のエラーが 0（形・op・参照・経路・配置の空回し） | 機械（lint_storyboard.py --layout） | must |
-| S-M2 | 字幕と読みに禁止語（比喩・造語・スキル内部の用語。`../../assets/banned_terms.json`）が無い | 機械 | must |
-| S-M3 | 口調の語尾が徹底している。ずんだもんでは**全文の文末**が「〜のだ」「〜なのだ」（問いは「〜のだ？」「〜なのだ？」）。「〜よ」「〜んだ」「〜だね」で終わる文が無い | 機械 | must |
-| S-M4 | 読みに英字・読みの分かれる単独の漢字が残っていない | 機械 | must |
+| S-M1 | `check_storyboard.cjs` の誤り（形・id の解決・印・点の経路）と配置の問題（はみ出し・小さい・重なり）が 0。警告のうち「辺 … に label がない」も 0（G-M2） | 機械（`node scripts/check_storyboard.cjs <storyboard.json> --theme <テーマ>`。時刻は見積もり） | must |
+| S-M2 | 字幕と読みに禁止語（比喩・造語・スキル内部の用語。`../../assets/banned_terms.json`）が無い | 機械（`check_text.py`） | must |
+| S-M3 | 口調の語尾が徹底している。ずんだもん（話者 1・3・5・7・22・38・75・76）では**全文の文末**が「〜のだ」「〜なのだ」（問いは「〜のだ？」「〜なのだ？」）。「〜よ」「〜んだ」「〜だね」で終わる文が無い | 機械（`check_text.py`） | must |
+| S-M4 | 読む文（`read` があれば `read`、なければ `text`）に、`read` で読みを書いておらず、ユーザー辞書（`../../assets/voicevox_user_dict.json`）にもない英字の語が無い | 機械（`check_text.py`） | must |
 | S-W1 | 各文が TW-1〜TW-9 に反していない | writing-reviewer | must（読んだ人が誤解する・意味が取れないもの）/ should（より正確にできるもの） |
 | S-W2 | 用語を比喩や造語で置き換えていない。禁止語の辞書に無い新しい造語（例: 「目印」「試行印」「読み書き役」）も含む。見つけたら辞書に足す候補として `suggestion` に書く | writing-reviewer | must |
 | S-W3 | 口調のために文の主体・相手が崩れていない（語尾を付けるための受け身化など） | writing-reviewer | must |
+| S-W4 | 読みの分かれる単独の漢字（「方」「他」「行」など）を、意図した読みで読ませるよう `read` に書いている | writing-reviewer | should |
 | S-F1 | 各行の主張が `source` から言える（FC-wrong / FC-overclaim / FC-nosource が無い） | fact-checker（台本モード） | must |
-| S-F2 | `map`・`objects`・ops の経路と値が根拠と一致する | fact-checker（台本モード） | must |
+| S-F2 | 図の宣言（`figures` の辺・メッセージ・表やグラフの値）と動作（`trace`・`reply` の経路、`relabel` の値）が根拠と一致する | fact-checker（台本モード） | must |
 | S-F3 | 契約の言い切りがすべて台本のどこかで言われ、契約に無い主張を足していない | fact-checker（台本モード） | must |
-| S-D1 | 詳解の章で、流れているデータ（トークン・リクエスト・レコード等）が画面の主役になっている（VG-1） | director（計画モード） | must |
-| S-D2 | 1 行 1 つの画面変化で、字幕の主題と画面の主題が同じ（VG-4・VG-7） | director（計画モード） | must |
-| S-D3 | 構成の型（契約の `structure`）の部が `../structures.md` の並びどおりにあり、型ごとの「1 件」（overview なら利用の場面の 1 回、concept なら 1 つの事例）が通されている | director（計画モード） | must |
-| S-D4 | その他の VG の約束（寄って戻る・同じものを変形させる・失敗は値の書き換えで見せる 等） | director（計画モード） | should |
+| S-D1 | 詳解の場面で、流れているデータ（トークン・リクエスト・レコード等）が画面の主役になっている（VG-1） | director（計画モード） | must |
+| S-D2 | 1 行 1 つの画面変化で、字幕の主題と画面の主題が同じ（VG-3・VG-6） | director（計画モード） | must |
+| S-D3 | 構成の型（契約の `structure`）の部が `../structures.md` の並びどおりに場面（`scenes` の `role`）としてあり、型ごとの「1 件」（overview なら利用の場面の 1 回、concept なら 1 つの事例）が通されている | director（計画モード） | must |
+| S-D4 | その他の VG の約束（寄って戻る VG-4・具体的な 1 件を通す VG-5・応答は別の矢印 VG-7・残り物を消す VG-8 など） | director（計画モード） | should |
 
 ## 較正の例
 

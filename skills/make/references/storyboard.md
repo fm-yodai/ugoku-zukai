@@ -225,7 +225,7 @@ python3 scripts/build_player.py storyboard.json -o preview.html     # 音声な�
 ## 3. 場面と行（scenes / lines）
 
 ```json
-{ "id": "s1", "figure": "flow", "title": "（任意）章の題", "lines": [
+{ "id": "s1", "figure": "flow", "title": "（任意）章の題", "role": "（任意）detail", "lines": [
   { "id": "l2", "text": "{a}申請者が送った申請は、{b}最初に入力チェックを通ります。",
     "read": "（任意）読み。印も同じ位置に置く",
     "source": ["src/expense/check.ts:42"],
@@ -235,7 +235,8 @@ python3 scripts/build_player.py storyboard.json -o preview.html     # 音声な�
 - `figure` は図 1 つか、2 つの配列（左右に並べる。`split` で左の幅の割合、既定 0.56）
 - 場面が変わると、次の場面で使わない図は消え、使い続ける図は新しい区画へ動く
 - `text` は字幕。2 行（1 行およそ全角 38 字）に収まらなければ文を分ける
-- `source` は根拠（契約と同じ書き方）。評価役が照合する
+- `role` は構成の型の部（`question` `overview` `detail` `recap` など。`structures.md`）。プレーヤーは使わず、評価役が部の並びを照合する
+- `source` は根拠（契約と同じ書き方）。評価役が照合し、再生ページの下の「根拠」の一覧にも行ごとに出る（押すとその行の時刻へ飛ぶ）。読んだ人がたどれるように、`"src/expense/check.ts:42"`・`"PR #12"`・`"https://example.com/guide 「承認は 2 段まで」"` のように場所か引用まで書く
 
 ## 4. 文中の印と時刻
 
