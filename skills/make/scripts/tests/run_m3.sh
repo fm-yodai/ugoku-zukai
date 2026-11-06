@@ -29,9 +29,9 @@ sh scripts/tests/test_frames.sh || fail=1
 python3 scripts/tests/test_build_review.py >/dev/null 2>&1 || { echo "NG: test_build_review.py"; python3 scripts/tests/test_build_review.py; fail=1; }
 # 作業フォルダ（題材の外に作る。同じ名前は -2 -3…、日本語だけの名前は run）
 rh=$(mktemp -d)
-w1=$(UZ_RUNS_HOME="$rh" python3 scripts/workdir.py new "this repo" 2>/dev/null)
-w2=$(UZ_RUNS_HOME="$rh" python3 scripts/workdir.py new "this repo" 2>/dev/null)
-w3=$(UZ_RUNS_HOME="$rh" python3 scripts/workdir.py new "このリポジトリ" 2>/dev/null)
+w1=$(UZ_RUNS_HOME="$rh" python3 scripts/workdir.py new --now 20260101-0000 "this repo" 2>/dev/null)
+w2=$(UZ_RUNS_HOME="$rh" python3 scripts/workdir.py new --now 20260101-0000 "this repo" 2>/dev/null)
+w3=$(UZ_RUNS_HOME="$rh" python3 scripts/workdir.py new --now 20260101-0000 "このリポジトリ" 2>/dev/null)
 for w in "$w1" "$w2" "$w3"; do
   [ -d "$w/sources" ] && [ -d "$w/review" ] || { echo "NG: workdir.py の作業フォルダに sources/ review/ がない: $w"; fail=1; }
 done

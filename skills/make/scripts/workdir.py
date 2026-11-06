@@ -35,13 +35,14 @@ def default_home():
 
 
 def slug(name):
-    s = re.sub(r"[^A-Za-z0-9]+", "-", name).strip("-")
+    s = re.sub(r"[^A-Za-z0-9]+", "-", name).strip("-")[:40].rstrip("-")
     return s or "run"
 
 
 def make(home, name, now=None):
     now = now or datetime.datetime.now()
-    base = f"{now:%Y%m%d-%H%M}-{slug(name)}"
+    stamp = now if isinstance(now, str) else f"{now:%Y%m%d-%H%M}"
+    base = f"{stamp}-{slug(name)}"
     os.makedirs(home, exist_ok=True)
     n = 1
     while True:
@@ -62,9 +63,10 @@ def main():
     p = sp.add_parser("new", help="作業フォルダを作ってパスを出す")
     p.add_argument("name", help="題材の短い名前")
     p.add_argument("--home", help="置き場（省くと UZ_RUNS_HOME → ${CLAUDE_PLUGIN_DATA}/runs → ~/.cache/ugoku-zukai/runs）")
+    p.add_argument("--now", help=argparse.SUPPRESS)  # 試験用: 時刻の部分 YYYYMMDD-HHMM を固定する
     a = ap.parse_args()
     try:
-        print(make(a.home or default_home(), a.name))
+        print(make(a.home or default_home(), a.name, a.now))
     except OSError as e:
         print(f"workdir: 作業フォルダを作れない（{e}）", file=sys.stderr)
         sys.exit(4)
