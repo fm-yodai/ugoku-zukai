@@ -1,6 +1,6 @@
 # maker-checker のループの約束
 
-2 取材と契約・4 台本・5 画面（台帳のフェーズ名は `contract`・`script`・`screen`）は、maker が作り、checker が `criteria/` の基準で判定し、合格するまで回す。本体（SKILL.md を実行しているセッション）は**進行役**で、成果物の中身を書かない・指摘の本文を読まない。読むのは `scripts/ledger.py status` が出す件数の要約だけ。例外は 2 つで、3 人の確認では `ledger.py residual` が書く `review/residual.md` の表をユーザーに見せ、8 報告では「足すべき項目」を集めるために台帳の `suggestion` を読む（チャットで 1 人が役を順に演じるときの約束は下の「チャットでの回し方」）。
+2 取材と契約・4 台本・5 画面（台帳のフェーズ名は `contract`・`script`・`screen`）は、maker が作り、checker が `criteria/` の基準で判定し、合格するまで回す。本体（SKILL.md を実行しているセッション）は**進行役**で、成果物の中身を書かない（例外は 6 音声で台本の `voice.speaker` を声の一覧に合わせて直すことだけ）・指摘の本文を読まない。読むのは `scripts/ledger.py status` が出す件数の要約だけ。例外は 2 つで、3 人の確認では `ledger.py residual` が書く `review/residual.md` の表をユーザーに見せ、8 報告では「足すべき項目」を集めるために台帳の `suggestion` を読む（チャットで 1 人が役を順に演じるときの約束は下の「チャットでの回し方」）。
 
 設計の根拠: Anthropic「Harness design for long-running application development」（独立した懐疑的な評価役・基準ごとの合否・作る前の契約）、「Demystifying evals for AI agents」（次元ごとのルーブリック・Unknown を許す）、Huang ら ICLR 2024（自己修正は外部の信号があるときに効く → 機械検査を先に回す）。
 
@@ -30,6 +30,7 @@
   - `STOP_MAX`: 最大の周（Claude Code は 3、チャットは 2。`ledger.py status … --max-rounds 2`）を終えても合格しない
   - `STOP_OSC`: 同じキーの `reopen` が 2 に達した（直す → 壊れる の振動）。最大の周を待たない
   - `STOP_DISPUTE`: 同じキーの反論が 2 回認められなかった（maker と checker の意見が割れたまま）
+- 5 画面で PNG を作れなかった（`frames.json` の `png` が false）ときは、画面の周を 1 回だけ回し、`status` の判定にかかわらず 6 音声へ進む。目で見ないと決められない基準は UNKNOWN のまま残論点になり、8 報告に「コマの画像なし」と書く
 - 3 人の確認で契約を直すことになって 2 取材と契約に戻るときは、`python3 scripts/ledger.py reset <workdir> contract` で周を 1 から数え直す（前の項目は台帳の `archived` に移り、判定と残論点には使わない）
 - 打ち切ったら、閉じていない項目は**残論点**になる。`ledger.py residual` で一覧を作り、7 組み立てと公開の再生ページ（たたんだ「未解決の指摘 N 件」）と 8 報告に必ず出す。黙って公開しない
 

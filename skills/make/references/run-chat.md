@@ -61,14 +61,14 @@ for d in /mnt/skills/*/make /mnt/skills/*/*/make; do [ -f "$d/scripts/build_play
 find / -xdev -path "*/make/player/template.html" -not -path "*/uz-work/*" -not -path "/mnt/user-data/*" 2>/dev/null | while read f; do d="${f%/player/template.html}"; [ -f "$d/scripts/build_player.py" ] && echo "$d"; done
 ```
 
-候補がちょうど 1 つならそれが `<skill>`。2 つ以上残ったら、先へ進まずにユーザーにどれを使うか聞く。次に作業フォルダを作る。
+候補がちょうど 1 つならそれが `<skill>`。2 つ以上残ったら、先へ進まずにユーザーにどれを使うか聞く。次に作業フォルダを、動画ごとに 1 つ作る（同じ会話で 2 本目を作るときに前の台帳を引き継がないよう、`<題材の短い名前>` は英数字とハイフンで、前と違う名前にする。すでにあれば `-2` を付ける）。
 
 ```sh
-mkdir -p uz-work/sources uz-work/review
-realpath uz-work
+mkdir -p uz-work/<題材の短い名前>/sources uz-work/<題材の短い名前>/review
+realpath uz-work/<題材の短い名前>
 ```
 
-最後の出力が `<workdir>`。題材のファイルが添付されていれば `/mnt/user-data/uploads/` にある。zip なら作業フォルダに展開して一次資料にする（`unzip` がなくても動く）:
+最後の出力が `<workdir>`。題材のファイルが添付されていれば `/mnt/user-data/uploads/` にある。zip なら作業フォルダに展開して一次資料にする（`unzip` がなくても動く）。以後、作り手としても評価役としても、一次資料は展開した `<workdir>/src` の下を読む（`git archive` の zip には `.git` が無いので、`git ls-files` などに頼らず、ファイルの一覧は `find <workdir>/src -type f` で取る）:
 
 ```sh
 python3 -m zipfile -e /mnt/user-data/uploads/<添付>.zip <workdir>/src
@@ -122,7 +122,7 @@ node <skill>/scripts/frames.cjs <workdir>/storyboard.json --theme <テーマ> -o
 ```
 
 - 評価役として `<workdir>/frames/frames.json` を読み、`png` が true なら `sheets` に載ったシートだけを目で見て、合わせて判定する
-- 終了コード 4 は PNG を作れなかったという意味（resvg を読めない）。SVG と `frames.json` だけで判定し、目で見ないと決められない基準は UNKNOWN にする。8 報告の残論点に「コマの画像なし」と書く
+- 終了コード 4 は PNG を作れなかったという意味（resvg を読めない。`frames.json` の `png` が false）。SVG と `frames.json` だけで判定し、目で見ないと決められない基準は UNKNOWN にする。**画面の周は 1 回だけ**にし、status の判定にかかわらず 6 音声へ進む。8 報告に「コマの画像なし」と書く
 - 直すときは図の宣言と動作だけ。字幕を変えないと直せない項目は disputed にし、4 台本の次の周として字幕を直してから、画面の次の周に戻る
 
 ## 6 音声
@@ -134,7 +134,7 @@ python3 <skill>/scripts/setup_voice.py --agree
 python3 <skill>/scripts/tts.py <workdir>/storyboard.json -o <workdir>/voice
 ```
 
-`setup_voice.py` の一覧が出たら、`interview.md` の声が既定（春日部つむぎ、8）でないときだけ、一覧で番号を確かめて `<workdir>/storyboard.json` の `voice.speaker` を直してから `tts.py` を実行する（`text` は変えないので台本の周回には戻らない）。
+`setup_voice.py` の一覧が出たら、`interview.md` の声が既定（春日部つむぎ、8）でないときだけ、一覧で番号を確かめて `<workdir>/storyboard.json` の `voice.speaker` を進行役として直してから（作り手の役に戻らずに進行役が台本を直す、ただ 1 つの例外。番号のほかは変えない） `tts.py` を実行する（`text` は変えないので台本の周回には戻らない）。
 
 `tts.py` が終了コード 3 で終わったら、0 になるまで同じコマンドを繰り返す（100 秒ずつ区切って進む）。終わったら実際の声の長さで検査する:
 

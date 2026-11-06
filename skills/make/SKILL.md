@@ -51,8 +51,8 @@ metadata:
 ### 0 準備
 
 - 環境を判定し、run-*.md を読む
-- 作業フォルダを作る。Claude Code は `scripts/workdir.py new <題材の短い名前>`（題材の外、`${CLAUDE_PLUGIN_DATA}/runs/` の下にできる。ユーザーの作業ツリーには書かない）。チャットは会話の作業ディレクトリに `./uz-work`
-- 題材の種類（コード・リポジトリ・PR / issue・Web ページ・文書ファイル・直前の出力・題目だけ）と、一次資料の場所を確かめる
+- 作業フォルダを作る。Claude Code は `scripts/workdir.py new <題材の短い名前>`（題材の外、`${CLAUDE_PLUGIN_DATA}/runs/` の下にできる。ユーザーの作業ツリーには書かない）。チャットは会話の作業ディレクトリに `./uz-work/<題材の短い名前>`（動画ごとに 1 つ。同じ会話の 2 本目が前の台帳を引き継がないように）
+- 題材の種類（コード・リポジトリ・PR / issue・Web ページ・文書ファイル・直前の出力・題目だけ）と、一次資料の場所を確かめる。手元の題材は絶対パスにし、researcher と fact-checker の両方に同じものを明示して渡す（Claude Code は手元のリポジトリ・フォルダをそのまま、URL を clone するなら `<workdir>/repo`。チャットは zip を展開した `<workdir>/src`）
 
 ### 1 インタビュー
 
@@ -99,11 +99,11 @@ writer が台本 `storyboard.json` を書く → 進行役が `scripts/check_sto
 4. CONTINUE なら writer が台帳に応答し、**図の宣言と動作（`do`）だけ**を直す。字幕（`text`）は変えない。字幕を変えないと直せない項目は writer が disputed にする。その理由が「字幕を変える必要がある」なら、**4 台本に戻る**（`script` の台帳で次の周として直し、画面をやり直す）
 5. 直したら `check_storyboard.cjs` を通してから（誤りは機械検査の差し戻し）、手順 2（`frames.cjs`）に戻ってコマを書き直す
 
-`frames.cjs` や `setup_render.py` が終了コード 4 で終わったら、PNG を作れない環境（resvg を読めない）。止まらずに SVG と `frames.json` だけで進める。director は目で見ないと決められない基準を UNKNOWN にする。8 報告の残論点に「コマの画像なし」と書き添える。
+`frames.cjs` や `setup_render.py` が終了コード 4 で終わったら、PNG を作れない環境（resvg を読めない）。止まらずに SVG と `frames.json` だけで進める（`frames.json` の `png` が false）。このときは**画面の周を 1 回だけ**回す: director は SVG と `frames.json` で判定できる基準だけを判定し、目で見ないと決められない基準を UNKNOWN にする。`ledger.py status` の判定にかかわらず 6 音声へ進み（閉じない項目は残論点）、8 報告に「コマの画像なし」と書く。
 
 ### 6 音声
 
-1. `scripts/setup_voice.py --agree` で VOICEVOX を入れる（1 で同意を得たときだけ。最後に入っている声の一覧が出る）。`interview.md` の声が既定（春日部つむぎ）でなければ、進行役がこの一覧で話者の番号を確かめ、台本の `voice.speaker` をその番号にする（字幕 `text` は変わらないので台本の周回には戻らない）。番号を直してから手順 2 へ進む
+1. `scripts/setup_voice.py --agree` で VOICEVOX を入れる（1 で同意を得たときだけ。最後に入っている声の一覧が出る）。`interview.md` の声が既定（春日部つむぎ）でなければ、進行役がこの一覧で話者の番号を確かめ、台本の `voice.speaker` をその番号にする。進行役が成果物に手を入れる**ただ 1 つの例外**で、番号のほかは変えない（字幕 `text` は変わらないので台本の周回には戻らない）。番号を直してから手順 2 へ進む
 2. `scripts/tts.py <workdir>/storyboard.json -o <workdir>/voice` で 1 行ずつ合成する。**終了コード 3 は「時間で区切った。続きがある」**なので、0 になるまで同じコマンドを繰り返す（合成済みの行は作り直さない）
 3. `scripts/check_storyboard.cjs … --timeline <workdir>/voice/timeline.json` で、実際の声の長さで検査し直す。誤り（と「辺 … に label がない」）があれば、機械検査の差し戻しとして writer が**動作 `do` だけ**を直す（台帳には載せない）。字幕 `text` や読み `read` を変えたときは、手順 2（`tts.py`）をもう一度実行する
 4. 読み間違いは、字幕を変えずに行の `read` で直す（直した語は 8 報告の「足すべき項目」に挙げる）

@@ -4,9 +4,9 @@
 
 ## 目次
 
-指摘ファイル → severity の基準 → 応答ファイル（書き手が書く）→ maker-checker 形式（ugoku-zukai。checker の出力 / maker の応答）。単独のレビューは前の 3 つ、ugoku-zukai は最後の節を使う。
+指摘ファイル → severity の基準 → 応答ファイル（書き手が書く）→ maker-checker 形式（ugoku-zukai。checker の出力 / maker の応答）。単独のレビューは前の 3 つ、ugoku-zukai の周回（2 取材と契約・4 台本・5 画面）は最後の節だけを使う（`finding`・`rebutted` の形は使わない）。
 
-## 指摘ファイル
+## 指摘ファイル（単独レビュー用。maker-checker のループでは使わない）
 
 ```json
 {
@@ -45,7 +45,7 @@
 
 迷ったら should にする。must は呼び出し元が必ず対応する前提なので、数を絞る。
 
-## 応答ファイル（書き手が書く）
+## 応答ファイル（書き手が書く。単独レビュー用。maker-checker のループでは使わない）
 
 ```json
 {

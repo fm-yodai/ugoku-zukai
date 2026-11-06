@@ -11,7 +11,7 @@ SKILL.md の流れ（0 準備〜8 報告）を、Claude Code のサブエージ�
 
 ## 進行役の約束
 
-- 成果物（`brief.md`・`contract.json`・`storyboard.json`・応答）を自分で書かない。直すのは作り手のエージェント
+- 成果物（`brief.md`・`contract.json`・`storyboard.json`・応答）を自分で書かない。直すのは作り手のエージェント。例外は 1 つだけで、6 音声で台本の `voice.speaker`（話者の番号）を一覧に合わせて直すのは進行役がする（字幕や図には触らない）
 - 指摘の本文は読まない。読むのは機械検査の出力、`ledger.py status` の要約、エージェントが最後に返す 1 行だけ。指摘の中身は作り手にファイルのパスで渡す。例外は 3 人の確認（`ledger.py residual` の表を見せる）と 8 報告（足すべき項目を集める）
 - 周回を続けるかは `ledger.py status` の終了コードだけで決める（`ingest`・`respond` の要約は最大の周を見ていないので使わない）
 - animator は呼ばない
@@ -22,8 +22,8 @@ SKILL.md の流れ（0 準備〜8 報告）を、Claude Code のサブエージ�
 
 | エージェント | 呼ぶ段 | 足して渡すもの | 出力先 |
 |---|---|---|---|
-| `ugoku-zukai:researcher` | 2 | 題材の場所（ref・PR 番号・URL・ファイルのパス） | N=1 は `<workdir>/contract.json` と `<workdir>/brief.md`、N≥2 は `<workdir>/review/contract/r<N>/responses.json` |
-| `ugoku-zukai:fact-checker` | 2・4 | 題材の場所（一次資料）。`brief.md` は渡さない | `<workdir>/review/<phase>/r<N>/fact-checker.json` |
+| `ugoku-zukai:researcher` | 2 | 題材の場所。手元のファイル・フォルダ・リポジトリは絶対パス（作業ツリーのまま）。リポジトリの URL なら URL と clone 先 `<workdir>/repo`。ほかに PR 番号・Web ページの URL | N=1 は `<workdir>/contract.json` と `<workdir>/brief.md`、N≥2 は `<workdir>/review/contract/r<N>/responses.json` |
+| `ugoku-zukai:fact-checker` | 2・4 | 題材の場所（researcher に渡したのと同じ絶対パス。URL を clone したなら `<workdir>/repo`）。`brief.md` は渡さない | `<workdir>/review/<phase>/r<N>/fact-checker.json` |
 | `ugoku-zukai:director` | 2・4・5 | なし | `<workdir>/review/<phase>/r<N>/director.json` |
 | `ugoku-zukai:writing-reviewer` | 4 | なし | `<workdir>/review/script/r<N>/writing-reviewer.json` |
 | `ugoku-zukai:writer` | 4・5・6 | テーマ（`3b1b`・`flat`・`<workdir>/theme.json`） | `<workdir>/storyboard.json`、N≥2 と画面の直しは `<workdir>/review/<phase>/r<N>/responses.json`。機械検査の差し戻しでは応答を書かない |
@@ -138,7 +138,7 @@ node ${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/check_storyboard.cjs <workdir>/st
 node ${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/frames.cjs <workdir>/storyboard.json --theme <テーマ> -o <workdir>/frames
 ```
 
-- `setup_render.py` か `frames.cjs` が終了コード 4 で終わったら、PNG なしで続ける（SVG と `frames.json` は書けている）。director には「PNG が無い」と添えて呼ぶ。8 報告の残論点に「コマの画像なし」と書く
+- `setup_render.py` か `frames.cjs` が終了コード 4 で終わったら（`frames.json` の `png` が false）、PNG なしで続ける（SVG と `frames.json` は書けている）。director には「PNG が無い」と添えて呼ぶ。**画面の周は 1 回だけ**にし、`ledger.py status` の判定にかかわらず 6 音声へ進む（見えない基準は UNKNOWN のまま残論点になる）。8 報告に「コマの画像なし」と書く
 - N≥2 では writer を phase `screen` で呼ぶ。writer は図の宣言と動作だけを直し、字幕は変えない
 - writer が最後に返す 1 行の disputed が 1 以上なら、`responses.json` の disputed の `note` だけを読む。「字幕を変える必要がある」なら、writer を phase `script`・`script` の最後の周 +1 で呼び、画面の台帳のその項目のキーを添えて直させる。4 の機械検査と評価役をその周で回してから、画面の次の周に戻る
 
@@ -151,7 +151,7 @@ python3 ${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/setup_voice.py --agree
 python3 ${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/tts.py <workdir>/storyboard.json -o <workdir>/voice
 ```
 
-`setup_voice.py` の一覧が出たら、`interview.md` の声が既定（春日部つむぎ、8）でないときだけ、一覧で番号を確かめて `<workdir>/storyboard.json` の `voice.speaker` を直してから `tts.py` を実行する（`text` は変えないので台本の周回には戻らない）。
+`setup_voice.py` の一覧が出たら、`interview.md` の声が既定（春日部つむぎ、8）でないときだけ、一覧で番号を確かめて `<workdir>/storyboard.json` の `voice.speaker` を進行役が直してから（「成果物を自分で書かない」のただ 1 つの例外。番号のほかは変えない） `tts.py` を実行する（`text` は変えないので台本の周回には戻らない）。
 
 `tts.py` の終了コード 3 は時間で区切っただけ。0 になるまで同じコマンドを繰り返す。終わったら実際の声の長さで検査する:
 
