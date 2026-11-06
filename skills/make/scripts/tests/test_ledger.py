@@ -42,6 +42,23 @@ class LedgerTest(unittest.TestCase):
         self.assertIn("l9:S-W1", r.stdout)
         self.assertIn("1 件", r.stdout)  # l1 は台本にあるので数えない
 
+    def test_reset(self):
+        # 人の確認で契約に戻ったら、周を 1 から数え直す。前の項目は archived に移し、判定の材料にしない
+        self.ingest_r1()
+        os.makedirs(os.path.join(self.wd, "review", "script", "r1"))
+        r = run("reset", self.wd, "script")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        led = json.load(open(os.path.join(self.wd, "review", "ledger.json"), encoding="utf-8"))
+        self.assertNotIn("script", led["phases"])
+        self.assertEqual(led["archived"][0]["phase"], "script")
+        self.assertTrue(led["archived"][0]["items"])
+        self.assertFalse(os.path.exists(os.path.join(self.wd, "review", "script")))
+        self.assertTrue(os.path.isdir(os.path.join(self.wd, "review", "script-old1", "r1")))
+        r = run("status", self.wd, "script")
+        self.assertIn("周 0/3", r.stdout)
+        run("residual", self.wd)
+        self.assertEqual(json.load(open(os.path.join(self.wd, "review", "residual.json"), encoding="utf-8"))["items"], [])
+
     def test_max_rounds_2(self):
         self.ingest_r1()  # c1-2:S-F1 が open のまま
         self.assertEqual(run("status", self.wd, "script", "--round", "2").returncode, 10)

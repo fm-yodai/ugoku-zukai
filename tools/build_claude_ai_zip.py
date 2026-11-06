@@ -38,7 +38,7 @@ def main():
     dest = os.path.join(out_dir, "ugoku-zukai-make.zip")
     with zipfile.ZipFile(dest, "w", zipfile.ZIP_DEFLATED) as z:
         for base, dirs, files in os.walk(SKILL):
-            dirs[:] = [d for d in dirs if d not in ("__pycache__", "tests")]
+            dirs[:] = [d for d in dirs if d not in ("__pycache__", "tests", "node_modules")]
             for f in files:
                 path = os.path.join(base, f)
                 arc = os.path.join("make", os.path.relpath(path, SKILL))

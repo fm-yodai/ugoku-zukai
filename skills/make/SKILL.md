@@ -12,45 +12,125 @@ description: >
   Works in claude.ai / Claude Desktop chat and in Claude Code. Not for static one-page
   decision documents where a still diagram is enough.
 metadata:
-  version: "0.1.0"
+  version: "0.2.0"
 ---
 
 # 動く図解を作る
 
-> **開発中（0.1.0）**: プレーヤー（台本の形式・テーマ・図 16 種）と声（VOICEVOX での合成と時刻表）までできた。進行の手順（M3）はまだないので、下の流れを Claude が自分で順に進める。設計は `docs/design.md`（リポジトリの直下）が正。
+題材を「問い → 全体像 → 流れに沿った詳解 → まとめ」の順に、動く図と日本語のナレーションで見せる再生ページ（HTML 1 枚）を作る。判断の優先順位は **正確さ > 分かりやすさ > 見た目**。根拠のない処理・数値・分岐を絵のために足さない。
 
-## 役割
-
-題材を「問い → 全体像 → 流れに沿った詳解 → まとめ」の順に、動く図とナレーションで見せる。判断の優先順位は **正確さ > 分かりやすさ > 見た目**。根拠のない処理・数値・分岐を絵のために足さない。
+あなたはこの流れの**進行役**です。成果物（契約・台本）は作り手（researcher・writer）が書き、評価役（fact-checker・writing-reviewer・director）が成功基準 `references/criteria/` で判定します。進行役は機械検査を回し、台帳の判定に従って次へ進めます。
 
 ## 最初に環境を判定する
 
-| 手がかり | 環境 | 進め方 |
+| 手がかり | 環境 | 手順の詳細 |
 |---|---|---|
-| Agent ツールがあり、`ugoku-zukai:researcher` などのサブエージェントを呼べる | Claude Code | 作り手と評価役をサブエージェントに分ける（`references/loop-protocol.md`） |
-| サブエージェントがない（claude.ai / Desktop のチャット） | チャット | 1 つの会話で役を順に演じる。評価役の番では、作り手の取材メモや推論を読み返さず、成功基準（`references/criteria/`）と一次資料だけで判定する |
+| Agent ツールがあり、`ugoku-zukai:researcher` などのサブエージェントを呼べる | Claude Code | `references/run-code.md` |
+| サブエージェントがない（claude.ai / Claude Desktop のチャット） | チャット | `references/run-chat.md` |
 
-どちらの環境でも、機械検査と組み立ては同じスクリプトを使う。
+判定したら、その環境の文書を**最初に全部読む**。下の流れの番号と名前は両方の環境で同じで、各段の具体的なコマンド・渡すもの・分岐は run-*.md に書いてある。
+
+- 下の `scripts/…` は、スキルのフォルダ（この SKILL.md のある場所）からの相対パス。環境ごとの書き方は run-*.md の「パスの書き方」に従う
+- 作業フォルダ（以下 `<workdir>`）の中のファイル名は、`scripts/workdir.py` の説明にある名前を使う（`interview.md`・`contract.json`・`storyboard.json`・`review/`・`frames/`・`voice/`・`player.html` など）
+
+## 周回の約束（2 取材と契約・4 台本・5 画面）
+
+約束の正は `references/loop-protocol.md`。要点だけ書く。
+
+1. 作り手が作る（2 周目からは、台帳の open の項目に応答して直し、`review/<phase>/r<N>/responses.json` を書く。進行役が `scripts/ledger.py respond` で取り込む）
+2. 進行役が機械検査を回す。誤りがあれば作り手に戻す（周には数えない。同じ周で 5 回を超えたら打ち切って評価役へ進む）
+   - `check_storyboard.cjs` は警告だけなら終了コード 0 で終わる。**出力に「辺 … に label がない」があれば、誤りと同じに writer へ戻す**（must の基準 S-M1・G-M2）
+3. 評価役が判定する（Claude Code は役ごとに並列、チャットは 1 回にまとめる）。作り手の推論と取材メモ `brief.md` は評価役に渡さない
+4. 進行役が `scripts/ledger.py ingest` で台帳に取り込む
+5. **次へ進むかは `scripts/ledger.py status` の判定（終了コード）だけで決める**: PASS（0）→ 次の段へ / CONTINUE（10）→ 次の周 / STOP_MAX・STOP_OSC・STOP_DISPUTE（20〜22）→ 打ち切って次の段へ（閉じていない項目は残論点として持ち越す）
+   - `ingest` と `respond` も件数の要約を出すが、最大の周（`--max-rounds`）を見ていないので、判断に使わない
+   - 最大の周は Claude Code が 3、チャットが 2（チャットでは必ず `--max-rounds 2` を付ける）
 
 ## 流れ
 
-1. **インタビュー**: 読者・一番分かってほしいこと・範囲・構成の型（`references/structures.md`）・長さ・声・画風・描き方を聞く。AskUserQuestion、なければフォーム、なければ文章で聞く
-   - 画風は「3b1b 調 / フラットな図解 / 手持ちのデザインに合わせる」から選んでもらう。合わせる場合は、デザインシステムでなくても手元の資料（Web ページ・画像・PowerPoint・CSS など）を何でも受け取り、`references/themes.md` の手順でテーマにして検査する
-   - 描き方の既定は「標準（宣言型の台本＋SVG プレーヤー）」。数式・3D・手作りの絵が要る題材だけ manim-web を勧める
-   - VOICEVOX の音声モデルの利用規約（https://github.com/VOICEVOX/voicevox_vvm/blob/main/TERMS.txt ）への同意も、ここで取る。声の既定は春日部つむぎ（話者 8、話速 1.1）。ほかの声は `setup_voice.py` の一覧から選んでもらい、台本の `voice.speaker` に書く
-2. **取材と契約**: 一次資料を読み、根拠つきの契約 `contract.json` を書く。検査には `scripts/check_contract.py` を使い、基準は `references/criteria/contract.md`
-3. **台本**: `storyboard.json`（図の宣言・字幕と文中の印・根拠・動作）を書く。形式は `references/storyboard.md`、見本は `examples/`、文章の規則は `references/writing/rules.md`。書いたら `node scripts/check_storyboard.cjs` で検査する
-4. **音声**: 同意を得てから `python3 scripts/setup_voice.py --agree` で VOICEVOX を入れる（初回だけ約 94MB。Claude Code では入れた場所を使い回す）。次に `python3 scripts/tts.py storyboard.json -o work` で 1 行ずつ合成し、時刻表 `work/timeline.json`（印の時刻つき）と `work/narration.mp3` を作る
-   - 終了コード 3 は「時間で区切った。続きがある」。同じコマンドを繰り返す（合成済みの行は作り直さない）
-   - 時刻表ができたら `node scripts/check_storyboard.cjs storyboard.json --timeline work/timeline.json` で検査し直す（実際の声の長さで、動きが次の行にはみ出していないかを見る）
-   - 読み間違いは、字幕を変えずに行の `read` で直す。何度も出る語は `assets/voicevox_user_dict.json` に足す
-5. **組み立て**: `python3 scripts/build_player.py storyboard.json --theme … --voice work -o player.html [--artifact]` で、台本・テーマ・時刻表・音声をプレーヤーの HTML 1 枚に埋め込む。台本の文を合成の後に変えると「音声が古い」と止まるので、`tts.py` をもう一度実行する
-6. **公開**: Artifact で公開する。閉じなかった指摘は残論点として、ページとチャットの両方に示す
+### 0 準備
+
+- 環境を判定し、run-*.md を読む
+- 作業フォルダを作る。Claude Code は `scripts/workdir.py new <題材の短い名前>`（題材の外、`${CLAUDE_PLUGIN_DATA}/runs/` の下にできる。ユーザーの作業ツリーには書かない）。チャットは会話の作業ディレクトリに `./uz-work`
+- 題材の種類（コード・リポジトリ・PR / issue・Web ページ・文書ファイル・直前の出力・題目だけ）と、一次資料の場所を確かめる
+
+### 1 インタビュー
+
+AskUserQuestion、なければ質問のフォーム、なければ文章でまとめて聞く。聞くこと:
+
+- **読者**と**一番分かってほしいこと**（1 文）
+- **範囲**（含めるもの・外すもの）と**構成の型**（処理の流れ / 変更前後 / 全体紹介 / 概念 / 比較。`references/structures.md`）
+- **長さ**: 既定は 3 分
+- **声**: 既定は春日部つむぎ（話者 8、話速 1.1）。ほかの声を選ぶなら、話者の番号を控える（台本の `voice.speaker` に書く）
+- **画風**: 3b1b 調（`3b1b`）/ フラットな図解（`flat`）/ 手持ちのデザインに合わせる。合わせる場合は、Web ページ・画像・PowerPoint・CSS・トークンなど何でも受け取り、`references/themes.md` の手順で `<workdir>/theme.json` を作り、`scripts/check_theme.py` を通す
+- **VOICEVOX の音声モデルの利用規約への同意**（https://github.com/VOICEVOX/voicevox_vvm/blob/main/TERMS.txt ）。音声モデルなど約 94MB を GitHub から取ること、再生ページに「VOICEVOX:<声の名前>」のクレジットを出すことも伝える。同意がなければ音声は作らない（6 音声を飛ばし、音声なしの再生ページにする）
+
+描き方（標準 / manim-web）は聞かない。今は標準（宣言型の台本＋SVG のプレーヤー）だけで作る。数式の変形や 3D が主役の題材なら、今は向かないと先に伝える。
+
+答えを `<workdir>/interview.md` に書く（題材と一次資料の場所・読者・一番分かってほしいこと・範囲・構成の型・長さ・声・テーマ・規約への同意）。
+
+### 2 取材と契約
+
+researcher が一次資料を読み、取材メモ `brief.md` と契約 `contract.json` を書く → 進行役が `scripts/check_contract.py <workdir>` → 評価役（fact-checker 契約モード・director 構造モード）→ 台帳（フェーズ名 `contract`）。基準は `references/criteria/contract.md`。
+
+### 3 人の確認
+
+周回が終わったら、契約の要約をユーザーに見せて了承をもらう。人に確かめるのは**ここの 1 回だけ**（台本の周回は手間がかかるので、その前に物差しを合わせる）。見せるもの:
+
+- 一番分かってほしいこと（`takeaway`）
+- 言い切ること（`claims`。根拠の場所も添える）
+- 構成の型と尺の配分（`structure`・`budget`）
+- 主な図の種類（`diagram.type` と選んだ理由）
+- 契約の周回で閉じなかった指摘があれば、その件数と要点
+
+直しを求められたら、要望を `interview.md` に書き足して **2 取材と契約に戻る**。台帳の `contract` の周は `scripts/ledger.py reset <workdir> contract` で 1 から数え直す。
+
+### 4 台本
+
+writer が台本 `storyboard.json` を書く → 進行役が `scripts/check_storyboard.cjs`（テーマを付ける。時刻は見積もり）と `scripts/check_text.py` → 評価役（writing-reviewer・fact-checker 台本モード・director 計画モード）→ 台帳（フェーズ名 `script`）。台本の形式は `references/storyboard.md`、基準は `references/criteria/script.md`・`structure.md`。
+
+### 5 画面
+
+合成の前に、見積もりの時刻で画面を確かめる。
+
+1. 初回だけ `scripts/setup_render.py` でコマを PNG にする道具を入れる
+2. 進行役が `scripts/frames.cjs` で各行の落ち着いたコマを `<workdir>/frames/` に書く（`--timeline` は付けない）
+3. 評価役（director 画面モード）が判定 → 台帳（フェーズ名 `screen`）
+4. CONTINUE なら writer が**図の宣言と動作（`do`）だけ**を直す。字幕（`text`）は変えない。字幕を変えないと直せない項目は writer が disputed にする。その理由が「字幕を変える必要がある」なら、**4 台本に戻る**（`script` の台帳で次の周として直し、画面をやり直す）
+5. 直したら `check_storyboard.cjs` を通してから、2 に戻ってコマを書き直す
+
+`frames.cjs` や `setup_render.py` が終了コード 4 で終わったら、PNG を作れない環境（resvg を読めない）。止まらずに SVG と `frames.json` だけで進める。director は目で見ないと決められない基準を UNKNOWN にする。8 報告の残論点に「コマの画像なし」と書き添える。
+
+### 6 音声
+
+1. `scripts/setup_voice.py --agree` で VOICEVOX を入れる（1 で同意を得たときだけ。最後に入っている声の一覧が出る）
+2. `scripts/tts.py <workdir>/storyboard.json -o <workdir>/voice` で 1 行ずつ合成する。**終了コード 3 は「時間で区切った。続きがある」**なので、0 になるまで同じコマンドを繰り返す（合成済みの行は作り直さない）
+3. `scripts/check_storyboard.cjs … --timeline <workdir>/voice/timeline.json` で、実際の声の長さで検査し直す。誤り（と「辺 … に label がない」）があれば writer が**動作 `do` だけ**を直す。字幕 `text` や読み `read` を変えたら、2 の `tts.py` をもう一度実行する
+4. 読み間違いは、字幕を変えずに行の `read` で直す（直した語は 8 報告の「足すべき項目」に挙げる）
+
+### 7 組み立てと公開
+
+1. `scripts/ledger.py residual <workdir>` で残論点を `review/residual.json` に書き出す（件数が出る）
+2. `scripts/build_player.py <workdir>/storyboard.json --theme <テーマ> --voice <workdir>/voice --review <workdir> -o <workdir>/player.html --artifact` で組み立てる。プレーヤーの下に、たたんだ「未解決の指摘 N 件」と「根拠」の一覧が付く。VOICEVOX のクレジットはプレーヤーが出す
+   - 「音声が古い」で止まったら、台本の文が合成の後に変わっている。6 の `tts.py` をもう一度実行する
+3. `player.html` を Artifact として公開する（ファイルのまま。書き写さない。やり方は run-*.md）
+
+### 8 報告
+
+ユーザーに次を返す。
+
+- 公開したページ（Artifact の URL かリンク）
+- 残論点の件数と、must の項目の要点（0 件なら「なし」）。PNG を作れなかったときは「コマの画像なし」
+- **足すべき項目**（人がスキルに足すかを決める。進行役はスキルのファイルを書き換えない）
+  - 禁止語の候補: 台帳の指摘の `suggestion` から（`assets/banned_terms.json` 向け）
+  - 読み: 6 音声で `read` を足して直した語（`assets/voicevox_user_dict.json` 向け）
+  - 語彙・型の提案: 図の種類・動作・構成の型で表せなかったこと（`references/storyboard.md`・`structures.md` 向け）と、新しい較正の例（`references/criteria/` 向け）
 
 ## 不変条件
 
 1. 契約と台本の主張には根拠を付ける（`path:line`、PR・issue 番号、URL と引用、`file:p.N`）
-2. 各フェーズは、評価役の合格か、3 周での打ち切りを経てから次へ進む。閉じなかった指摘は残論点として必ず示す
-3. GitHub への書き込み系のコマンドは実行しない。ユーザーの作業ツリーで pull や checkout もしない
-4. ナレーションを外部サービスへ送らない（音声合成は VOICEVOX をその場で動かす）。VOICEVOX のクレジットを、動画と再生ページの両方に出す
+2. 各周回は `ledger.py status` の判定で進める。閉じなかった指摘は残論点として、再生ページと報告の両方に必ず出す。黙って公開しない
+3. GitHub への書き込み系のコマンドは実行しない。ユーザーの作業ツリーで pull や checkout もしない。作業フォルダは題材の外に作る
+4. ナレーションを外部サービスへ送らない（VOICEVOX をその場で動かす）。VOICEVOX のクレジットを再生ページに出す
 5. 音声はプレーヤーの中で WebAudio で鳴らす（チャットのプレビューでは audio 要素が拒否されるため）
+6. animator は呼ばない（保留中。M3 では writer が字幕と動作の両方を書く）

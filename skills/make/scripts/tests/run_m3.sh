@@ -57,5 +57,24 @@ for s in check_storyboard.cjs check_text.py frames.cjs; do
   grep '^tools:' ../../agents/writer.md | grep -q "/scripts/$s " || { echo "NG: writer の tools: に $s がない"; fail=1; }
 done
 grep '^tools:' ../../agents/researcher.md | grep -q "/scripts/check_contract.py " || { echo "NG: researcher の tools: に check_contract.py がない"; fail=1; }
+# 進行役の手順（SKILL.md・run-chat.md・run-code.md）
+docs="SKILL.md references/run-chat.md references/run-code.md"
+for f in $docs; do
+  [ -f "$f" ] || { echo "NG: $f がない"; fail=1; continue; }
+  # 出てくる scripts/ のファイルがすべて実在する
+  for p in $(grep -oE 'scripts/[A-Za-z0-9_./-]*\.(py|cjs|sh)' "$f" | sort -u); do
+    [ -f "$p" ] || { echo "NG: $f の $p がない"; fail=1; }
+  done
+  # コードの塊に bash 専用の書き方がない（claude.ai のシェルは sh）
+  bad=$(awk '/^ *```/{c=!c; next} c' "$f" | grep -nE '\$\{PIPESTATUS|(^|[;&|( ])time |\[\[|<\(')
+  [ -z "$bad" ] || { echo "NG: $f のコードに bash 専用の書き方がある"; echo "$bad"; fail=1; }
+done
+[ -f SKILL.md ] && [ "$(wc -l < SKILL.md)" -le 200 ] || { echo "NG: SKILL.md が 200 行を超える"; fail=1; }
+# フェーズの番号と名前が criteria/README.md と同じ
+for ph in "0 準備" "1 インタビュー" "2 取材と契約" "3 人の確認" "4 台本" "5 画面" "6 音声" "7 組み立てと公開" "8 報告"; do
+  grep -q "^### $ph" SKILL.md || { echo "NG: SKILL.md に「### $ph」がない"; fail=1; }
+  grep -q "$ph" references/criteria/README.md || { echo "NG: criteria/README.md に「$ph」がない"; fail=1; }
+done
+[ -f references/run-chat.md ] && { grep -q -- "--max-rounds 2" references/run-chat.md || { echo "NG: run-chat.md に --max-rounds 2 がない"; fail=1; }; }
 [ $fail = 0 ] && echo "M3 の検査: すべて OK" || echo "M3 の検査: NG あり"
 exit $fail

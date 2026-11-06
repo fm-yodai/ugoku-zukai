@@ -6,6 +6,8 @@
   python3 ledger.py status   <workdir> <phase> [--round N] [--max-rounds N]
                                                                          件数の要約と判定を出す（最大周の既定は 3。チャットは 2 を渡す）
   python3 ledger.py residual <workdir>                                   閉じていない項目を review/residual.md と review/residual.json に書き出す
+  python3 ledger.py reset    <workdir> <phase>                           そのフェーズの周を 1 から数え直す（人の確認で契約に戻ったとき）。
+                                                                         前の項目は台帳の archived に、review/<phase>/ は review/<phase>-oldN/ に移す
 
 status の判定と終了コード: PASS 0 / CONTINUE 10 / STOP_MAX 20 / STOP_OSC 21 / STOP_DISPUTE 22
 本体（進行役）は status の出力だけを読み、指摘の本文は maker にファイルのパスで渡す。
@@ -237,6 +239,23 @@ def residual(workdir):
     print(f"{out}: {len(rows)} 件")
 
 
+def reset(workdir, phase):
+    led = load(workdir)
+    ph = led["phases"].pop(phase, None)
+    if ph is not None:
+        led.setdefault("archived", []).append({"phase": phase, **ph})
+    d = os.path.join(workdir, "review", phase)
+    moved = ""
+    if os.path.isdir(d):
+        k = 1
+        while os.path.exists(f"{d}-old{k}"):
+            k += 1
+        os.rename(d, f"{d}-old{k}")
+        moved = f"、review/{phase}/ → review/{phase}-old{k}/"
+    save(workdir, led)
+    print(f"[{phase}] 周を数え直す（前の項目 {len(ph['items']) if ph else 0} 件を archived に移した{moved}）")
+
+
 def main():
     a = [x for x in sys.argv[1:]]
     if len(a) < 2:
@@ -252,6 +271,8 @@ def main():
         status(a[1], a[2], rnd, mx)
     elif cmd == "residual":
         residual(a[1])
+    elif cmd == "reset" and len(a) == 3:
+        reset(a[1], a[2])
     else:
         sys.exit(__doc__)
 

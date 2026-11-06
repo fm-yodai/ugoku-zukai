@@ -6,17 +6,18 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 題材（コード・リポジトリ・PR・Web ページ・文書・題目）を、日本語ナレーション付きの「動く図解」（HTML 1 枚の再生ページ）にする Claude プラグイン `ugoku-zukai`。本体はスキル `skills/make/`。claude.ai / Claude Desktop のチャットと Claude Code の両方で動かすことが前提。
 
-- 設計の正は `docs/design.md`。マイルストーン（M1a / M1b / M2 済み、M3 進行役以降は未着手）、合意済みの要件、claude.ai のサンドボックスで確かめた事実（通信先・道具・制約）はここにある。仕様を変えたら、ここの「Mn の実装」節に追記する
+- 設計の正は `docs/design.md`。マイルストーン（M1a / M1b / M2 済み、M3 進行役は手順まで書いて両環境での通しが残り、M4 以降は未着手）、合意済みの要件、claude.ai のサンドボックスで確かめた事実（通信先・道具・制約）はここにある。仕様を変えたら、ここの「Mn の実装」節に追記する
 - 文書・コメント・コミットメッセージは日本語。コミットは `M2: 〜` のようにマイルストーンを頭に付ける
-- 前身は個人用スキル explain-video-anywhere（v1、Manim＋Docker の VOICEVOX）。`agents/` と `references/criteria/` などは v1 からの移植で、Manim 依存の記述が残っている（M3 で書き換える予定）
+- 前身は個人用スキル explain-video-anywhere（v1、Manim＋Docker の VOICEVOX）。`agents/` と `references/criteria/` などは v1 からの移植で、M3 で新しいプレーヤー向けに書き換えた（保留中の `agents/animator.md` だけ v1 の Manim 用のまま）
 
 ## コマンド
 
 依存のインストール手順はない（python3 と node をそのまま使う。elkjs は `player/vendor/` に同梱）。
 
 ```bash
-# まとめての検査（見本台本 × テーマ 3 種の配置検査・テーマの検査・デザイン抽出）
+# まとめての検査（見本台本 × テーマ 3 種の配置検査・テーマの検査・デザイン抽出）。run_m3.sh は M1 に続けて台帳・字幕・コマ・進行役の文書を検査する
 bash skills/make/scripts/tests/run_m1.sh
+bash skills/make/scripts/tests/run_m3.sh
 
 # 台本 1 本の検査（形・id の解決・配置）。--timeline で実際の声の長さでも検査する
 node skills/make/scripts/check_storyboard.cjs skills/make/examples/sequence.json --theme flat [--timeline work/timeline.json] [--json]
@@ -26,6 +27,16 @@ python3 skills/make/scripts/check_theme.py skills/make/player/themes/3b1b.json
 
 # 契約の検査（<workdir>/contract.json を読む。テスト用の例は scripts/tests/contracts/）
 python3 skills/make/scripts/check_contract.py skills/make/scripts/tests/contracts/ok_repo
+
+# 字幕と読みの検査（禁止語・ずんだもんの語尾・辞書にない英字の語）
+python3 skills/make/scripts/check_text.py skills/make/examples/sequence.json
+
+# 作業フォルダを題材の外に作る（${CLAUDE_PLUGIN_DATA}/runs/<日時>-<名前>。パスを 1 行で出す）
+python3 skills/make/scripts/workdir.py new this-repo
+
+# 各行の落ち着いたコマ（SVG と PNG のシート）。PNG には初回だけ resvg を入れる。終了コード 4 = PNG なし（SVG と frames.json だけ）
+python3 skills/make/scripts/setup_render.py
+node skills/make/scripts/frames.cjs skills/make/examples/sequence.json --theme flat -o work/frames
 
 # 声: 初回だけ VOICEVOX を入れ（約 94MB）、1 行ずつ合成して timeline.json と narration.mp3 を作る
 python3 skills/make/scripts/setup_voice.py --agree
@@ -42,7 +53,7 @@ python3 tools/build_voice_check.py
 
 ## 全体の構造
 
-**流れ**: インタビュー → 取材と契約（`contract.json`）→ 台本（`storyboard.json`）→ 音声（`tts.py`）→ 組み立て（`build_player.py`）→ Artifact で公開。手順は `skills/make/SKILL.md`。
+**流れ**: 0 準備 → 1 インタビュー → 2 取材と契約（`contract.json`）→ 3 人の確認（1 回だけ）→ 4 台本（`storyboard.json`）→ 5 画面（`frames.cjs`、見積もりの時刻）→ 6 音声（`tts.py`）→ 7 組み立て（`build_player.py`）と Artifact での公開 → 8 報告。手順は `skills/make/SKILL.md`、環境ごとのコマンドは `references/run-code.md`（Claude Code）と `references/run-chat.md`（チャット）。
 
 **プレーヤー（`skills/make/player/src/`）は、ブラウザと node で同じコードを動かす**のが要。
 - `util → figures → figures2 → validate → engine → check` は DOM に触らない。グローバルの `UZ` に生えていく（`UZ.build(storyboard, theme, timeline)` が配置と時刻を計算する）。DOM に触るのは `view_svg.js` だけ
@@ -55,7 +66,7 @@ python3 tools/build_voice_check.py
 
 **テーマ**（`player/themes/*.json`、`references/themes.md`）: 色・文字・線の定義。`extract_design.py` が手持ちのデザイン（トークン・CSS・HTML・Tailwind・Office・画像・PDF）からテーマを作り、`check_theme.py` で検査する。
 
-**maker-checker**: Claude Code では `agents/` のサブエージェント（作り手 researcher / writer / animator、評価役 fact-checker / writing-reviewer / director）で回し、チャットでは 1 会話で役を順に演じる。成功基準は `references/criteria/`、周回の約束は `references/loop-protocol.md`、台帳は `scripts/ledger.py`（判定は終了コード: PASS 0 / CONTINUE 10 / STOP_* 20〜22）。
+**maker-checker**: Claude Code では `agents/` のサブエージェント（作り手 researcher / writer、評価役 fact-checker / writing-reviewer / director。animator は保留中で呼ばない）で回し、チャットでは 1 会話で役を順に演じる。成功基準は `references/criteria/`、周回の約束は `references/loop-protocol.md`、台帳は `scripts/ledger.py`（判定は終了コード: PASS 0 / CONTINUE 10 / STOP_* 20〜22）。
 
 ## 守ること
 
