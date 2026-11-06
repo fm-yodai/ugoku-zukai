@@ -266,7 +266,7 @@
             extras.customs.push({ key, name: val, src, fig: a.fig || sc.figs[0] });
             act.key = key;
           }
-          act.dur = dur; act.end = start + dur;
+          act.dur = dur; act.end = start + dur; act.line = ln.id;
           acts.push(act);
           cursor = act.end;
           if (act.end > tl.start + tl.dur + 1.2) warn(`${where}: 動きが行の終わりより ${(act.end - tl.start - tl.dur).toFixed(1)} 秒はみ出す（次の行の声に重なる）`);
