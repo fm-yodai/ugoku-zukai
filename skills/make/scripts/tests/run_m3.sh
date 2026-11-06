@@ -17,6 +17,10 @@ out=$(python3 scripts/check_text.py scripts/tests/text/bad.json 2>&1) && { echo 
 for r in S-M2 S-M3 S-M4; do
   echo "$out" | grep -q "^$r:" || { echo "NG: text/bad.json で $r が出ない"; fail=1; }
 done
+# S-M3 は「。」の無い最後の文と「！」で終わる文も見る（bad の l4・l5）。「」の中の「。」では切らない（ok の l4）
+for l in l4 l5; do
+  echo "$out" | grep -q "^S-M3: 行 $l " || { echo "NG: text/bad.json の $l で S-M3 が出ない"; fail=1; }
+done
 for f in scripts/tests/text/ok.json scripts/tests/text/bad.json; do
   node scripts/check_storyboard.cjs "$f" >/dev/null 2>&1 || { echo "NG: $f が台本の形を通らない"; fail=1; }
 done
