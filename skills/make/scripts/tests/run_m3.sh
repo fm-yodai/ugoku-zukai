@@ -42,5 +42,20 @@ rm -rf "$rh"
 # 成功基準と演出の約束に、v1（Manim・ショット DSL）の語が残っていない
 old=$(grep -rnE "lint_storyboard|render\.sh|shot_scene|custom\.py|occupancy|layout_report|map\.kind|\bops\b|Manim" references)
 [ -z "$old" ] || { echo "NG: references に v1 の語が残っている"; echo "$old"; fail=1; }
+# エージェントの定義に v1 の語と、もう無い文書の名前が残っていない（animator は保留中で v1 のまま残すので除く）
+agents=$(ls ../../agents/*.md | grep -v '/animator\.md$')
+old=$(grep -nE "lint_storyboard|render\.sh|shot_scene|custom\.py|occupancy|layout_report|map\.kind|\bops\b|Manim|shot-dsl|storyboard-guide|layout_map|op-proposals|移植中|Phase [0-9]" $agents)
+[ -z "$old" ] || { echo "NG: agents に v1 の語が残っている"; echo "$old"; fail=1; }
+# エージェントの tools: に書いたスクリプトが実在する（${CLAUDE_PLUGIN_ROOT} をリポジトリの直下に置き換える）
+for f in $agents; do
+  for p in $(grep '^tools:' "$f" | grep -oE '\$\{CLAUDE_PLUGIN_ROOT\}/[^ )*]+'); do
+    q=$(echo "$p" | sed 's|^\${CLAUDE_PLUGIN_ROOT}|../..|')
+    [ -f "$q" ] || { echo "NG: $f の tools: のスクリプトがない: $p"; fail=1; }
+  done
+done
+for s in check_storyboard.cjs check_text.py frames.cjs; do
+  grep '^tools:' ../../agents/writer.md | grep -q "/scripts/$s " || { echo "NG: writer の tools: に $s がない"; fail=1; }
+done
+grep '^tools:' ../../agents/researcher.md | grep -q "/scripts/check_contract.py " || { echo "NG: researcher の tools: に check_contract.py がない"; fail=1; }
 [ $fail = 0 ] && echo "M3 の検査: すべて OK" || echo "M3 の検査: NG あり"
 exit $fail
