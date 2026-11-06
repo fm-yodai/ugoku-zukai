@@ -1,0 +1,50 @@
+{
+  "format": "ugoku-zukai/2",
+  "title": "返答の形",
+  "voice": {
+    "speaker": 3
+  },
+  "figures": {
+    "f": {
+      "type": "list",
+      "title": "返答",
+      "items": [
+        {
+          "id": "i1",
+          "text": "本文"
+        },
+        {
+          "id": "i2",
+          "text": "結果"
+        }
+      ]
+    }
+  },
+  "scenes": [
+    {
+      "id": "s1",
+      "figure": "f",
+      "lines": [
+        {
+          "id": "l1",
+          "text": "{a}一覧のように読むのだ。",
+          "do": [
+            {
+              "at": "a",
+              "show": "f"
+            }
+          ]
+        },
+        {
+          "id": "l2",
+          "text": "次に値を返すのだ。"
+        },
+        {
+          "id": "l3",
+          "text": "JSON を返すのだ。",
+          "read": "ジェイソンを返すのだ。"
+        }
+      ]
+    }
+  ]
+}

@@ -11,5 +11,17 @@ done
 for d in scripts/tests/contracts/bad_*; do
   python3 scripts/check_contract.py "$d" >/dev/null 2>&1 && { echo "NG: 契約 $d が通ってしまう"; fail=1; }
 done
+# 字幕と読み（S-M2〜S-M4）
+python3 scripts/check_text.py scripts/tests/text/ok.json >/dev/null 2>&1 || { echo "NG: text/ok.json が通らない"; fail=1; }
+out=$(python3 scripts/check_text.py scripts/tests/text/bad.json 2>&1) && { echo "NG: text/bad.json が通ってしまう"; fail=1; }
+for r in S-M2 S-M3 S-M4; do
+  echo "$out" | grep -q "^$r:" || { echo "NG: text/bad.json で $r が出ない"; fail=1; }
+done
+for f in scripts/tests/text/ok.json scripts/tests/text/bad.json; do
+  node scripts/check_storyboard.cjs "$f" >/dev/null 2>&1 || { echo "NG: $f が台本の形を通らない"; fail=1; }
+done
+for f in examples/*.json; do
+  python3 scripts/check_text.py "$f" >/dev/null 2>&1 || { echo "NG: 見本 $f が字幕と読みの検査を通らない"; python3 scripts/check_text.py "$f"; fail=1; }
+done
 [ $fail = 0 ] && echo "M3 の検査: すべて OK" || echo "M3 の検査: NG あり"
 exit $fail
