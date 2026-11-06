@@ -1,0 +1,54 @@
+{
+  "format": "ugoku-zukai/2",
+  "title": "改善を続ける仕組みと、配車係の役割",
+  "voice": { "speaker": 3, "speed": 1.1 },
+  "figures": {
+    "loop": {
+      "type": "cycle", "title": "毎月の見直し", "center": "毎月 1 回",
+      "steps": [
+        { "id": "atsume", "label": "数字を集める", "sub": "遅配・誤り", "role": "actor" },
+        { "id": "mitsuke", "label": "原因を見つける", "role": "process" },
+        { "id": "kaeru", "label": "手順を変える", "role": "store" },
+        { "id": "tashikame", "label": "効いたか確かめる", "role": "external" }
+      ]
+    },
+    "role": {
+      "type": "venn", "title": "これからの配車係",
+      "sets": [
+        { "id": "genba", "label": "現場の勘", "sub": "道・荷主の事情" },
+        { "id": "data", "label": "データ", "sub": "件数・時間" },
+        { "id": "tool", "label": "画面の操作", "sub": "割り当て・通知" }
+      ],
+      "overlaps": [
+        { "id": "o_kaizen", "of": ["genba", "data"], "label": "改善の案" },
+        { "id": "o_center", "of": ["genba", "data", "tool"], "label": "配車係" }
+      ]
+    },
+    "pyr": {
+      "type": "pyramid", "title": "仕組みを支えるもの",
+      "levels": [
+        { "id": "py_goal", "label": "遅配をなくす", "role": "accent" },
+        { "id": "py_kaizen", "label": "毎月の見直し" },
+        { "id": "py_data", "label": "依頼と配車のデータ", "sub": "受付の一本化で集まる" },
+        { "id": "py_rule", "label": "受付と連絡の決まりごと" }
+      ]
+    }
+  },
+  "scenes": [
+    { "id": "s1", "figure": "loop", "lines": [
+      { "id": "l1", "text": "仕組みを入れたあとは、{a}毎月一回の見直しを回します。", "do": [ { "at": "a", "show": "center" } ] },
+      { "id": "l2", "text": "{a}数字を集め、{b}原因を見つけ、{c}手順を変えて、{d}効いたかを確かめます。", "do": [ { "at": "a", "show": "atsume" }, { "at": "b", "show": ["atsume>mitsuke", "mitsuke"] }, { "at": "c", "show": ["mitsuke>kaeru", "kaeru"] }, { "at": "d", "show": ["kaeru>tashikame", "tashikame"] } ] },
+      { "id": "l3", "text": "{a}確かめた結果が、次の月の数字になります。", "do": [ { "at": "a", "show": "tashikame>atsume" }, { "trace": ["tashikame", "atsume", "mitsuke", "kaeru", "tashikame"], "dur": 3.2 } ] }
+    ] },
+    { "id": "s2", "figure": "role", "lines": [
+      { "id": "l4", "text": "配車係に求められるのは、{a}現場の勘、{b}データ、{c}画面の操作の三つです。", "do": [ { "at": "a", "show": "genba" }, { "at": "b", "show": "data" }, { "at": "c", "show": "tool" } ] },
+      { "id": "l5", "text": "{a}勘とデータが重なる所から、改善の案が出てきます。", "do": [ { "at": "a", "show": "o_kaizen" }, { "pulse": ["genba", "data"] } ] },
+      { "id": "l6", "text": "{a}三つがそろうのが、これからの配車係です。", "do": [ { "at": "a", "show": "o_center" }, { "pulse": "o_center" } ] }
+    ] },
+    { "id": "s3", "figure": "pyr", "lines": [
+      { "id": "l7", "text": "まとめると、{a}土台は受付と連絡の決まりごとです。", "do": [ { "at": "a", "show": "py_rule" } ] },
+      { "id": "l8", "text": "その上に{a}データがたまり、{b}毎月の見直しが回ります。", "do": [ { "at": "a", "show": "py_data" }, { "at": "b", "show": "py_kaizen" } ] },
+      { "id": "l9", "text": "{a}そうして、遅配をなくすところまで積み上げます。", "do": [ { "at": "a", "show": "py_goal" }, { "pulse": "py_goal" } ] }
+    ] }
+  ]
+}

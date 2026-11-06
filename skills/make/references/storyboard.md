@@ -2,7 +2,7 @@
 
 台本 `storyboard.json` は「どの図を出し、ナレーションのどの語でどう動かすか」を書く。座標や秒は書かない。配置はプレーヤーが ELK などで決め、時刻は字幕の文中の印と音声の時刻表で決まる。評価役は台本だけを読んで「何を見せるか」を照合できる。
 
-見本は `examples/`（業務の流れ・状態遷移・シーケンス図・箇条/比較/表・2 つの図と下の層）。書いたら必ず検査する:
+見本は `examples/`（業務の流れ・状態遷移・シーケンス図・箇条/比較/表・2 つの図と下の層、提案資料の図 `proposal-*.json`）。書いたら必ず検査する:
 
 ```bash
 node scripts/check_storyboard.cjs storyboard.json --theme 3b1b     # 形・id・経路・配置
@@ -48,6 +48,16 @@ python3 scripts/build_player.py storyboard.json -o preview.html     # 音声な�
 | `table` | 表 | 行の `id`（行の全セル）、列の `id`（列の全セル）、セル `行.列`、見出し `header` |
 | `sequence` | シーケンス図 | 参加者の `id`、メッセージの `id`（省くと `m1` `m2`…） |
 | `graph` | 箱と矢印（構成・業務の流れ・状態遷移） | ノードの `id`、辺 `出発>到着`（または辺の `id`）、グループの `id` |
+| `swimlane` | スイムレーン（担当ごとの業務の流れ） | 担当の `id`（帯）、手順の `id`、辺 `出発>到着` |
+| `beforeafter` | As-Is / To-Be（左右の手順を比べる） | `before` `after`（板）、各手順の `id`、`arrow`、手順の間の矢印 `前>後` |
+| `roadmap` | ロードマップ（期間 × 流れ） | 期間の `id`、流れの `id`、項目の `id`、`grid`（見出しと区切り線と流れの帯）、`now` |
+| `tree` | ツリー（論点・ロジックツリー・組織図） | ノードの `id`、枝 `親>子` |
+| `chart` | 棒グラフ・折れ線 | 系列の `id`（系列の全部）、値 `系列.区分`、区分の `id`（その区分の全系列）、`axis` `categories` `legend` |
+| `kpi` | 大きな数字のカード（出すと数え上がる） | カードの `id`、増減 `カード.delta` |
+| `matrix` | 2×2 マトリクス | 象限の `id`（既定は `tl` `tr` `bl` `br`）、点の `id`、`axes` `quadrants` |
+| `pyramid` | ピラミッド・ファネル | 段の `id`、ファネルの率 `段.rate` |
+| `cycle` | サイクル（PDCA など） | 段階の `id`、弧 `前>次`、`center` |
+| `venn` | ベン図（2〜3 つ） | 集合の `id`、重なりの `id` |
 | `canvas` | 下の層。座標で図形を置く（6 章） | 図形の `id` |
 
 図の `title` は章の題（画面の左上）になる。場面に `title` があればそちらが章の題になり、図の題は図の上に小さく出る。
@@ -113,6 +123,105 @@ python3 scripts/build_player.py storyboard.json -o preview.html     # 音声な�
 - 辺の `label` は具体的な動詞句（「公開鍵を取得」）。同じ向きの辺を 2 本引くときだけ `id` を書く
 - 点は宣言した辺の上だけを通れる（`trace`）
 
+### 提案資料の図（M1b）
+
+`trace`（点がたどる）と `reply` は、`graph` のほか `swimlane` `tree` `cycle` `roadmap` のマイルストーン・`chart` の折れ線の点など、箱のある図で使える。`axis` `grid` のようなまとめの id は、`show` で一度に出すためのもの。
+
+#### swimlane
+
+```json
+{ "type": "swimlane", "lanes": [ { "id": "ninushi", "label": "荷主", "role": "external" } ],
+  "steps": [ { "id": "irai", "lane": "ninushi", "label": "電話・FAXで依頼", "sub": "（任意）" } ],
+  "edges": [ { "from": "irai", "to": "memo", "label": "（任意）" } ] }
+```
+
+列は辺から自動で決まる。隣の担当への受け渡しは同じ列で縦に、同じ担当の次の手順は右の列に置く（`col` で固定もできる）。左へ戻る辺は下を回る。担当は 5 本まで。
+
+#### beforeafter
+
+```json
+{ "type": "beforeafter", "arrow": "受付を一つに",
+  "before": { "label": "いま", "steps": [ { "id": "b1", "text": "紙から表計算に転記", "mark": "cross" } ] },
+  "after":  { "label": "これから", "steps": [ { "id": "a1", "text": "荷主が Web で依頼" } ] } }
+```
+
+手順は上から下へ矢印でつながる（`"flow": false` なら箇条）。各側 6 個まで。板の色は既定で `before` = `muted`、`after` = `added`（`role` で変える）。構成図どうしを比べるなら、`graph` を 2 つ並べた場面にする。
+
+#### roadmap
+
+```json
+{ "type": "roadmap", "periods": [ { "id": "q1", "label": "4〜6月" } ],
+  "tracks": [ { "id": "sys", "label": "仕組み" } ],
+  "items": [ { "id": "web", "track": "sys", "from": "q1", "to": "q2", "label": "Web の依頼画面" },
+             { "id": "go", "track": "sys", "at": "q4", "pos": 0.75, "label": "FAX 終了" } ],
+  "now": { "period": "q1", "pos": 0.1, "label": "いま" } }
+```
+
+`from`〜`to` は帯（出すと左から伸びる）、`at` はマイルストーン（ひし形。`pos` は期間の中の位置 0〜1）。同じ流れで期間が重なる帯は下の段へずれる。
+
+#### tree
+
+```json
+{ "type": "tree", "direction": "right", "root": { "id": "chien", "label": "遅配が月 40 件", "children": [
+  { "id": "shuppatsu", "label": "出発が遅れる", "edge": "（任意: 枝の言葉）", "children": [ { "id": "tenki", "label": "転記の待ち", "sub": "平均 25 分" } ] } ] } }
+```
+
+`direction` は `right`（論点・ロジックツリー）か `down`（組織図）。省くと大きく描ける方。5 段まで。図全体の `show` は根から 1 段ずつ（枝 → 子）。
+
+#### chart
+
+```json
+{ "type": "chart", "kind": "bar", "unit": "件", "categories": ["4月", "5月"],
+  "series": [ { "id": "shiken", "label": "試した営業所", "values": [38, 41], "role": "actor" } ] }
+```
+
+`kind` は `bar`（棒が下から伸びる）か `line`（線が引かれ、点に値）。区分の id は文字列そのもの（id に使えない文字があれば `c1` `c2`…。`{ "id", "label" }` でも書ける）。`min` `max` `decimals`、`"values": false`（値を出さない）。系列が 2 つ以上なら凡例が出る。
+
+#### kpi
+
+```json
+{ "type": "kpi", "items": [ { "id": "k_time", "label": "受付 1 件の時間", "value": 4.5, "unit": "分", "decimals": 1,
+  "delta": "-11 分", "better": "down", "prefix": "（任意: ¥ など）" } ] }
+```
+
+4 枚まで。`delta` の符号で ▲▼、`better`（`up` / `down`）と合わせて良し悪しの色になる。
+
+#### matrix
+
+```json
+{ "type": "matrix", "x": { "label": "かかる手間", "low": "小さい", "high": "大きい" }, "y": { "label": "効き目" },
+  "quadrants": { "tl": { "id": "sugu", "label": "すぐやる", "role": "good" }, "br": "後回し" },
+  "items": [ { "id": "p1", "label": "受付の一本化", "x": 0.42, "y": 0.82, "role": "actor", "size": 0.5 } ] }
+```
+
+点の `x` `y` は 0〜1（右・上ほど高い）。`size`（0〜1）で円の大きさ。点を動かすには `{"move": "p1", "to": {"x": 0.6, "y": 0.75}}`。
+
+#### pyramid
+
+```json
+{ "type": "pyramid", "kind": "funnel", "unit": " 社",
+  "levels": [ { "id": "f1", "label": "案内した", "value": 120 }, { "id": "f2", "label": "登録した", "value": 84, "sub": "（任意）" } ] }
+```
+
+`levels` は上から。`kind` は `pyramid`（上が細い。土台から積むなら下の段から `show`）か `funnel`（上が太い）。ファネルで `value` があれば、段の間に前の段からの率（`段.rate`）が出る。6 段まで。
+
+#### cycle
+
+```json
+{ "type": "cycle", "center": "毎月 1 回", "steps": [ { "id": "atsume", "label": "数字を集める", "sub": "（任意）", "edge": "（任意: 次への弧の言葉）" } ] }
+```
+
+3〜8 個を時計回りに並べ、最後から最初へも弧を引く（`"closed": false` で引かない）。
+
+#### venn
+
+```json
+{ "type": "venn", "sets": [ { "id": "genba", "label": "現場の勘", "sub": "（任意）" } ],
+  "overlaps": [ { "id": "o1", "of": ["genba", "data"], "label": "改善の案" } ] }
+```
+
+集合は 2〜3 個。`overlaps` の言葉は重なりの真ん中に置く（3 つの重なりは `of` に 3 つ）。
+
 ## 3. 場面と行（scenes / lines）
 
 ```json
@@ -150,13 +259,13 @@ python3 scripts/build_player.py storyboard.json -o preview.html     # 音声な�
 | `pulse` | `{"pulse": "sys"}` | 一瞬強調する | 0.8 |
 | `mark` | `{"mark": "keiri", "as": "check"}` | 印を付ける。`as` は `check` `cross` `question`。付け直すと差し替わる | 0.5 |
 | `unmark` | `{"unmark": "keiri"}` | 印を外す | 0.4 |
-| `trace` | `{"trace": ["app", "sys", "kacho"], "label": "申請書", "dot": "dot"}` | 点が経路をたどる（graph だけ）。1 つ目は点のいる所。初めてなら 1 つ目に現れる。`label` は点の札（箱の外を動く間だけ出る） | 区間数 × 1.0 |
+| `trace` | `{"trace": ["app", "sys", "kacho"], "label": "申請書", "dot": "dot"}` | 点が経路をたどる（箱と辺のある図）。1 つ目は点のいる所。初めてなら 1 つ目に現れる。`label` は点の札（箱の外を動く間だけ出る） | 区間数 × 1.0 |
 | `reply` | `{"reply": ["kacho", "sys", "app"], "label": "差し戻し", "as": "bad"}` | 戻りの矢印を、行きの辺のラベルと反対の側に引く。区間ごとに逆向きの辺の宣言が要る | 区間数 × 0.8＋0.4 |
-| `note` | `{"note": "kacho", "text": "多くはここで終わる", "link": false}` | 対象の脇に注記を置く（重ならない所を自動で選ぶ） | 0.6 |
+| `note` | `{"note": "kacho", "text": "多くはここで終わる", "link": false}` | 対象の脇に注記を置く（重ならない所を自動で選ぶ。`move` する前の位置で決まるので、動かす部品には付けない） | 0.6 |
 | `badge` | `{"badge": "2 / 3"}` | 右上の札。`""` で消す | 0.5 |
 | `relabel` | `{"relabel": "k2.after", "text": "半日"}` | 文字を書き換える | 0.6 |
 | `tint` | `{"tint": "sys>bucho", "as": "warn"}` | 線や行の色を役割の色に変える | 0.6 |
-| `move` | `{"move": "box1", "by": [0, -90]}` / `{"to": [x, y]}` / `{"to": "別のid"}` | 部品を動かす（図のローカル座標） | 1.0 |
+| `move` | `{"move": "box1", "by": [0, -90]}` / `{"to": [x, y]}` / `{"to": "別のid"}` / `{"to": {"x": 0.6, "y": 0.7}}`（matrix） | 部品を動かす（図のローカル座標） | 1.0 |
 | `custom` | `{"custom": "ring", "dur": 1.6}` | 台本の `custom` の関数で描く（6 章） | 2.0 |
 
 共通の引数: `at`（印）・`after`（秒）・`dur`（秒）。

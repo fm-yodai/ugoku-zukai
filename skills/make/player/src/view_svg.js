@@ -17,6 +17,7 @@
     cross: "M-6,-6 L6,6 M6,-6 L-6,6",
     question: "M-4,-5 C-4,-10 6,-10 6,-4 C6,0 1,0 1,4 M1,8.5 L1,9",
     dot: "M0,0 L0,0",
+    arrowdown: "M0,-8 L0,7 M-6,1 L0,7 L6,1",
   };
 
   class View {
@@ -101,6 +102,8 @@
           E.g = el("g", null, L.box);
           const sw = S.stroke;
           const mk = (fill, stroke, extra) => {
+            if (it.shape === "diamond") return el("path", { d: `M${it.x + it.w / 2},${it.y} L${it.x + it.w},${it.y + it.h / 2} L${it.x + it.w / 2},${it.y + it.h} L${it.x},${it.y + it.h / 2} Z`, fill, stroke, "stroke-width": sw, "stroke-linejoin": "round", ...extra }, E.g);
+            if (it.shape === "poly") return el("path", { d: ptsD(it.poly) + "Z", fill, stroke, "stroke-width": sw, "stroke-linejoin": "round", ...extra }, E.g);
             if (it.shape === "ellipse") return el("ellipse", { cx: it.x + it.w / 2, cy: it.y + it.h / 2, rx: it.w / 2, ry: it.h / 2, fill, stroke, "stroke-width": sw, ...extra }, E.g);
             if (it.shape === "store") {
               const ry = 9, x = it.x, y = it.y, w = it.w, h = it.h;
@@ -114,6 +117,8 @@
           E.stroke = mk("none", it.stroke, { pathLength: 1, "stroke-dasharray": "1 1" });
           if (glow) E.stroke.setAttribute("filter", "url(#uz-glow)");
           E.texts = (it.texts || []).map(T => this.textSpec(E.g, T));
+          if (it.label) E.label = this.textSpec(E.g, it.label, { halo: true });
+          if (it.staticMark) E.smark = this.glyph(E.g, it.staticMark.kind, it.staticMark.x, it.staticMark.y, it.staticMark.kind === "cross" ? S.bad : it.staticMark.kind === "question" ? S.warn : S.good, 1);
           if (it.life) E.life = el("path", { d: ptsD(it.life.pts), stroke: S.line, "stroke-width": 2, "stroke-dasharray": "6 6", fill: "none" }, L.back);
         } else if (it.kind === "edge") {
           E.g = el("g", null, it.isReply ? L.fx : L.edge);
@@ -121,7 +126,7 @@
             ...(it.dashed ? { "stroke-dasharray": "7 6" } : { pathLength: 1, "stroke-dasharray": "1 1" }) }, E.g);
           if (it.head) {
             const n = it.pts.length, tip = it.pts[n - 1], from = it.pts[n - 2];
-            const ang = Math.atan2(tip[1] - from[1], tip[0] - from[0]), Lh = 12, Wh = 6;
+            const k = it.headScale || 1, ang = Math.atan2(tip[1] - from[1], tip[0] - from[0]), Lh = 12 * k, Wh = 6 * k;
             const a = [tip[0] - Lh * Math.cos(ang) + Wh * Math.sin(ang), tip[1] - Lh * Math.sin(ang) - Wh * Math.cos(ang)];
             const b = [tip[0] - Lh * Math.cos(ang) - Wh * Math.sin(ang), tip[1] - Lh * Math.sin(ang) + Wh * Math.cos(ang)];
             E.head = el("path", { d: `M${a}L${tip}L${b}Z`, fill: it.stroke, stroke: it.stroke, "stroke-width": 1, "stroke-linejoin": "round" }, E.g);
@@ -136,9 +141,16 @@
               this.text(E.g, [String(it.bullet.n)], it.bullet.x, it.bullet.y, 19, { weight: S.bold, color: S.ink });
             } else el("circle", { cx: it.bullet.x, cy: it.bullet.y, r: it.bullet.r, fill: S.accent }, E.g);
           }
+          if (it.legend) el("rect", { x: it.legend.x, y: it.legend.y - 8, width: 18, height: 16, rx: 3, fill: it.legend.color }, E.g);
           if (it.glyph) this.glyph(E.g, it.glyph.kind, it.glyph.x, it.glyph.y, it.glyph.color, 0.85);
           E.texts = (it.texts || []).map(T => this.textSpec(E.g, T));
           if (it.staticMark) this.glyph(E.g, it.staticMark.kind, it.staticMark.x, it.staticMark.y, it.staticMark.kind === "cross" ? S.bad : it.staticMark.kind === "question" ? S.warn : S.good, 1);
+        } else if (it.kind === "bar") {
+          E.g = el("g", null, L.box);
+          E.rect = el("rect", { x: it.x, y: it.y, width: it.w, height: it.h, rx: it.r, fill: it.fill, stroke: it.stroke, "stroke-width": it.solid ? 0 : S.stroke }, E.g);
+          if (it.solid) E.rect.setAttribute("fill", it.stroke);
+          E.texts = (it.texts || []).map(T => this.textSpec(E.g, T));
+          if (it.label) E.label = this.textSpec(E.g, it.label, { halo: true });
         } else if (it.kind === "rect") {
           E.g = el("g", null, L.back);
           E.bg = el("rect", { x: it.x, y: it.y, width: it.w, height: it.h, rx: it.r, fill: it.fill === "none" ? C.rgba(S.accent, 0) : it.fill }, E.g);
@@ -199,6 +211,13 @@
           const fillO = smooth((show - 0.35) / 0.55);
           E.fill.style.opacity = op(fillO); if (E.head) E.head.style.opacity = op(fillO);
           for (const tx of E.texts) tx.style.opacity = op(smooth((show - 0.45) / 0.5));
+          if (E.label) E.label.style.opacity = op(smooth((show - 0.5) / 0.5));
+          if (E.smark) E.smark.style.opacity = op(smooth((show - 0.6) / 0.4));
+          if (it.count && E.texts[it.count.index]) {
+            const c = it.count, v = c.to * ease(clamp((show - 0.3) / 0.7));
+            const str = c.prefix + UZ.fmtNum(show >= 1 ? c.to : v, c.decimals ?? (c.to % 1 ? 1 : 0));
+            if (E._count !== str) { E._count = str; this.setLines(E.texts[it.count.index], [str]); }
+          }
           if (E.life) E.life.style.opacity = op(smooth((show - 0.5) / 0.5) * 0.9);
           const sc = 1 + 0.07 * (s.pulse || 0);
           const cx = it.x + it.w / 2, cy = it.y + it.h / 2;
@@ -226,6 +245,19 @@
           if (E.hl) E.hl.setAttribute("opacity", (s.pulse || 0).toFixed(3));
           if (s.text != null && E.texts[0]) this.relabel(E.texts[0], it.texts[0], s);
           if (s.tint && E.texts[0]) E.texts[0].setAttribute("fill", C.mix(it.texts[0].color || S.ink, s.tint, s.tintP));
+        } else if (it.kind === "bar") {
+          const g = ease(clamp(show / 0.85));
+          if (it.grow === "right") { E.rect.setAttribute("width", Math.max(0.01, it.w * g)); }
+          else if (it.grow === "down") { E.rect.setAttribute("height", Math.max(0.01, it.h * g)); }
+          else { E.rect.setAttribute("y", it.y + it.h * (1 - g)); E.rect.setAttribute("height", Math.max(0.01, it.h * g)); }
+          E.rect.style.opacity = op(show > 0 ? 1 : 0);
+          for (const tx of E.texts) tx.style.opacity = op(smooth((show - 0.6) / 0.4));
+          if (E.label) E.label.style.opacity = op(smooth((show - 0.75) / 0.25));
+          let col = s.tint ? C.mix(s.tintFrom || it.stroke, s.tint, s.tintP) : it.stroke;
+          if (s.pulse > 0.01) col = C.mix(col, S.accent, s.pulse);
+          if (it.solid) E.rect.setAttribute("fill", col); else { E.rect.setAttribute("stroke", col); E.rect.setAttribute("stroke-width", S.stroke + 1.6 * (s.pulse || 0)); }
+          E.g.setAttribute("transform", `translate(${off[0]},${off[1]})`);
+          if (s.text != null && E.texts[0]) this.relabel(E.texts[0], it.texts[0], s);
         } else if (it.kind === "rect") {
           E.g.style.opacity = op(smooth(show));
           if (it.fill === "none") E.bg.setAttribute("fill", C.rgba(s.tint || S.accent, 0.16 * Math.max(s.pulse || 0, s.tint ? s.tintP : 0)));

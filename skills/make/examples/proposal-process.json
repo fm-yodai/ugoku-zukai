@@ -1,0 +1,78 @@
+{
+  "format": "ugoku-zukai/2",
+  "title": "配車の受付を一つにまとめる提案",
+  "voice": { "speaker": 3, "speed": 1.1 },
+  "figures": {
+    "lane": {
+      "type": "swimlane", "title": "いまの配車の流れ",
+      "lanes": [
+        { "id": "ninushi", "label": "荷主", "role": "external" },
+        { "id": "uketsuke", "label": "営業所の受付", "role": "actor" },
+        { "id": "haisha", "label": "配車係", "role": "process" },
+        { "id": "driver", "label": "ドライバー", "role": "store" }
+      ],
+      "steps": [
+        { "id": "irai", "lane": "ninushi", "label": "電話・FAXで依頼" },
+        { "id": "memo", "lane": "uketsuke", "label": "紙に書き取る" },
+        { "id": "excel", "lane": "uketsuke", "label": "表計算に転記" },
+        { "id": "wariate", "lane": "haisha", "label": "車両を割り当て" },
+        { "id": "renraku", "lane": "haisha", "label": "電話で連絡" },
+        { "id": "shuka", "lane": "driver", "label": "集荷に向かう" }
+      ],
+      "edges": [
+        { "from": "irai", "to": "memo" },
+        { "from": "memo", "to": "excel" },
+        { "from": "excel", "to": "wariate", "label": "共有フォルダ" },
+        { "from": "wariate", "to": "renraku" },
+        { "from": "renraku", "to": "shuka" }
+      ]
+    },
+    "ba": {
+      "type": "beforeafter", "title": "受付から割り当てまで",
+      "before": { "label": "いま", "steps": [
+        { "id": "b1", "text": "電話・FAXで受ける" },
+        { "id": "b2", "text": "紙から表計算に転記", "mark": "cross" },
+        { "id": "b3", "text": "配車係が表を見て割り当て" },
+        { "id": "b4", "text": "ドライバーに電話", "mark": "cross" } ] },
+      "after": { "label": "これから", "steps": [
+        { "id": "a1", "text": "荷主が Web で依頼" },
+        { "id": "a2", "text": "依頼がそのまま配車画面に並ぶ" },
+        { "id": "a3", "text": "候補の車両を画面が出す" },
+        { "id": "a4", "text": "ドライバーのアプリに届く" } ] },
+      "arrow": "受付を一つに"
+    },
+    "road": {
+      "type": "roadmap", "title": "進め方",
+      "periods": [ { "id": "q1", "label": "4〜6月" }, { "id": "q2", "label": "7〜9月" }, { "id": "q3", "label": "10〜12月" }, { "id": "q4", "label": "1〜3月" } ],
+      "tracks": [ { "id": "sys", "label": "仕組み" }, { "id": "ops", "label": "業務" } ],
+      "items": [
+        { "id": "web", "track": "sys", "from": "q1", "to": "q2", "label": "Web の依頼画面", "role": "actor" },
+        { "id": "app", "track": "sys", "from": "q2", "to": "q3", "label": "ドライバーのアプリ", "role": "process" },
+        { "id": "pilot", "track": "ops", "from": "q2", "to": "q2", "label": "1 営業所で試す", "role": "store" },
+        { "id": "roll", "track": "ops", "from": "q3", "to": "q4", "label": "全営業所に広げる", "role": "store" },
+        { "id": "go", "track": "ops", "at": "q4", "pos": 0.75, "label": "FAX 終了", "role": "accent" }
+      ],
+      "now": { "period": "q1", "pos": 0.1, "label": "いま" }
+    }
+  },
+  "scenes": [
+    { "id": "s1", "figure": "lane", "lines": [
+      { "id": "l1", "text": "いまの配車は、{a}荷主からの電話を受けるところから始まります。", "do": [ { "show": ["ninushi", "uketsuke", "haisha", "driver"] }, { "at": "a", "show": "irai" } ] },
+      { "id": "l2", "text": "受付は{a}紙に書き取り、{b}それを表計算に打ち直しています。", "do": [ { "at": "a", "show": ["memo", "irai>memo"] }, { "at": "b", "show": ["excel", "memo>excel"] } ] },
+      { "id": "l3", "text": "配車係は{a}共有フォルダの表を見て車両を決め、{b}ドライバーに電話します。", "do": [ { "at": "a", "show": ["wariate", "excel>wariate"] }, { "at": "b", "show": ["renraku", "wariate>renraku", "shuka", "renraku>shuka"] } ] },
+      { "id": "l4", "text": "一件の依頼が、{a}三人の手を順に渡っていきます。", "do": [ { "at": "a", "trace": ["irai", "memo", "excel", "wariate", "renraku", "shuka"], "label": "依頼", "dur": 3.2 } ] },
+      { "id": "l5", "text": "{a}手で写す所が二か所あり、ここで書き間違いが起きます。", "do": [ { "at": "a", "mark": "excel", "as": "cross" }, { "mark": "renraku", "as": "cross" }, { "note": "excel", "text": "転記の誤り 月 12 件" } ] }
+    ] },
+    { "id": "s2", "figure": "ba", "lines": [
+      { "id": "l6", "text": "{a}いまの受付から割り当てまでを、四つの手順で並べました。", "do": [ { "at": "a", "show": "before" } ] },
+      { "id": "l7", "text": "提案は、{a}依頼の入口を一つにまとめることです。", "do": [ { "at": "a", "show": "arrow" } ] },
+      { "id": "l8", "text": "{a}荷主の依頼が、{b}写し直しなしで配車係とドライバーまで届きます。", "do": [ { "at": "a", "show": ["after", "a1"] }, { "at": "b", "show": ["a1>a2", "a2", "a2>a3", "a3", "a3>a4", "a4"] } ] },
+      { "id": "l9", "text": "{a}転記と電話の二つの手順が、なくなります。", "do": [ { "at": "a", "tint": ["b2", "b4"], "as": "bad" }, { "pulse": ["a2", "a4"] } ] }
+    ] },
+    { "id": "s3", "figure": "road", "lines": [
+      { "id": "l10", "text": "進め方です。{a}まず四月から、荷主向けの依頼画面を作ります。", "do": [ { "show": ["grid", "now"] }, { "at": "a", "show": "web" } ] },
+      { "id": "l11", "text": "夏には{a}一つの営業所で試し、{b}並行してドライバーのアプリを作ります。", "do": [ { "at": "a", "show": "pilot" }, { "at": "b", "show": "app" } ] },
+      { "id": "l12", "text": "秋から{a}全営業所に広げ、{b}三月で FAX の受付を終えます。", "do": [ { "at": "a", "show": "roll" }, { "at": "b", "show": "go" }, { "pulse": "go" } ] }
+    ] }
+  ]
+}

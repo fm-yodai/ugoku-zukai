@@ -219,3 +219,11 @@ ugoku-zukai/
 - 検査: `scripts/check_storyboard.cjs`（形・解決・配置）、`scripts/check_theme.py`、`scripts/tests/run_m1.sh`
 - デザインの抽出: `scripts/extract_design.py`（トークン JSON・CSS・HTML/URL・Tailwind・Office のテーマ・画像・PDF）。名前のない色だけの入力では役割の割り当てが推測になるので、Claude が確かめて直す
 - 見本帳: `tools/build_gallery.py`（見本 5 本 × テーマ 3 種）
+
+### M1b の実装（2026-11-06）
+
+- 提案資料の図を 10 種足した（`player/src/figures2.js`）: `swimlane` `beforeafter` `roadmap` `tree` `chart`（棒・折れ線）`kpi` `matrix` `pyramid`（ピラミッド・ファネル）`cycle` `venn`。配置は ELK を使わず、図ごとに決まった並べ方で計算する（スイムレーンは辺から列を決め、隣の担当への受け渡しは同じ列で縦に置く）
+- 新しい描き方: ひし形・多角形の箱、伸びる棒（`bar`）、数え上がる数字（KPI）、箱の外のラベル（2×2 の点）
+- `trace` / `reply` は箱と辺のある図ならどれでも使える。`move` の `to: {x, y}` で 2×2 の点を動かせる
+- まとめの id（`axis` `grid` `axes` `quadrants` `categories` `legend`）で、目盛りや枠を一度に出せる
+- 見本: `examples/proposal-{process,analysis,numbers,concept}.json`（架空のくも運輸の配車改善の提案）。全テーマで検査を通る

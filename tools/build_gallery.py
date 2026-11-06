@@ -19,6 +19,10 @@ SAMPLES = [
     ("sequence", "シーケンス図"),
     ("table-compare", "箇条・比較・表"),
     ("mixed", "2 つの図・下の層"),
+    ("proposal-process", "スイムレーン・As-Is/To-Be・ロードマップ"),
+    ("proposal-analysis", "ツリー・2×2"),
+    ("proposal-numbers", "KPI・棒グラフ・ファネル"),
+    ("proposal-concept", "サイクル・ベン図・ピラミッド"),
 ]
 THEMES = [
     ("3b1b", os.path.join(MAKE, "player", "themes", "3b1b.json")),
@@ -68,7 +72,7 @@ PAGE = r"""<title>ugoku-zukai 見本帳</title>
 </style>
 <div class="wrap">
   <header>
-    <h1>ugoku-zukai 見本帳（M1a）</h1>
+    <h1>ugoku-zukai 見本帳（M1）</h1>
     <p>新しい台本の形式で書いた見本を、テーマを切り替えて再生できます。音声はまだ入っていません（M2）。動きの時刻は字幕の文字数からの見積もりで、文中の印 <code>{a}</code> の位置に合わせて動きます。</p>
   </header>
   <div class="pick">

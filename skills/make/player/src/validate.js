@@ -5,6 +5,8 @@
   const TYPES = {
     title: ["text"], list: ["items"], compare: ["items"], table: ["columns", "rows"],
     sequence: ["participants", "messages"], graph: ["nodes", "edges"], canvas: ["shapes"],
+    swimlane: ["lanes", "steps"], beforeafter: ["before", "after"], roadmap: ["periods", "items"], tree: ["root"],
+    chart: ["categories", "series"], kpi: ["items"], matrix: ["x", "y"], pyramid: ["levels"], cycle: ["steps"], venn: ["sets"],
   };
   const ROLES = ["actor", "process", "store", "external", "muted", "added", "removed", "good", "bad", "warn", "accent"];
 
@@ -81,6 +83,74 @@
       if (f.type === "list") {
         for (const it of f.items || []) { addId(it.id, "項目"); if (!it.text) E(`${where}: 項目 ${it.id} に text がない`); }
         if ((f.items || []).length > 8) W(`${where}: 箇条が 8 個を超える（画面で読み切れない）`);
+      }
+      if (f.type === "swimlane") {
+        const lane = new Set();
+        for (const l of f.lanes || []) { addId(l.id, "担当（lane）"); role(l.role, l.id); lane.add(l.id); }
+        for (const st of f.steps || []) { addId(st.id, "手順"); role(st.role, st.id); if (!lane.has(st.lane)) E(`${where}: 手順 ${st.id} の lane「${st.lane}」が lanes にない`); if (!st.label) E(`${where}: 手順 ${st.id} に label がない`); }
+        const sid = new Set((f.steps || []).map(x => x.id));
+        for (const e of f.edges || []) { if (!sid.has(e.from) || !sid.has(e.to)) E(`${where}: 辺 ${e.from}>${e.to} の両端が steps にない`); }
+        if ((f.lanes || []).length > 5) W(`${where}: 担当が 5 本を超える（縦に詰まる）`);
+      }
+      if (f.type === "beforeafter") {
+        for (const k of ["before", "after"]) {
+          const side = f[k];
+          if (!side || !Array.isArray(side.steps) || !side.steps.length) { E(`${where}: ${k}.steps がない`); continue; }
+          side.steps.forEach((st, i) => { const id = typeof st === "string" ? `${k}.${i + 1}` : st.id || `${k}.${i + 1}`; addId(id, `${k} の手順`); if (typeof st === "object") role(st.role, id); });
+          if (side.steps.length > 6) W(`${where}: ${k} の手順が 6 個を超える`);
+        }
+        addId("before", "板"); addId("after", "板"); addId("arrow", "矢印");
+      }
+      if (f.type === "roadmap") {
+        const per = new Set((f.periods || []).map(p => (typeof p === "string" ? p : p.id)));
+        per.forEach(id => addId(id, "期間"));
+        const tr = new Set((f.tracks || []).map(t => t.id));
+        for (const t of f.tracks || []) addId(t.id, "流れ（track）");
+        for (const it of f.items || []) {
+          addId(it.id, "項目"); role(it.role, it.id);
+          if (it.track != null && !tr.has(it.track)) E(`${where}: 項目 ${it.id} の track「${it.track}」が tracks にない`);
+          if (it.track == null && tr.size) E(`${where}: 項目 ${it.id} に track がない`);
+          for (const k of ["from", "to", "at"]) if (it[k] != null && !per.has(it[k])) E(`${where}: 項目 ${it.id} の ${k}「${it[k]}」が periods にない`);
+          if (it.at == null && it.from == null) E(`${where}: 項目 ${it.id} に from（帯）か at（マイルストーン）がない`);
+        }
+      }
+      if (f.type === "tree") {
+        const walk = (n, d) => { if (!n || typeof n !== "object") { E(`${where}: ノードがオブジェクトでない`); return; } addId(n.id, "ノード"); role(n.role, n.id); if (!n.label) E(`${where}: ノード ${n.id} に label がない`); if (d > 4) W(`${where}: 5 段より深い（読み切れない）`); for (const c of n.children || []) walk(c, d + 1); };
+        walk(f.root, 0);
+        if (f.direction && !["right", "down"].includes(f.direction)) E(`${where}: direction は right か down`);
+      }
+      if (f.type === "chart") {
+        const nc = (f.categories || []).length;
+        if (f.kind && !["bar", "line"].includes(f.kind)) E(`${where}: kind は bar か line`);
+        for (const sr of f.series || []) {
+          addId(sr.id, "系列"); role(sr.role, sr.id);
+          if (!Array.isArray(sr.values) || sr.values.length !== nc) E(`${where}: 系列 ${sr.id} の values の数が categories の数（${nc}）と違う`);
+        }
+        if (nc > 12) W(`${where}: 区分が 12 個を超える`);
+      }
+      if (f.type === "kpi") {
+        for (const it of f.items || []) { addId(it.id, "KPI"); role(it.role, it.id); if (typeof it.value !== "number") E(`${where}: KPI ${it.id} の value は数で書く`); if (!it.label) E(`${where}: KPI ${it.id} に label がない`); }
+        if ((f.items || []).length > 4) W(`${where}: KPI が 4 枚を超える`);
+      }
+      if (f.type === "matrix") {
+        if (!f.x || !f.x.label || !f.y || !f.y.label) E(`${where}: x.label と y.label が要る`);
+        for (const k of Object.keys(f.quadrants || {})) { if (!["tl", "tr", "bl", "br"].includes(k)) E(`${where}: quadrants のキーは tl / tr / bl / br`); const q = f.quadrants[k]; addId(typeof q === "object" && q.id ? q.id : k, "象限"); }
+        for (const it of f.items || []) { addId(it.id, "点"); role(it.role, it.id); if (!(it.x >= 0 && it.x <= 1 && it.y >= 0 && it.y <= 1)) E(`${where}: 点 ${it.id} の x / y は 0〜1`); }
+      }
+      if (f.type === "pyramid") {
+        if (f.kind && !["pyramid", "funnel"].includes(f.kind)) E(`${where}: kind は pyramid か funnel`);
+        for (const l of f.levels || []) { addId(l.id, "段"); role(l.role, l.id); if (!l.label) E(`${where}: 段 ${l.id} に label がない`); }
+        if ((f.levels || []).length > 6) W(`${where}: 段が 6 つを超える`);
+      }
+      if (f.type === "cycle") {
+        for (const st of f.steps || []) { addId(st.id, "段階"); role(st.role, st.id); if (!st.label) E(`${where}: 段階 ${st.id} に label がない`); }
+        if ((f.steps || []).length < 3 || f.steps.length > 8) E(`${where}: 段階は 3〜8 個`);
+      }
+      if (f.type === "venn") {
+        if ((f.sets || []).length < 2 || f.sets.length > 3) E(`${where}: 集合は 2 か 3 個`);
+        const ss = new Set();
+        for (const st of f.sets || []) { addId(st.id, "集合"); role(st.role, st.id); ss.add(st.id); }
+        for (const o of f.overlaps || []) { addId(o.id, "重なり"); if (!Array.isArray(o.of) || o.of.length < 2 || o.of.some(x => !ss.has(x))) E(`${where}: 重なり ${o.id} の of は sets の id を 2 つ以上`); }
       }
       if (f.type === "canvas") {
         for (const s of f.shapes || []) {

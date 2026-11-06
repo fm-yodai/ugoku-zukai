@@ -186,8 +186,8 @@
             act.key = key;
           } else if (verb === "trace") {
             const path = asList(val);
-            const fid = (a.fig) || sc.figs.find(f => figs[f].type === "graph" && path.every(p => figs[f].items[p]));
-            if (!fid) { err(`${where}: 経路 ${path.join("→")} のノードが箱と矢印の図にそろっていない`); return; }
+            const fid = (a.fig) || sc.figs.find(f => path.every(p => figs[f].items[p] && figs[f].items[p].dotAt));
+            if (!fid) { err(`${where}: 経路 ${path.join("→")} のノードが 1 つの図にそろっていない（点が通れるのは箱と矢印・スイムレーン・ツリー・サイクルなどの箱）`); return; }
             const F = figs[fid], did = a.dot || "dot", key = `${fid}/dot:${did}`;
             if (!extras.dots[key]) extras.dots[key] = { key, fig: fid, id: did };
             let cur = dotState[key];
@@ -201,7 +201,7 @@
             for (let i = 1; i < path.length; i++) {
               const e = F.items[`${path[i - 1]}>${path[i]}`];
               if (!e) { err(`${where}: 辺 ${path[i - 1]}>${path[i]} が宣言されていない（点は宣言した辺の上だけを通る）`); ok = false; break; }
-              pts.push(...enterExit(F.items[path[i - 1]], e.pts, F.items[path[i]]));
+              pts.push(...(F.extra.direct ? e.pts : enterExit(F.items[path[i - 1]], e.pts, F.items[path[i]])));
               pts.push(F.items[path[i]].dotAt);
               segs++;
             }
@@ -212,8 +212,8 @@
             dotState[key] = { node: path[path.length - 1], last: path };
           } else if (verb === "reply") {
             const path = asList(val);
-            const fid = a.fig || sc.figs.find(f => figs[f].type === "graph" && path.every(p => figs[f].items[p]));
-            if (!fid) { err(`${where}: 経路 ${path.join("→")} のノードが箱と矢印の図にそろっていない`); return; }
+            const fid = a.fig || sc.figs.find(f => path.every(p => figs[f].items[p] && figs[f].items[p].dotAt));
+            if (!fid) { err(`${where}: 経路 ${path.join("→")} のノードが 1 つの図にそろっていない`); return; }
             const F = figs[fid];
             let pts = [], ok = true;
             for (let i = 1; i < path.length; i++) {
@@ -245,6 +245,10 @@
             const it = figs[r.fig].items[r.id];
             const c0 = center(it.bbox);
             let to = a.to;
+            if (to && !Array.isArray(to) && typeof to === "object") {
+              if (!figs[r.fig].extra.coord) { err(`${where}: to の {x, y} は 2×2 の図（matrix）だけで使える`); return; }
+              to = figs[r.fig].extra.coord(to.x, to.y);
+            }
             if (typeof to === "string") { const r2 = resolve(sc, to, where); if (!r2) return; to = center(figs[r2.fig].items[r2.id].bbox); }
             if (a.by) to = [c0[0] + a.by[0], c0[1] + a.by[1]];
             if (!to) { err(`${where}: to（座標か id）か by が要る`); return; }

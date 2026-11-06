@@ -61,7 +61,7 @@
       for (const T of texts) {
         if (T.what === "text" && (T.it.kind === "box" || T.it.kind === "frame" || T.it.kind === "rect")) continue;
         for (const Bx of boxes) {
-          if (Bx.it === T.it || (Bx.it.members || []).includes(T.it.id) || T.it.parent === Bx.it.id || T.it.target === Bx.it.id) continue;
+          if (Bx.it === T.it || (Bx.it.members || []).includes(T.it.id) || T.it.parent === Bx.it.id || T.it.target === Bx.it.id || (T.it.over || []).includes(Bx.it.id)) continue;
           if (Bx.it.kind === "frame") {
             // 枠は中に入るのは構わない。縁をまたぐときだけ
             const inside = T.b.x >= Bx.b.x && T.b.y >= Bx.b.y && T.b.x + T.b.w <= Bx.b.x + Bx.b.w && T.b.y + T.b.h <= Bx.b.y + Bx.b.h;

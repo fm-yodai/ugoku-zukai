@@ -1,0 +1,49 @@
+{
+  "format": "ugoku-zukai/2",
+  "title": "試した営業所で、数字はどう変わったか",
+  "voice": { "speaker": 3, "speed": 1.1 },
+  "figures": {
+    "kpi": {
+      "type": "kpi", "title": "試した 3 か月の結果",
+      "items": [
+        { "id": "k_time", "label": "受付 1 件の時間", "value": 4.5, "unit": "分", "decimals": 1, "delta": "-11 分", "better": "down" },
+        { "id": "k_miss", "label": "転記の誤り", "value": 0, "unit": "件/月", "delta": "-12 件", "better": "down", "role": "good" },
+        { "id": "k_late", "label": "遅配", "value": 9, "unit": "件/月", "delta": "-31 件", "better": "down", "role": "process" }
+      ]
+    },
+    "bars": {
+      "type": "chart", "title": "月ごとの遅配の件数", "kind": "bar", "unit": "件",
+      "categories": ["4月", "5月", "6月", "7月", "8月", "9月"],
+      "series": [
+        { "id": "shiken", "label": "試した営業所", "values": [38, 41, 40, 22, 14, 9], "role": "actor" },
+        { "id": "hoka", "label": "ほかの営業所（平均）", "values": [36, 39, 37, 38, 35, 37], "role": "muted" }
+      ]
+    },
+    "funnel": {
+      "type": "pyramid", "kind": "funnel", "title": "Web 依頼への切り替え（荷主 120 社）", "unit": " 社",
+      "levels": [
+        { "id": "f_annai", "label": "案内した", "value": 120 },
+        { "id": "f_touroku", "label": "登録した", "value": 84 },
+        { "id": "f_riyou", "label": "一度使った", "value": 63 },
+        { "id": "f_teichaku", "label": "毎回 Web で依頼", "value": 41 }
+      ]
+    }
+  },
+  "scenes": [
+    { "id": "s1", "figure": "kpi", "lines": [
+      { "id": "l1", "text": "七月から三か月、{a}一つの営業所で新しい受付を試しました。", "do": [ { "at": "a", "badge": "7〜9月" } ] },
+      { "id": "l2", "text": "{a}受付一件にかかる時間は、四分半になりました。", "do": [ { "at": "a", "show": "k_time" } ] },
+      { "id": "l3", "text": "{a}転記の誤りはなくなり、{b}遅配は月九件まで減りました。", "do": [ { "at": "a", "show": "k_miss" }, { "at": "b", "show": "k_late" } ] }
+    ] },
+    { "id": "s2", "figure": "bars", "lines": [
+      { "id": "l4", "text": "{a}月ごとに見ると、{b}六月までは四十件前後でした。", "do": [ { "at": "a", "badge": "" }, { "at": "a", "show": ["axis", "categories", "legend"], "dur": 0.5, "stagger": 0.08 }, { "at": "b", "show": ["shiken.4月", "shiken.5月", "shiken.6月"] } ] },
+      { "id": "l5", "text": "{a}七月に切り替えてから、{b}月を追うごとに減っています。", "do": [ { "at": "a", "show": "shiken.7月" }, { "at": "b", "show": ["shiken.8月", "shiken.9月"] } ] },
+      { "id": "l6", "text": "{a}ほかの営業所は、同じ時期も変わっていません。", "do": [ { "at": "a", "show": "hoka" }, { "note": "hoka.9月", "text": "季節の影響ではない" } ] }
+    ] },
+    { "id": "s3", "figure": "funnel", "lines": [
+      { "id": "l7", "text": "荷主の切り替えも見ておきます。{a}案内した百二十社のうち、{b}八十四社が登録しました。", "do": [ { "at": "a", "show": "f_annai" }, { "at": "b", "show": ["f_touroku", "f_touroku.rate"] } ] },
+      { "id": "l8", "text": "{a}一度使ったのは六十三社、{b}毎回 Web で依頼するのは四十一社です。", "do": [ { "at": "a", "show": ["f_riyou", "f_riyou.rate"] }, { "at": "b", "show": ["f_teichaku", "f_teichaku.rate"] } ] },
+      { "id": "l9", "text": "{a}一度使った荷主を、毎回の利用につなげるのが次の課題です。", "do": [ { "at": "a", "tint": "f_teichaku.rate", "as": "warn" }, { "pulse": "f_teichaku" } ] }
+    ] }
+  ]
+}

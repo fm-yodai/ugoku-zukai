@@ -439,6 +439,8 @@
       if (it.rowBox) sb(it.rowBox);
       if (it.textBox) sb(it.textBox);
       if (it.staticMark) { it.staticMark.x += dx; it.staticMark.y += dy; }
+      if (it.legend) { it.legend.x += dx; it.legend.y += dy; }
+      if (it.poly) it.poly = it.poly.map(p => [p[0] + dx, p[1] + dy]);
     }
   };
 })(globalThis.UZ = globalThis.UZ || {});

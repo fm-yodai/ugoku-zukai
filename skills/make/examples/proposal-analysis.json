@@ -1,0 +1,50 @@
+{
+  "format": "ugoku-zukai/2",
+  "title": "遅配の原因と、手を付ける順番",
+  "voice": { "speaker": 3, "speed": 1.1 },
+  "figures": {
+    "why": {
+      "type": "tree", "title": "なぜ遅配が起きるのか", "direction": "right",
+      "root": { "id": "chien", "label": "遅配が月 40 件", "children": [
+        { "id": "shuppatsu", "label": "出発が遅れる", "children": [
+          { "id": "tenki", "label": "転記の待ち時間", "sub": "平均 25 分" },
+          { "id": "shako", "label": "車両の取り合い" } ] },
+        { "id": "tochu", "label": "途中で遅れる", "children": [
+          { "id": "juutai", "label": "渋滞を避けられない" },
+          { "id": "henko", "label": "届け先の変更が伝わらない" } ] },
+        { "id": "tsuite", "label": "着いてから遅れる", "children": [
+          { "id": "machi", "label": "荷受けの待ち" } ] } ] }
+    },
+    "prio": {
+      "type": "matrix", "title": "どこから手を付けるか",
+      "x": { "label": "かかる手間", "low": "小さい", "high": "大きい" },
+      "y": { "label": "遅配への効き目", "low": "小さい", "high": "大きい" },
+      "quadrants": {
+        "tl": { "id": "sugu", "label": "すぐやる", "role": "good" },
+        "tr": { "id": "keikaku", "label": "計画してやる" },
+        "bl": { "id": "tsuide", "label": "ついでにやる" },
+        "br": { "id": "yamenai", "label": "後回し", "role": "muted" }
+      },
+      "items": [
+        { "id": "p_uketsuke", "label": "受付の一本化", "x": 0.42, "y": 0.82, "role": "actor" },
+        { "id": "p_app", "label": "変更をアプリで通知", "x": 0.3, "y": 0.62, "role": "process" },
+        { "id": "p_route", "label": "経路の自動計算", "x": 0.82, "y": 0.55, "role": "store" },
+        { "id": "p_yoyaku", "label": "荷受けの予約", "x": 0.7, "y": 0.2, "role": "external" }
+      ]
+    }
+  },
+  "scenes": [
+    { "id": "s1", "figure": "why", "lines": [
+      { "id": "l1", "text": "{a}遅配は、いま月に四十件ほど起きています。", "do": [ { "at": "a", "show": "chien" } ] },
+      { "id": "l2", "text": "遅れる場所で分けると、{a}出発、{b}途中、{c}着いてからの三つです。", "do": [ { "at": "a", "show": ["chien>shuppatsu", "shuppatsu"] }, { "at": "b", "show": ["chien>tochu", "tochu"] }, { "at": "c", "show": ["chien>tsuite", "tsuite"] } ] },
+      { "id": "l3", "text": "さらに分けると、{a}原因は五つに行き着きます。", "do": [ { "at": "a", "show": ["shuppatsu>tenki", "tenki", "shuppatsu>shako", "shako", "tochu>juutai", "juutai", "tochu>henko", "henko", "tsuite>machi", "machi"] } ] },
+      { "id": "l4", "text": "このうち{a}転記の待ちと{b}変更の伝わらなさは、受付の仕組みで直せます。", "do": [ { "at": "a", "focus": ["chien", "shuppatsu", "tenki", "tochu", "henko", "chien>shuppatsu", "shuppatsu>tenki", "chien>tochu", "tochu>henko"] }, { "at": "a", "mark": "tenki", "as": "check" }, { "at": "b", "mark": "henko", "as": "check" } ] }
+    ] },
+    { "id": "s2", "figure": "prio", "lines": [
+      { "id": "l5", "text": "打ち手を、{a}手間と{b}効き目の二つの軸で並べます。", "do": [ { "at": "a", "show": ["xaxis", "xlabel", "mid"] }, { "at": "b", "show": ["yaxis", "ylabel", "mid2"] }, { "show": "quadrants" } ] },
+      { "id": "l6", "text": "{a}経路の自動計算は効きますが、手間がかかります。{b}荷受けの予約は先方との調整が要ります。", "do": [ { "at": "a", "show": "p_route" }, { "at": "b", "show": "p_yoyaku" } ] },
+      { "id": "l7", "text": "{a}変更の通知と{b}受付の一本化は、左上の「すぐやる」に入ります。", "do": [ { "at": "a", "show": "p_app" }, { "at": "b", "show": "p_uketsuke" }, { "pulse": "sugu" } ] },
+      { "id": "l8", "text": "受付を一本化すると{a}通知の仕組みも共通になるので、{b}経路の計算も手間が下がります。", "do": [ { "at": "a", "pulse": "p_app" }, { "at": "b", "move": "p_route", "to": { "x": 0.6, "y": 0.75 } } ] }
+    ] }
+  ]
+}

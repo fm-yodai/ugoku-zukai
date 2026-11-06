@@ -2,7 +2,7 @@
 
 題材を、自然な日本語ナレーション付きの「動く図解」にする Claude のプラグインです。題材は、コード・リポジトリ・PR・Web ページ・手元の文書・題目だけ、のどれでも構いません。claude.ai / Claude Desktop のチャットでも、Claude Code でも動くことを目指しています。
 
-> **開発中（0.1.0）**: プレーヤーの芯（M1a）までできました。音声と進行の手順はまだなので、音声なしの下見までです。設計は [docs/design.md](docs/design.md) を見てください。前身は個人用のスキル explain-video-anywhere（Manim＋VOICEVOX）です。
+> **開発中（0.1.0）**: プレーヤーの芯と提案資料の図（M1a・M1b）までできました。音声と進行の手順はまだなので、音声なしの下見までです。設計は [docs/design.md](docs/design.md) を見てください。前身は個人用のスキル explain-video-anywhere（Manim＋VOICEVOX）です。
 
 ## できること（目標）
 
