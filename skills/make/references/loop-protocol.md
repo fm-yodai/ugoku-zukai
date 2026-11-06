@@ -20,7 +20,7 @@
 |---|---|---|
 | open | checker が FAIL / UNKNOWN と判定した | maker が直して fixed にするか、理由を付けて disputed にする |
 | fixed | maker が直したと応答した | 次の周で同じ checker が再確認する。PASS → closed、まだ FAIL → open に戻し `reopen` を 1 足す |
-| disputed | maker が理由を付けて直さなかった | 次の周で checker が反論を読み、認めれば accepted、認めなければ open（`rejected` を 1 足す） |
+| disputed | maker が理由を付けて直さなかった | 次の周で checker が反論を読み、認めれば accepted。見直して基準を満たしていれば（台本に戻って直った など）`verdict: PASS` で closed。どちらでもなければ open（`rejected` を 1 足す） |
 | closed / accepted | 解決した | closed の項目が後の周で再び FAIL になったら open に戻し `reopen` を 1 足す（回帰） |
 
 ## 合格と打ち切り

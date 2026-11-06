@@ -57,7 +57,7 @@ maker の推論と取材メモは受け取らない。渡されても判断の�
 
 ## 前の周の再確認
 
-台帳のその phase で、`checker` が自分の項目のうち fixed / disputed のものを**すべて** `rechecks` で判定する。disputed は maker の反論（`response`）を読み、根拠で認められるなら `accept_dispute: true`。閉じた項目が壊れていないかも見る（壊れていれば同じキーで findings に出す）。
+台帳のその phase で、`checker` が自分の項目のうち fixed / disputed のものを**すべて** `rechecks` で判定する。disputed は maker の反論（`response`）を読み、根拠で認められるなら `accept_dispute: true`（→ accepted）。見直して基準を満たしていれば `verdict: "PASS"`（→ closed）。どちらでもなければ `verdict: "FAIL"`（→ open）。閉じた項目が壊れていないかも見る（壊れていれば同じキーで findings に出す）。
 
 ## 出力
 

@@ -4,9 +4,9 @@
 
 - `sheet-NN.png`: 各行の落ち着いたコマを 2 列 × 3 行に並べたシート。各コマの上の帯に「行 id ＋字幕の頭」が出る
 - `svg/<行 id>.svg`: 各行のコマ（640×360 に縮める前の SVG）
-- `frames.json`: 行ごとの `{id, scene, t, text, svg, sub_forced, settled}`。`settled: false` の行は、そのコマの時点でまだ動作が続いている（途中の画面）。`sub_forced: true` の行は、そのコマの時刻に再生ページでは字幕が消えている（動作が声より長いか、次の場面の始まりでコマの時刻を切った）ので、コマの字幕は補ったもの。どちらも、1 行の動作が声に対して多すぎないかを見る手がかりにする（S-D2・VG-3）
+- `frames.json`: `png`（PNG のシートを書けたか）、`sheets`（シートのファイル名と載せた行 id）、`lines`（行ごとの `{id, scene, t, text, svg, sub_forced, settled}`）。`settled: false` の行は、そのコマの時点でまだ動作が続いている（途中の画面）。`sub_forced: true` の行は、そのコマの時刻に再生ページでは字幕が消えている（動作が声より長いか、次の場面の始まりでコマの時刻を切った）ので、コマの字幕は補ったもの。どちらも、1 行の動作が声に対して多すぎないかを見る手がかりにする（S-D2・VG-3）
 
-resvg を入れられず PNG が無いときは、`svg/` と `frames.json` だけで判定し、見えない基準は UNKNOWN にする。
+見るシートは `frames.json` の `sheets` に載ったものだけ（`frames.cjs` は始めに前の回のシートを消すが、ほかの手で置いたものは残りうる）。PNG があるかは `frames.json` の `png` で分かる。resvg を入れられず PNG が無い（`png: false`）ときは、`svg/` と `frames.json` だけで判定し、見えない基準は UNKNOWN にする。
 
 VLM は「重なっているか」の判定が苦手（重なりの単純な課題で正答率 6 割程度、ACCV 2024「VLMs are blind」）。**重なり・はみ出し・大きさは機械（`check_storyboard.cjs` の配置）が判定し、checker は意味だけを見る**。checker は位置を言うとき、シートのファイル名と行 id（「`sheet-02.png` の行 `l7`」）を `evidence` に書く（maker が元の動作までたどれるように）。
 

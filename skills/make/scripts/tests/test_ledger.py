@@ -87,5 +87,54 @@ class LedgerTest(unittest.TestCase):
         self.assertEqual(d["items"], [])
 
 
+    def _dispute_screen(self):
+        # 画面の指摘を maker が disputed にした状態を作る
+        r1 = {"reviewer": "director", "phase": "screen", "round": 1,
+              "checks": [{"criterion": "V-D1", "verdict": "FAIL", "evidence": "sheet-01.png の行 l3"}],
+              "findings": [{"key": "l3:V-D1", "line_id": "l3", "criterion": "V-D1", "severity": "must",
+                            "problem": "…", "evidence": "sheet-01.png の行 l3"}], "rechecks": []}
+        resp = {"phase": "screen", "round": 1, "responses": [
+            {"key": "l3:V-D1", "action": "disputed", "note": "字幕を変える必要がある"}]}
+        f1, f2 = os.path.join(self.wd, "r1.json"), os.path.join(self.wd, "resp.json")
+        json.dump(r1, open(f1, "w", encoding="utf-8"))
+        json.dump(resp, open(f2, "w", encoding="utf-8"))
+        self.assertEqual(run("ingest", self.wd, "screen", f1).returncode, 0)
+        self.assertEqual(run("respond", self.wd, "screen", f2).returncode, 0)
+
+    def _recheck(self, rc):
+        r2 = {"reviewer": "director", "phase": "screen", "round": 2,
+              "checks": [{"criterion": "V-D1", "verdict": "PASS", "evidence": "sheet-01.png を見た"}],
+              "findings": [], "rechecks": [rc]}
+        f = os.path.join(self.wd, "r2.json")
+        json.dump(r2, open(f, "w", encoding="utf-8"))
+        self.assertEqual(run("ingest", self.wd, "screen", f).returncode, 0)
+        led = json.load(open(os.path.join(self.wd, "review", "ledger.json"), encoding="utf-8"))
+        return led["phases"]["screen"]["items"]["l3:V-D1"]
+
+    def test_disputed_recheck_pass_closes(self):
+        # disputed でも、checker が見直して PASS と判定したら閉じる（反論を認めたかどうかは問わない）
+        self._dispute_screen()
+        it = self._recheck({"key": "l3:V-D1", "verdict": "PASS", "evidence": "台本に戻って直り、l3 は読める"})
+        self.assertEqual(it["status"], "closed")
+        self.assertEqual(it["rejected"], 0)
+        self.assertEqual(run("status", self.wd, "screen").returncode, 0)
+
+    def test_disputed_recheck_fail_reopens(self):
+        self._dispute_screen()
+        it = self._recheck({"key": "l3:V-D1", "verdict": "FAIL", "evidence": "反論は基準と合わない"})
+        self.assertEqual(it["status"], "open")
+        self.assertEqual(it["rejected"], 1)
+
+    def test_respond_missing_file(self):
+        # 応答ファイルが無いときは、わかる文で知らせて何も変えない（トレースバックを出さない）
+        self.ingest_r1()
+        before = open(os.path.join(self.wd, "review", "ledger.json"), encoding="utf-8").read()
+        r = run("respond", self.wd, "script", os.path.join(self.wd, "nai.json"))
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertNotIn("Traceback", r.stderr)
+        self.assertIn("応答ファイルが無い", r.stdout)
+        self.assertEqual(open(os.path.join(self.wd, "review", "ledger.json"), encoding="utf-8").read(), before)
+
+
 if __name__ == "__main__":
     unittest.main()

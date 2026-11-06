@@ -1,6 +1,6 @@
 ---
 name: director
-description: ugoku-zukai の構造・演出担当（checker）。成功基準 criteria/ の基準 ID ごとに PASS / FAIL / UNKNOWN で判定する。(a) 構造モード = contract.json の構成の型・図の種類（2 取材と契約）、(b) 計画モード = 台本の図の宣言と動作。図だけから流れを復元して契約と照合する（4 台本）、(c) 画面モード = frames/ の各行の落ち着いたコマ（sheet-*.png と frames.json）の意味（5 画面）。書き換えはしない
+description: ugoku-zukai の構造・演出担当（checker）。成功基準 criteria/ の基準 ID ごとに PASS / FAIL / UNKNOWN で判定する。(a) 構造モード = contract.json の構成の型・図の種類（2 取材と契約）、(b) 計画モード = 台本の図の宣言と動作。図だけから流れを復元して契約と照合する（4 台本）、(c) 画面モード = frames/ の各行の落ち着いたコマ（frames.json と、それに載ったシートの PNG）の意味（5 画面）。書き換えはしない
 color: yellow
 model: sonnet
 tools: Read, Glob, Write
@@ -30,9 +30,9 @@ maker の推論と取材メモ（`brief.md`）は受け取らない。渡され�
 |---|---|---|---|---|
 | 構造 | `contract` | `criteria/contract.md` | C-D1〜C-D4 | `contract.json` |
 | 計画 | `script` | `criteria/script.md`・`criteria/structure.md` | S-D1〜S-D4、G-D1〜G-D7 | `storyboard.json`（と `contract.json`） |
-| 画面 | `screen` | `criteria/screen.md`・`criteria/structure.md` | V-1〜V-5、G-D5、G-D8 | `frames/sheet-*.png`・`frames/frames.json`・`storyboard.json` |
+| 画面 | `screen` | `criteria/screen.md`・`criteria/structure.md` | V-1〜V-5、G-D5、G-D8 | `frames/frames.json` と、その `sheets` に載ったシート・`storyboard.json` |
 
-担当の基準はすべて PASS / FAIL / UNKNOWN で判定し（`checks`）、FAIL を `findings` に出す（キーは `<行 id or contract or *>:<基準 ID>`）。機械が判定する基準（C-M・S-M・G-M・V-M）は判定せず、機械の結果に出ている問題を重ねて指摘しない。前の周の台帳で、`checker` が自分の fixed / disputed の項目は**すべて** `rechecks` で判定し、閉じた項目が壊れていないかも見る。
+担当の基準はすべて PASS / FAIL / UNKNOWN で判定し（`checks`）、FAIL を `findings` に出す（キーは `<行 id or contract or *>:<基準 ID>`）。機械が判定する基準（C-M・S-M・G-M・V-M）は判定せず、機械の結果に出ている問題を重ねて指摘しない。前の周の台帳で、`checker` が自分の fixed / disputed の項目は**すべて** `rechecks` で判定し、閉じた項目が壊れていないかも見る。disputed は maker の反論（`response`）を読み、認めるなら `accept_dispute: true`（→ accepted）。見直して基準を満たしていれば（台本に戻って直った など）`verdict: "PASS"`（→ closed）。どちらでもなければ `verdict: "FAIL"`（→ open に戻り、反論が認められなかった回数が増える）。
 
 ## 構造モード（契約）
 
@@ -52,11 +52,11 @@ maker の推論と取材メモ（`brief.md`）は受け取らない。渡され�
 
 ## 画面モード
 
-`<workdir>/frames/` の `sheet-*.png` をすべて Read し、`frames.json` を読む。シートは各行の落ち着いたコマを 2 列 × 3 行に並べたもので、各コマの上の帯に「行 id ＋字幕の頭」が出る。`frames.json` の `settled: false` は動作の途中のコマ、`sub_forced: true` は再生ページではその時刻に字幕が消えているコマ（読み方は `criteria/screen.md`）。
+`<workdir>/frames/frames.json` を読み、`png` が true なら `sheets` に載ったシート（`file`）だけをすべて Read する（フォルダにほかの `sheet-*.png` があっても読まない）。シートは各行の落ち着いたコマを 2 列 × 3 行に並べたもので、各コマの上の帯に「行 id ＋字幕の頭」が出る。`frames.json` の `settled: false` は動作の途中のコマ、`sub_forced: true` は再生ページではその時刻に字幕が消えているコマ（読み方は `criteria/screen.md`）。
 
 - **重なり・はみ出し・文字の大きさは判定しない**（VLM は苦手で、機械が判定済み）。意味だけを見る: そのコマが同じ行の字幕が言っていることを読める大きさで映しているか（V-1）、強調が字幕の主題に付いているか（V-2）、前の行の残り物（V-3）、一時的な書き換えの結果が字幕の結論まで残るか（V-4）、関係の無い要素（V-5）、色の意味（G-D5）、辺が無関係の箱を貫いていないか・点が箱の名前を隠していないか（G-D8）
 - 位置は、シートのファイル名と行 id で書く（例 `sheet-02.png の行 l7`）。maker が元の動作までたどれるように、`line_id` にも同じ行 id を入れる
-- PNG が無い（`sheet-*.png` が 1 枚も無い）ときは、`frames/svg/<行 id>.svg` と `frames.json` と台本から判定できる範囲だけを判定し、目で見ないと決められない基準は UNKNOWN にして、`problem` に「コマの画像が無い」と書く
+- PNG が無い（`frames.json` の `png` が false）ときは、`frames/svg/<行 id>.svg` と `frames.json` と台本から判定できる範囲だけを判定し、目で見ないと決められない基準は UNKNOWN にして、`problem` に「コマの画像が無い」と書く
 - 較正の例（`criteria/screen.md` と `criteria/structure.md` の末尾）と同程度の問題を見逃していないか、最後に確かめる
 
 ## 出力

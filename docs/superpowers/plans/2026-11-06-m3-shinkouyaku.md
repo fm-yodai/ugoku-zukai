@@ -242,7 +242,7 @@
 
 - [ ] **Step 1: プラグインを読み込んだ Claude Code を起動する**（ユーザーに `claude --plugin-dir ~/ugoku-zukai` を頼む）。`/agents` に `ugoku-zukai:writer` などが出ることを確かめる
 - [ ] **Step 2: 題材「このリポジトリ」、長さ 3 分で `/ugoku-zukai:make` を最後まで回す**。人の確認でユーザーに契約を見てもらう
-- [ ] **Step 3: 確かめることを記録する** — `${CLAUDE_PLUGIN_ROOT}` がエージェントの `tools:` で展開されたか（許可の確認が出ずに check_storyboard.cjs が走ったか）、各フェーズの周の数と判定、tts の時間、公開したページで声と動きがそろうか
+- [ ] **Step 3: 確かめることを記録する** — `${CLAUDE_PLUGIN_ROOT}` がエージェントの `tools:` で展開されたか（許可の確認が出ずに check_storyboard.cjs が走ったか）、Bash で `CLAUDE_PLUGIN_DATA` が設定されているか、題材の外の作業フォルダへの書き込みで許可の確認が出るか（出るなら `--add-dir` か許可の規則を手順に書く）、Artifact が作業フォルダのファイルを公開できるか、各フェーズの周の数と判定、tts の時間、公開したページで声と動きがそろうか・根拠の一覧（幅 360px・行を押して飛ぶ）
 - [ ] **Step 4: 見つかった不具合を直す**（直すたびに `run_m3.sh` を回し、別のコミットにする）
 - [ ] **Step 5: `docs/design.md` に「M3 の実装」を書き、コミット** — `M3: Claude Code での通しの結果を記録`
 

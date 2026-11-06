@@ -96,7 +96,7 @@ ugoku-zukai の 2 取材と契約・4 台本・5 画面（フェーズ名 `contr
 | `findings[].key` | `<line_id>:<criterion>`。同じ問題は周や checker が変わっても同じキーにする。全体への指摘は `*:<criterion>`、契約への指摘は `contract:<criterion>` |
 | `findings[].criterion` | `criteria/` の基準 ID（`C-F1` など）。`rule` には従来どおり細かい規則（`TW-2`・`FC-wrong`・`VG-7`）を書いてよい |
 | `findings[].severity` | 基準の重さに従う（基準が must / should を分けている場合はその定義どおり） |
-| `rechecks` | 前の周の台帳で、自分の担当の fixed / disputed の項目すべて。`verdict` は PASS / FAIL。disputed には `accept_dispute`（true = 反論を認める） |
+| `rechecks` | 前の周の台帳で、自分の担当の fixed / disputed の項目すべて。`verdict` は PASS / FAIL。disputed には `accept_dispute`（true = 反論を認める → accepted）。disputed でも、見直して基準を満たしていれば `verdict: PASS` で closed になる。`accept_dispute` が無く FAIL なら open に戻り、反論が認められなかった回数（`rejected`）が 1 増える |
 
 UNKNOWN の基準は `findings` にも `<line_id or *>:<criterion>` で載せ、`problem` に「判定に要る情報」を書く。
 

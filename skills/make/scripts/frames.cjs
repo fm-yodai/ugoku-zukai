@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // 台本の各行の「落ち着いたコマ」を SVG に書き、6 コマずつ並べたシートを PNG にする（評価役が画面を見るため）
 // 使い方: node frames.cjs <storyboard.json> --theme <名前|パス> -o <出力先> [--timeline timeline.json]
-// 書くもの: <出力先>/svg/<行 id>.svg、<出力先>/sheet-NN.png、<出力先>/frames.json
+// 書くもの: <出力先>/svg/<行 id>.svg、<出力先>/sheet-NN.png、<出力先>/frames.json（始めに、前の回のこの 3 つだけを消す）
 // シート: 1280×1170。1 コマは 640×390（上に 30 の帯「行 id ＋字幕の頭 20 字」、その下に 640×360 のコマ）を 2 列 × 3 行
 // frames.json の lines[].sub_forced = 再生ではその時刻に字幕が出ていない（または薄い）ので補った、settled = その行の動作がすべて終わっている
 // 終了コード: 0 = PNG まで書けた、1 = 台本の誤りか想定外の誤り、2 = 使い方の誤り、4 = resvg を読めず SVG と frames.json だけ書いた
@@ -65,6 +65,11 @@ const esc = s => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(
   for (const sc of sb.scenes) for (const ln of sc.lines) textOf[ln.id] = UZ.parseText(ln.text).text;
   const sceneStart = Object.fromEntries(M.scenes.map(s => [s.id, s.start]));
   const L = M.timeline.lines;
+  // 前の回の残り（行が減ったときの古いシートや SVG）を読まないよう、frames.cjs が書くものだけ消す。ほかのファイルは触らない
+  if (fs.existsSync(outDir)) {
+    for (const f of fs.readdirSync(outDir)) if (/^sheet-.*\.png$/.test(f) || f === "frames.json") fs.rmSync(path.join(outDir, f), { force: true });
+    fs.rmSync(path.join(outDir, "svg"), { recursive: true, force: true });
+  }
   fs.mkdirSync(path.join(outDir, "svg"), { recursive: true });
   const frames = [], inner = [];
   L.forEach((ln, i) => {

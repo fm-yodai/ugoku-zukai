@@ -9,9 +9,16 @@ out=$(mktemp -d)
 trap 'rm -rf "$out"' EXIT
 sb=examples/sequence.json
 
+# 前の回の残り（sheet-*.png・svg/）は消え、ほかのファイルは残る
+mkdir -p "$out/a/svg"
+echo x >"$out/a/sheet-99.png"; echo x >"$out/a/svg/zz.svg"; echo x >"$out/a/keep.txt"
 node scripts/frames.cjs "$sb" --theme flat -o "$out/a" >"$out/a.log" 2>&1
 code=$?
 [ -f "$out/a/frames.json" ] || { ng "frames.json ができない（終了コード $code）"; cat "$out/a.log"; echo "frames の検査: NG あり"; exit 1; }
+
+[ -e "$out/a/sheet-99.png" ] && ng "前の回の sheet-99.png が残っている"
+[ -e "$out/a/svg/zz.svg" ] && ng "前の回の svg/zz.svg が残っている"
+[ -f "$out/a/keep.txt" ] || ng "出力先のほかのファイル（keep.txt）まで消えた"
 
 # 行の件数・SVG の有無・字幕の文
 node -e '

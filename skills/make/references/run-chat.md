@@ -121,7 +121,7 @@ node <skill>/scripts/check_storyboard.cjs <workdir>/storyboard.json --theme <テ
 node <skill>/scripts/frames.cjs <workdir>/storyboard.json --theme <テーマ> -o <workdir>/frames
 ```
 
-- 評価役として `<workdir>/frames/sheet-*.png` を目で見て、`frames.json` と合わせて判定する
+- 評価役として `<workdir>/frames/frames.json` を読み、`png` が true なら `sheets` に載ったシートだけを目で見て、合わせて判定する
 - 終了コード 4 は PNG を作れなかったという意味（resvg を読めない）。SVG と `frames.json` だけで判定し、目で見ないと決められない基準は UNKNOWN にする。8 報告の残論点に「コマの画像なし」と書く
 - 直すときは図の宣言と動作だけ。字幕を変えないと直せない項目は disputed にし、4 台本の次の周として字幕を直してから、画面の次の周に戻る
 

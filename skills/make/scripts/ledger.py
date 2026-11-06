@@ -120,7 +120,11 @@ def ingest(workdir, phase, files):
                 warns.append(f"{who}: rechecks の {r.get('key')} に evidence が無い → 判定を保留")
                 continue
             if it["status"] == "disputed":
-                if r.get("accept_dispute"):
+                if r.get("verdict") == "PASS" and not r.get("accept_dispute"):
+                    # 見直したら基準を満たしていた（台本に戻って直った など）。反論の勝ち負けとは別に閉じる
+                    it["status"] = "closed"
+                    log(it, rnd, "closed", r["evidence"])
+                elif r.get("accept_dispute"):
                     it["status"] = "accepted"
                     log(it, rnd, "dispute_accepted", r["evidence"])
                 else:
@@ -153,6 +157,9 @@ def _reopen_or_open(it, rnd, event, note=""):
 
 def respond(workdir, phase, fp):
     led = load(workdir)
+    if not os.path.exists(fp):
+        print(f"応答ファイルが無い: {fp}（台帳は変えていない。maker が応答を書いたか、パスを確かめる）")
+        return
     ph = phase_of(led, phase)
     d = json.load(open(fp, encoding="utf-8"))
     rnd = int(d.get("round", ph["round"]))

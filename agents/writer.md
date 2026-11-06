@@ -53,7 +53,7 @@ python3 ${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/check_text.py <workdir>/storyb
 node ${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/frames.cjs <workdir>/storyboard.json --theme <テーマ> -o <workdir>/frames
 ```
 
-`sheet-NN.png` が 6 コマずつのシート、`frames.json` が行ごとの `sub_forced`・`settled`（読み方は `criteria/screen.md`）。終了コード 4 は PNG を書けなかったという意味なので、`svg/` と `frames.json` だけで確かめる。
+`sheet-NN.png` が 6 コマずつのシート（見るのは `frames.json` の `sheets` に載ったものだけ。PNG があるかは `frames.json` の `png` で分かる）、`frames.json` が行ごとの `sub_forced`・`settled`（読み方は `criteria/screen.md`）。終了コード 4 は PNG を書けなかったという意味なので、`svg/` と `frames.json` だけで確かめる。
 
 最後に、基準 S-・G- を 1 つずつ自分で点検する（checker の代わりではなく、漏れを減らすため）。
 
