@@ -1,6 +1,6 @@
 # maker-checker のループの約束
 
-2 取材と契約・4 台本・5 画面（台帳のフェーズ名は `contract`・`script`・`screen`）は、maker が作り、checker が `criteria/` の基準で判定し、合格するまで回す。本体（SKILL.md を実行しているセッション）は**進行役**で、成果物の中身を書かない・指摘の本文を読まない。読むのは `scripts/ledger.py status` が出す件数の要約だけ（チャットで 1 人が役を順に演じるときの約束は下の「チャットでの回し方」）。
+2 取材と契約・4 台本・5 画面（台帳のフェーズ名は `contract`・`script`・`screen`）は、maker が作り、checker が `criteria/` の基準で判定し、合格するまで回す。本体（SKILL.md を実行しているセッション）は**進行役**で、成果物の中身を書かない・指摘の本文を読まない。読むのは `scripts/ledger.py status` が出す件数の要約だけ。例外は 2 つで、3 人の確認では `ledger.py residual` が書く `review/residual.md` の表をユーザーに見せ、8 報告では「足すべき項目」を集めるために台帳の `suggestion` を読む（チャットで 1 人が役を順に演じるときの約束は下の「チャットでの回し方」）。
 
 設計の根拠: Anthropic「Harness design for long-running application development」（独立した懐疑的な評価役・基準ごとの合否・作る前の契約）、「Demystifying evals for AI agents」（次元ごとのルーブリック・Unknown を許す）、Huang ら ICLR 2024（自己修正は外部の信号があるときに効く → 機械検査を先に回す）。
 

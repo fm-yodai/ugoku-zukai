@@ -55,10 +55,10 @@ python3 <skill>/scripts/ledger.py status <workdir> <phase> --max-rounds 2
 for d in /mnt/skills/*/make /mnt/skills/*/*/make; do [ -f "$d/scripts/build_player.py" ] && [ -f "$d/player/template.html" ] && echo "$d"; done
 ```
 
-1 つも出なければ、ほかの場所を探す（出たパスから `/player/template.html` を除き、そこに `scripts/build_player.py` があるものを候補にする）。
+1 つも出なければ、ほかの場所を探す。見つけた `player/template.html` の 2 つ上のフォルダに `scripts/build_player.py` もあるものだけを候補にする。
 
 ```sh
-find / -xdev -path "*/make/player/template.html" -not -path "*/uz-work/*" -not -path "/mnt/user-data/*" 2>/dev/null
+find / -xdev -path "*/make/player/template.html" -not -path "*/uz-work/*" -not -path "/mnt/user-data/*" 2>/dev/null | while read f; do d="${f%/player/template.html}"; [ -f "$d/scripts/build_player.py" ] && echo "$d"; done
 ```
 
 候補がちょうど 1 つならそれが `<skill>`。2 つ以上残ったら、先へ進まずにユーザーにどれを使うか聞く。次に作業フォルダを作る。
@@ -133,6 +133,8 @@ VOICEVOX を入れる（約 94MB を GitHub から。会話ごとに要る）。
 python3 <skill>/scripts/setup_voice.py --agree
 python3 <skill>/scripts/tts.py <workdir>/storyboard.json -o <workdir>/voice
 ```
+
+`setup_voice.py` の一覧が出たら、`interview.md` の声が既定（春日部つむぎ、8）でないときだけ、一覧で番号を確かめて `<workdir>/storyboard.json` の `voice.speaker` を直してから `tts.py` を実行する（`text` は変えないので台本の周回には戻らない）。
 
 `tts.py` が終了コード 3 で終わったら、0 になるまで同じコマンドを繰り返す（100 秒ずつ区切って進む）。終わったら実際の声の長さで検査する:
 

@@ -84,5 +84,10 @@ done
 grep -q "ledger.py reset" references/loop-protocol.md || { echo "NG: loop-protocol.md に ledger.py reset がない"; fail=1; }
 # チャットのスキルの探し方は /mnt/skills を先に見る
 grep -q "/mnt/skills/\*/make" references/run-chat.md || { echo "NG: run-chat.md が /mnt/skills を先に見ていない"; fail=1; }
+# 声の番号: writer が interview.md から voice を書き、6 音声で進行役が一覧と照らして voice.speaker を直す
+grep -q '\*\*声\*\*（`voice`）' ../../agents/writer.md || { echo "NG: writer.md の台本の書き方に voice がない"; fail=1; }
+for f in $docs; do
+  grep -q "voice.speaker" "$f" || { echo "NG: $f に voice.speaker を直す手順がない"; fail=1; }
+done
 [ $fail = 0 ] && echo "M3 の検査: すべて OK" || echo "M3 の検査: NG あり"
 exit $fail

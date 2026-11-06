@@ -151,6 +151,8 @@ python3 ${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/setup_voice.py --agree
 python3 ${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/tts.py <workdir>/storyboard.json -o <workdir>/voice
 ```
 
+`setup_voice.py` の一覧が出たら、`interview.md` の声が既定（春日部つむぎ、8）でないときだけ、一覧で番号を確かめて `<workdir>/storyboard.json` の `voice.speaker` を直してから `tts.py` を実行する（`text` は変えないので台本の周回には戻らない）。
+
 `tts.py` の終了コード 3 は時間で区切っただけ。0 になるまで同じコマンドを繰り返す。終わったら実際の声の長さで検査する:
 
 ```sh

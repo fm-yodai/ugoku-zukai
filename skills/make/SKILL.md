@@ -61,7 +61,7 @@ AskUserQuestion、なければ質問のフォーム、なければ文章でま�
 - **読者**と**一番分かってほしいこと**（1 文）
 - **範囲**（含めるもの・外すもの）と**構成の型**（処理の流れ / 変更前後 / 全体紹介 / 概念 / 比較。`references/structures.md`）
 - **長さ**: 既定は 3 分
-- **声**: 既定は春日部つむぎ（話者 8、話速 1.1）。ほかに四国めたん（2）、ずんだもん（3。文末が「〜のだ」になる）など。ここでは声の名前を決め、話者の番号は 6 音声の手順 1 で `setup_voice.py` が出す一覧で確かめて台本の `voice.speaker` に書く
+- **声**: 既定は春日部つむぎ（話者 8、話速 1.1）。ほかに四国めたん（2）、ずんだもん（3。文末が「〜のだ」になる）など。選んだ声の名前（分かれば番号も）を `interview.md` に書く。writer は 4 台本でそれを台本の `voice` に書き（分からなければ既定の 8・1.1）、番号は 6 音声で確かめる
 - **画風**: 3b1b 調（`3b1b`）/ フラットな図解（`flat`）/ 手持ちのデザインに合わせる。合わせる場合は、Web ページ・画像・PowerPoint・CSS・トークンなど何でも受け取り、`references/themes.md` の手順で `<workdir>/theme.json` を作り、`scripts/check_theme.py` を通す
 - **VOICEVOX の音声モデルの利用規約への同意**（https://github.com/VOICEVOX/voicevox_vvm/blob/main/TERMS.txt ）。音声モデルなど約 94MB を GitHub から取ること、再生ページに「VOICEVOX:<声の名前>」のクレジットを出すことも伝える。同意がなければ音声は作らない（6 音声を飛ばし、音声なしの再生ページにする）
 
@@ -103,7 +103,7 @@ writer が台本 `storyboard.json` を書く → 進行役が `scripts/check_sto
 
 ### 6 音声
 
-1. `scripts/setup_voice.py --agree` で VOICEVOX を入れる（1 で同意を得たときだけ。最後に入っている声の一覧が出る）
+1. `scripts/setup_voice.py --agree` で VOICEVOX を入れる（1 で同意を得たときだけ。最後に入っている声の一覧が出る）。`interview.md` の声が既定（春日部つむぎ）でなければ、進行役がこの一覧で話者の番号を確かめ、台本の `voice.speaker` をその番号にする（字幕 `text` は変わらないので台本の周回には戻らない）。番号を直してから手順 2 へ進む
 2. `scripts/tts.py <workdir>/storyboard.json -o <workdir>/voice` で 1 行ずつ合成する。**終了コード 3 は「時間で区切った。続きがある」**なので、0 になるまで同じコマンドを繰り返す（合成済みの行は作り直さない）
 3. `scripts/check_storyboard.cjs … --timeline <workdir>/voice/timeline.json` で、実際の声の長さで検査し直す。誤り（と「辺 … に label がない」）があれば、機械検査の差し戻しとして writer が**動作 `do` だけ**を直す（台帳には載せない）。字幕 `text` や読み `read` を変えたときは、手順 2（`tts.py`）をもう一度実行する
 4. 読み間違いは、字幕を変えずに行の `read` で直す（直した語は 8 報告の「足すべき項目」に挙げる）
