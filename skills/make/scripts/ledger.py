@@ -3,8 +3,9 @@
 
   python3 ledger.py ingest   <workdir> <phase> <checker の出力.json …>   checker の判定を取り込む（周は各ファイルの round）
   python3 ledger.py respond  <workdir> <phase> <responses.json>          maker の応答（fixed / disputed）を取り込む
-  python3 ledger.py status   <workdir> <phase> [--round N]               件数の要約と判定を出す
-  python3 ledger.py residual <workdir>                                   閉じていない項目を review/residual.md に書き出す
+  python3 ledger.py status   <workdir> <phase> [--round N] [--max-rounds N]
+                                                                         件数の要約と判定を出す（最大周の既定は 3。チャットは 2 を渡す）
+  python3 ledger.py residual <workdir>                                   閉じていない項目を review/residual.md と review/residual.json に書き出す
 
 status の判定と終了コード: PASS 0 / CONTINUE 10 / STOP_MAX 20 / STOP_OSC 21 / STOP_DISPUTE 22
 本体（進行役）は status の出力だけを読み、指摘の本文は maker にファイルのパスで渡す。
@@ -14,7 +15,7 @@ import os
 import re
 import sys
 
-MAX_ROUNDS = 3
+MAX_ROUNDS = 3  # 既定。status の --max-rounds で変える（チャットは 2）
 OPEN = ("open", "fixed", "disputed")
 CRITERIA = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "references", "criteria")
 
@@ -37,7 +38,7 @@ def line_ids(workdir):
     if not os.path.exists(p):
         return None
     sb = json.load(open(p, encoding="utf-8"))
-    return {l["id"] for c in sb.get("chapters", []) for l in c.get("lines", [])}
+    return {l["id"] for c in sb.get("scenes", []) for l in c.get("lines", [])}
 
 
 CODES = {"PASS": 0, "CONTINUE": 10, "STOP_MAX": 20, "STOP_OSC": 21, "STOP_DISPUTE": 22}
@@ -174,7 +175,7 @@ def respond(workdir, phase, fp):
     print(summary(ph, phase))
 
 
-def decide(ph, round_override=None):
+def decide(ph, round_override=None, max_rounds=MAX_ROUNDS):
     items = ph["items"].values()
     if any(it["reopen"] >= 2 and it["status"] in OPEN for it in items):
         return "STOP_OSC"
@@ -183,10 +184,10 @@ def decide(ph, round_override=None):
     if not any(it["status"] in OPEN for it in items):
         return "PASS"
     rnd = round_override if round_override is not None else ph["round"]
-    return "STOP_MAX" if rnd >= MAX_ROUNDS else "CONTINUE"
+    return "STOP_MAX" if rnd >= max_rounds else "CONTINUE"
 
 
-def summary(ph, phase):
+def summary(ph, phase, max_rounds=MAX_ROUNDS):
     cnt = {}
     for it in ph["items"].values():
         k = (it["status"], it["severity"])
@@ -194,12 +195,12 @@ def summary(ph, phase):
     def n(st, sev=None):
         return sum(v for (s, sv), v in cnt.items() if s == st and (sev is None or sv == sev))
     unk = sum(1 for c in ph["checks"].values() if c["verdict"] == "UNKNOWN")
-    return (f"[{phase}] 周 {ph['round']}/{MAX_ROUNDS}: open must {n('open', 'must')} / open should {n('open', 'should')}"
+    return (f"[{phase}] 周 {ph['round']}/{max_rounds}: open must {n('open', 'must')} / open should {n('open', 'should')}"
             f" / fixed {n('fixed')} / disputed {n('disputed')} / closed {n('closed')} / accepted {n('accepted')}"
-            f" / UNKNOWN の基準 {unk} → {decide(ph)}")
+            f" / UNKNOWN の基準 {unk} → {decide(ph, None, max_rounds)}")
 
 
-def status(workdir, phase, rnd=None):
+def status(workdir, phase, rnd=None, max_rounds=MAX_ROUNDS):
     ph = phase_of(load(workdir), phase)
     ids = line_ids(workdir)
     if ids is not None and phase != "contract":
@@ -208,19 +209,25 @@ def status(workdir, phase, rnd=None):
         if gone:
             print(f"警告: 台本に無い行 ID を指す未解決の項目が {len(gone)} 件: {', '.join(gone[:8])}"
                   "（maker が行 ID を振り直していないか。行 ID は欠番にして振り直さない約束）")
-    v = decide(ph, rnd)
-    print(summary(ph, phase))
+    v = decide(ph, rnd, max_rounds)
+    print(summary(ph, phase, max_rounds))
     sys.exit(CODES[v])
 
 
 def residual(workdir):
     led = load(workdir)
     rows = []
+    items = []
     for phase, ph in led["phases"].items():
         for key, it in sorted(ph["items"].items()):
             if it["status"] in OPEN:
+                items.append({"phase": phase, "key": key, "severity": it["severity"], "status": it["status"],
+                              "problem": it.get("problem", ""), "response": it.get("response", "")})
                 rows.append(f"| {phase} | `{key}` | {it['severity']} | {it['status']} | {it.get('problem', '')[:120]} | {it.get('response', '')[:120]} |")
     out = os.path.join(workdir, "review", "residual.md")
+    os.makedirs(os.path.dirname(out), exist_ok=True)
+    with open(os.path.join(os.path.dirname(out), "residual.json"), "w", encoding="utf-8") as fh:
+        json.dump({"items": items}, fh, ensure_ascii=False, indent=1)
     with open(out, "w", encoding="utf-8") as fh:
         fh.write("# 残論点（ループを打ち切ったときに閉じていなかった項目）\n\n")
         if rows:
@@ -241,7 +248,8 @@ def main():
         respond(a[1], a[2], a[3])
     elif cmd == "status" and len(a) >= 3:
         rnd = int(a[a.index("--round") + 1]) if "--round" in a else None
-        status(a[1], a[2], rnd)
+        mx = int(a[a.index("--max-rounds") + 1]) if "--max-rounds" in a else MAX_ROUNDS
+        status(a[1], a[2], rnd, mx)
     elif cmd == "residual":
         residual(a[1])
     else:
