@@ -5,5 +5,11 @@ cd "$(dirname "$0")/../.."
 fail=0
 bash scripts/tests/run_m1.sh || fail=1
 python3 scripts/tests/test_ledger.py >/dev/null 2>&1 || { echo "NG: test_ledger.py"; python3 scripts/tests/test_ledger.py; fail=1; }
+for d in scripts/tests/contracts/ok_*; do
+  python3 scripts/check_contract.py "$d" >/dev/null 2>&1 || { echo "NG: 契約 $d が通らない"; fail=1; }
+done
+for d in scripts/tests/contracts/bad_*; do
+  python3 scripts/check_contract.py "$d" >/dev/null 2>&1 && { echo "NG: 契約 $d が通ってしまう"; fail=1; }
+done
 [ $fail = 0 ] && echo "M3 の検査: すべて OK" || echo "M3 の検査: NG あり"
 exit $fail
