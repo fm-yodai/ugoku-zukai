@@ -3,7 +3,7 @@
 
 使い方:
   python3 build_player.py storyboard.json -o out.html [--theme 3b1b|flat|theme.json]
-                          [--timeline timeline.json] [--audio narration.mp3] [--voice WORKDIR] [--artifact]
+                          [--timeline timeline.json] [--audio narration.mp3] [--voice WORKDIR] [--review WORKDIR] [--artifact]
 
 - 時刻表がなければ、プレーヤーが文字数から時刻を見積もる（音声なしの下見）
 - --artifact: Artifact で公開する形（<html>・<head>・<body> を外した断片）で書く
@@ -39,11 +39,11 @@ def safe_json(obj):
     return json.dumps(obj, ensure_ascii=False).replace("<", "\\u003c")
 
 
-def build(storyboard, theme, timeline=None, audio_b64=None, artifact=False):
+def build(storyboard, theme, timeline=None, audio_b64=None, artifact=False, residual=None):
     tpl = open(os.path.join(PLAYER, "template.html"), encoding="utf-8").read()
     title = storyboard.get("title", "動く図解")
     font_link = f'<link rel="stylesheet" href="{theme["font"]["css"]}">' if theme.get("font", {}).get("css") else ""
-    data = {"storyboard": storyboard, "theme": theme, "timeline": timeline, "audio": audio_b64}
+    data = {"storyboard": storyboard, "theme": theme, "timeline": timeline, "audio": audio_b64, "residual": residual}
     esc = title.replace("&", "&amp;").replace("<", "&lt;").replace('"', "&quot;")
     html = tpl.replace("__TITLE__", esc).replace("__FONT_LINK__", font_link)
     # 置換文字列にバックスラッシュが含まれても壊れないよう、関数で置き換える
@@ -57,6 +57,15 @@ def build(storyboard, theme, timeline=None, audio_b64=None, artifact=False):
     return html
 
 
+def load_residual(workdir):
+    """<workdir>/review/residual.json の items。ファイルがなければ 0 件"""
+    path = os.path.join(workdir, "review", "residual.json")
+    if not os.path.exists(path):
+        return []
+    with open(path, encoding="utf-8") as f:
+        return json.load(f).get("items", [])
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("storyboard")
@@ -65,6 +74,7 @@ def main():
     ap.add_argument("--timeline")
     ap.add_argument("--audio")
     ap.add_argument("--voice", help="tts.py の出力先。timeline.json と narration.mp3（か .wav）をまとめて読む")
+    ap.add_argument("--review", metavar="WORKDIR", help="<WORKDIR>/review/residual.json の残論点を再生ページに載せる（なければ 0 件）")
     ap.add_argument("--artifact", action="store_true")
     a = ap.parse_args()
     sb = json.load(open(a.storyboard, encoding="utf-8"))
@@ -73,7 +83,7 @@ def main():
         a.audio = a.audio or next((p for p in (os.path.join(a.voice, "narration.mp3"), os.path.join(a.voice, "narration.wav")) if os.path.exists(p)), None)
     tl = json.load(open(a.timeline, encoding="utf-8")) if a.timeline else None
     au = base64.b64encode(open(a.audio, "rb").read()).decode() if a.audio else None
-    html = build(sb, load_theme(a.theme), tl, au, a.artifact)
+    html = build(sb, load_theme(a.theme), tl, au, a.artifact, load_residual(a.review) if a.review else None)
     os.makedirs(os.path.dirname(os.path.abspath(a.out)), exist_ok=True)
     with open(a.out, "w", encoding="utf-8") as f:
         f.write(html)

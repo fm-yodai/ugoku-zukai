@@ -25,5 +25,7 @@ for f in examples/*.json; do
 done
 # 各行の落ち着いたコマ（SVG と PNG のシート。resvg がなければ PNG の検査は飛ばす）
 sh scripts/tests/test_frames.sh || fail=1
+# 再生ページの残論点と根拠の一覧
+python3 scripts/tests/test_build_review.py >/dev/null 2>&1 || { echo "NG: test_build_review.py"; python3 scripts/tests/test_build_review.py; fail=1; }
 [ $fail = 0 ] && echo "M3 の検査: すべて OK" || echo "M3 の検査: NG あり"
 exit $fail

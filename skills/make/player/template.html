@@ -22,6 +22,14 @@ __FONT_LINK__
   .uz-bar output { font-variant-numeric: tabular-nums; color: var(--muted); min-width: 92px; text-align: right; }
   .uz-bar label { color: var(--muted); display: flex; align-items: center; gap: 6px; cursor: pointer; }
   .uz-note { color: var(--muted); font-size: 12px; }
+  .uz-fold { color: var(--muted); font-size: 12px; border-top: 1px solid var(--line); padding-top: 6px; }
+  .uz-fold summary { cursor: pointer; }
+  .uz-fold ul { margin: 6px 0 0; padding-left: 18px; }
+  .uz-fold li { margin: 4px 0; overflow-wrap: anywhere; }
+  .uz-fold .uz-src { display: block; padding-left: 1em; }
+  .uz-fold button.uz-line { font: inherit; color: var(--ink); background: none; border: 0; padding: 0; text-align: left; cursor: pointer; overflow-wrap: anywhere; }
+  .uz-fold button.uz-line:hover, .uz-fold button.uz-line:focus-visible { color: var(--accent); outline: none; }
+  .uz-fold .uz-sev { color: var(--ink); font-weight: 700; }
   .uz-err { color: var(--err); white-space: pre-wrap; }
 </style>
 <!--UZ:HEAD_END-->
@@ -37,6 +45,8 @@ __FONT_LINK__
     <label><input id="uz-subs" type="checkbox" checked> 字幕</label>
   </div>
   <div class="uz-note" id="uz-note"></div>
+  <details class="uz-fold" id="uz-residual" hidden><summary></summary><ul></ul></details>
+  <details class="uz-fold" id="uz-sources" hidden><summary>根拠</summary><ul></ul></details>
   <div class="uz-err" id="uz-err" hidden></div>
 </div>
 <script>/*UZ:ELK*/</script>
@@ -94,6 +104,39 @@ const UZ_DATA = /*UZ:DATA*/null;
   $("uz-subs").onchange = () => { view.subtitles = $("uz-subs").checked; view._sub = null; tick(); };
   document.addEventListener("keydown", e => { if (e.code === "Space" && e.target === document.body) { e.preventDefault(); $("uz-play").click(); } });
   UZ.player = { seek(t) { pausedAt = t; tick(); }, get model() { return M; } };
+  // 残論点と根拠の一覧。データは textContent だけで入れる
+  function buildLists() {
+    const items = UZ_DATA.residual;
+    if (Array.isArray(items)) {
+      const d = $("uz-residual"), ul = d.querySelector("ul");
+      d.querySelector("summary").textContent = items.length ? `未解決の指摘 ${items.length} 件` : "未解決の指摘なし";
+      for (const it of items) {
+        const li = document.createElement("li");
+        const sev = document.createElement("span"); sev.className = "uz-sev";
+        sev.textContent = `[${it.severity || ""}] ${it.key || ""}`;
+        li.append(sev, " " + (it.problem || ""));
+        if (it.response) { const r = document.createElement("span"); r.className = "uz-src"; r.textContent = "対応: " + it.response; li.append(r); }
+        ul.append(li);
+      }
+      d.hidden = false;
+    }
+    const start = {};
+    for (const l of M.timeline.lines) start[l.id] = l.start;
+    const ul = $("uz-sources").querySelector("ul");
+    let n = 0;
+    for (const sc of UZ_DATA.storyboard.scenes || []) for (const ln of sc.lines || []) {
+      const srcs = Array.isArray(ln.source) ? ln.source : [];
+      if (!srcs.length || !(ln.id in start)) continue;
+      const li = document.createElement("li"), b = document.createElement("button");
+      b.type = "button"; b.className = "uz-line";
+      b.textContent = `${fmt(start[ln.id])} ${UZ.parseText(ln.text).text}`;
+      b.onclick = () => UZ.player.seek(start[ln.id]);
+      li.append(b);
+      for (const s of srcs) { const e = document.createElement("span"); e.className = "uz-src"; e.textContent = s; li.append(e); }
+      ul.append(li); n++;
+    }
+    if (n) $("uz-sources").hidden = false;
+  }
   (async () => {
     try {
       if (document.fonts && document.fonts.load) await Promise.race([document.fonts.load(`500 24px ${UZ_DATA.theme.font.family}`), new Promise(r => setTimeout(r, 2500))]);
@@ -105,6 +148,7 @@ const UZ_DATA = /*UZ:DATA*/null;
       const firstFull = M.scenes.length > 1 ? M.scenes[1].start + 0.01 : M.duration / 2;
       pausedAt = M.scenes[0].figs.some(f => !M.figs[f].autoShow) ? (M.timeline.lines[0].start + M.timeline.lines[0].dur) : Math.min(firstFull - 0.4, 3);
       tick(); pausedAt = 0; $("uz-seek").value = 0; $("uz-clock").textContent = `0:00 / ${fmt(M.duration)}`;
+      buildLists();
       document.dispatchEvent(new CustomEvent("uz-ready"));
     } catch (e) { showErr("準備に失敗しました: " + e.message); console.error(e); }
   })();
