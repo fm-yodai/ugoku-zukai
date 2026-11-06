@@ -38,7 +38,7 @@ metadata:
 約束の正は `references/loop-protocol.md`。要点だけ書く。
 
 1. 作り手が作る（2 周目からは、台帳の open の項目に応答して直し、`review/<phase>/r<N>/responses.json` を書く。進行役が `scripts/ledger.py respond` で取り込む）
-2. 進行役が機械検査を回す。誤りがあれば作り手に戻す（周には数えない。同じ周で 5 回を超えたら打ち切って評価役へ進む）
+2. 進行役が機械検査を回す。誤りがあれば「**機械検査の差し戻し**」として、検査の出力だけを作り手に渡して直させる（作り手は応答 `responses.json` を書かない。周には数えない。同じ周で 5 回を超えたら打ち切って評価役へ進む）
    - `check_storyboard.cjs` は警告だけなら終了コード 0 で終わる。**出力に「辺 … に label がない」があれば、誤りと同じに writer へ戻す**（must の基準 S-M1・G-M2）
 3. 評価役が判定する（Claude Code は役ごとに並列、チャットは 1 回にまとめる）。作り手の推論と取材メモ `brief.md` は評価役に渡さない
 4. 進行役が `scripts/ledger.py ingest` で台帳に取り込む
@@ -61,13 +61,13 @@ AskUserQuestion、なければ質問のフォーム、なければ文章でま�
 - **読者**と**一番分かってほしいこと**（1 文）
 - **範囲**（含めるもの・外すもの）と**構成の型**（処理の流れ / 変更前後 / 全体紹介 / 概念 / 比較。`references/structures.md`）
 - **長さ**: 既定は 3 分
-- **声**: 既定は春日部つむぎ（話者 8、話速 1.1）。ほかの声を選ぶなら、話者の番号を控える（台本の `voice.speaker` に書く）
+- **声**: 既定は春日部つむぎ（話者 8、話速 1.1）。ほかに四国めたん（2）、ずんだもん（3。文末が「〜のだ」になる）など。ここでは声の名前を決め、話者の番号は 6 音声の手順 1 で `setup_voice.py` が出す一覧で確かめて台本の `voice.speaker` に書く
 - **画風**: 3b1b 調（`3b1b`）/ フラットな図解（`flat`）/ 手持ちのデザインに合わせる。合わせる場合は、Web ページ・画像・PowerPoint・CSS・トークンなど何でも受け取り、`references/themes.md` の手順で `<workdir>/theme.json` を作り、`scripts/check_theme.py` を通す
 - **VOICEVOX の音声モデルの利用規約への同意**（https://github.com/VOICEVOX/voicevox_vvm/blob/main/TERMS.txt ）。音声モデルなど約 94MB を GitHub から取ること、再生ページに「VOICEVOX:<声の名前>」のクレジットを出すことも伝える。同意がなければ音声は作らない（6 音声を飛ばし、音声なしの再生ページにする）
 
 描き方（標準 / manim-web）は聞かない。今は標準（宣言型の台本＋SVG のプレーヤー）だけで作る。数式の変形や 3D が主役の題材なら、今は向かないと先に伝える。
 
-答えを `<workdir>/interview.md` に書く（題材と一次資料の場所・読者・一番分かってほしいこと・範囲・構成の型・長さ・声・テーマ・規約への同意）。
+答えを `<workdir>/interview.md` に書く（題材と一次資料の場所・読者・一番分かってほしいこと・範囲・構成の型・長さ・声・テーマ・規約への同意）。題目だけが渡されたときは、**材料の方針**（Web で集めてよいか、優先する資料の種類、避けたい資料）も聞いて書く（researcher が読む）。
 
 ### 2 取材と契約
 
@@ -81,7 +81,7 @@ researcher が一次資料を読み、取材メモ `brief.md` と契約 `contrac
 - 言い切ること（`claims`。根拠の場所も添える）
 - 構成の型と尺の配分（`structure`・`budget`）
 - 主な図の種類（`diagram.type` と選んだ理由）
-- 契約の周回で閉じなかった指摘があれば、その件数と要点
+- 契約の周回で閉じなかった指摘があれば、その件数と要点。`scripts/ledger.py residual <workdir>` を回し、出た `review/residual.md` の表をそのまま見せる（進行役が指摘の本文を読む例外。ほかに 8 報告がある）
 
 直しを求められたら、要望を `interview.md` に書き足して **2 取材と契約に戻る**。台帳の `contract` の周は `scripts/ledger.py reset <workdir> contract` で 1 から数え直す。
 
@@ -96,8 +96,8 @@ writer が台本 `storyboard.json` を書く → 進行役が `scripts/check_sto
 1. 初回だけ `scripts/setup_render.py` でコマを PNG にする道具を入れる
 2. 進行役が `scripts/frames.cjs` で各行の落ち着いたコマを `<workdir>/frames/` に書く（`--timeline` は付けない）
 3. 評価役（director 画面モード）が判定 → 台帳（フェーズ名 `screen`）
-4. CONTINUE なら writer が**図の宣言と動作（`do`）だけ**を直す。字幕（`text`）は変えない。字幕を変えないと直せない項目は writer が disputed にする。その理由が「字幕を変える必要がある」なら、**4 台本に戻る**（`script` の台帳で次の周として直し、画面をやり直す）
-5. 直したら `check_storyboard.cjs` を通してから、2 に戻ってコマを書き直す
+4. CONTINUE なら writer が台帳に応答し、**図の宣言と動作（`do`）だけ**を直す。字幕（`text`）は変えない。字幕を変えないと直せない項目は writer が disputed にする。その理由が「字幕を変える必要がある」なら、**4 台本に戻る**（`script` の台帳で次の周として直し、画面をやり直す）
+5. 直したら `check_storyboard.cjs` を通してから（誤りは機械検査の差し戻し）、手順 2（`frames.cjs`）に戻ってコマを書き直す
 
 `frames.cjs` や `setup_render.py` が終了コード 4 で終わったら、PNG を作れない環境（resvg を読めない）。止まらずに SVG と `frames.json` だけで進める。director は目で見ないと決められない基準を UNKNOWN にする。8 報告の残論点に「コマの画像なし」と書き添える。
 
@@ -105,7 +105,7 @@ writer が台本 `storyboard.json` を書く → 進行役が `scripts/check_sto
 
 1. `scripts/setup_voice.py --agree` で VOICEVOX を入れる（1 で同意を得たときだけ。最後に入っている声の一覧が出る）
 2. `scripts/tts.py <workdir>/storyboard.json -o <workdir>/voice` で 1 行ずつ合成する。**終了コード 3 は「時間で区切った。続きがある」**なので、0 になるまで同じコマンドを繰り返す（合成済みの行は作り直さない）
-3. `scripts/check_storyboard.cjs … --timeline <workdir>/voice/timeline.json` で、実際の声の長さで検査し直す。誤り（と「辺 … に label がない」）があれば writer が**動作 `do` だけ**を直す。字幕 `text` や読み `read` を変えたら、2 の `tts.py` をもう一度実行する
+3. `scripts/check_storyboard.cjs … --timeline <workdir>/voice/timeline.json` で、実際の声の長さで検査し直す。誤り（と「辺 … に label がない」）があれば、機械検査の差し戻しとして writer が**動作 `do` だけ**を直す（台帳には載せない）。字幕 `text` や読み `read` を変えたときは、手順 2（`tts.py`）をもう一度実行する
 4. 読み間違いは、字幕を変えずに行の `read` で直す（直した語は 8 報告の「足すべき項目」に挙げる）
 
 ### 7 組み立てと公開

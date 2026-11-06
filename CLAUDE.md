@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 題材（コード・リポジトリ・PR・Web ページ・文書・題目）を、日本語ナレーション付きの「動く図解」（HTML 1 枚の再生ページ）にする Claude プラグイン `ugoku-zukai`。本体はスキル `skills/make/`。claude.ai / Claude Desktop のチャットと Claude Code の両方で動かすことが前提。
 
-- 設計の正は `docs/design.md`。マイルストーン（M1a / M1b / M2 済み、M3 進行役は手順まで書いて両環境での通しが残り、M4 以降は未着手）、合意済みの要件、claude.ai のサンドボックスで確かめた事実（通信先・道具・制約）はここにある。仕様を変えたら、ここの「Mn の実装」節に追記する
+- 設計の正は `docs/design.md`。マイルストーン（M1a / M1b / M2 済み、M3 進行役は手順を書き終え、両環境での通しが残る。M4 以降は未着手）、合意済みの要件、claude.ai のサンドボックスで確かめた事実（通信先・道具・制約）はここにある。仕様を変えたら、ここの「Mn の実装」節に追記する
 - 文書・コメント・コミットメッセージは日本語。コミットは `M2: 〜` のようにマイルストーンを頭に付ける
 - 前身は個人用スキル explain-video-anywhere（v1、Manim＋Docker の VOICEVOX）。`agents/` と `references/criteria/` などは v1 からの移植で、M3 で新しいプレーヤー向けに書き換えた（保留中の `agents/animator.md` だけ v1 の Manim 用のまま）
 

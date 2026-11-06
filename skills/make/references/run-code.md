@@ -5,14 +5,14 @@ SKILL.md の流れ（0 準備〜8 報告）を、Claude Code のサブエージ�
 ## パスの書き方
 
 - スクリプトは `${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/…` で書く。SKILL.md の `scripts/…` はこれに読み替える
-- シェルで `${CLAUDE_PLUGIN_ROOT}` が空になる（展開されない）ときは、この文書の 3 つ上のフォルダ（`…/skills/make/references/run-code.md` の `skills` の 1 つ上）がプラグインのフォルダなので、その絶対パスを直接書く
+- シェルで `${CLAUDE_PLUGIN_ROOT}` が空になる（展開されない）ときは、この文書の絶対パスから `skills/make/references/run-code.md` を除いた部分がプラグインのフォルダなので、それを直接書く
 - `<workdir>` は 0 準備で `workdir.py` が出した絶対パス。エージェントにも絶対パスで渡す
 - シェルの変数や `cd` は次のコマンドに持ち越されない前提で、毎回フルパスで書く
 
 ## 進行役の約束
 
 - 成果物（`brief.md`・`contract.json`・`storyboard.json`・応答）を自分で書かない。直すのは作り手のエージェント
-- 指摘の本文は読まない。読むのは機械検査の出力、`ledger.py status` の要約、エージェントが最後に返す 1 行だけ。指摘の中身は作り手にファイルのパスで渡す
+- 指摘の本文は読まない。読むのは機械検査の出力、`ledger.py status` の要約、エージェントが最後に返す 1 行だけ。指摘の中身は作り手にファイルのパスで渡す。例外は 3 人の確認（`ledger.py residual` の表を見せる）と 8 報告（足すべき項目を集める）
 - 周回を続けるかは `ledger.py status` の終了コードだけで決める（`ingest`・`respond` の要約は最大の周を見ていないので使わない）
 - animator は呼ばない
 
@@ -26,7 +26,7 @@ SKILL.md の流れ（0 準備〜8 報告）を、Claude Code のサブエージ�
 | `ugoku-zukai:fact-checker` | 2・4 | 題材の場所（一次資料）。`brief.md` は渡さない | `<workdir>/review/<phase>/r<N>/fact-checker.json` |
 | `ugoku-zukai:director` | 2・4・5 | なし | `<workdir>/review/<phase>/r<N>/director.json` |
 | `ugoku-zukai:writing-reviewer` | 4 | なし | `<workdir>/review/script/r<N>/writing-reviewer.json` |
-| `ugoku-zukai:writer` | 4・5・6 | テーマ（`3b1b`・`flat`・`<workdir>/theme.json`） | `<workdir>/storyboard.json`、N≥2 と画面の直しは `<workdir>/review/<phase>/r<N>/responses.json` |
+| `ugoku-zukai:writer` | 4・5・6 | テーマ（`3b1b`・`flat`・`<workdir>/theme.json`） | `<workdir>/storyboard.json`、N≥2 と画面の直しは `<workdir>/review/<phase>/r<N>/responses.json`。機械検査の差し戻しでは応答を書かない |
 
 頼み方の例（評価役は同じメッセージで複数呼んで並列にする）:
 
@@ -36,7 +36,15 @@ SKILL.md の流れ（0 準備〜8 報告）を、Claude Code のサブエージ�
 出力先: /home/u/.claude/plugins/data/ugoku-zukai/runs/20261106-1530-this-repo/review/script/r2/director.json
 ```
 
-機械検査の誤りを作り手に戻すときは、同じフェーズ・同じ周で呼び、検査の出力をそのまま添える。戻すのは同じ周で 5 回まで。超えたら打ち切って評価役へ進む（残った誤りは評価役が FAIL にし、台帳に載る）。
+機械検査の誤りを作り手に戻すときは「機械検査の差し戻し」として呼ぶ。フェーズと周の番号は渡さず、作業フォルダ・テーマ・検査の出力（そのまま）だけを渡す。作り手は出力に出た誤りだけを直し、応答 `responses.json` は書かない（書くと、取り込み済みの応答を上書きしたり、評価役が確かめない直しが台帳に載ったりする）。researcher にも同じく「`check_contract.py` の差し戻し。応答は書かない」と伝える。戻すのは同じ周で 5 回まで。超えたら打ち切って評価役へ進む（残った誤りは評価役が FAIL にし、台帳に載る）。
+
+```text
+機械検査の差し戻し
+作業フォルダ: /home/u/.claude/plugins/data/ugoku-zukai/runs/20261106-1530-this-repo
+テーマ: flat
+検査の出力:
+（check_storyboard.cjs・check_text.py の出力をそのまま貼る）
+```
 
 ## 1 周の回し方（2・4・5 で共通）
 
@@ -48,7 +56,7 @@ SKILL.md の流れ（0 準備〜8 報告）を、Claude Code のサブエージ�
 python3 ${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/ledger.py respond <workdir> <phase> <workdir>/review/<phase>/r<N>/responses.json
 ```
 
-2. 機械検査（段ごとに下に書く）。誤りがあれば作り手に戻す
+2. 機械検査（段ごとに下に書く）。誤りがあれば機械検査の差し戻しで作り手に直させ、検査を回し直す
 3. 評価役を並列に呼ぶ
 4. 取り込む（その周の評価役の出力をすべて並べる。下は 2 取材と契約の例）
 
@@ -97,9 +105,10 @@ python3 ${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/check_contract.py <workdir>
 
 ## 3 人の確認
 
-`contract.json` を読んで要約を見せ（SKILL.md の 3）、AskUserQuestion で「このまま台本へ / 直す」を聞く。直すなら、要望を `interview.md` に書き足し、周を数え直してから 2 に戻る。
+`contract.json` を読んで要約を見せ（SKILL.md の 3）、AskUserQuestion で「このまま台本へ / 直す」を聞く。直すなら、要望を `interview.md` に書き足し、周を数え直してから 2 取材と契約に戻る。閉じなかった指摘は、下の residual が書く `review/residual.md` の表をそのまま見せる（進行役が指摘の本文を読む例外）。
 
 ```sh
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/ledger.py residual <workdir>
 python3 ${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/ledger.py reset <workdir> contract
 ```
 
@@ -112,7 +121,7 @@ node ${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/check_storyboard.cjs <workdir>/st
 python3 ${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/check_text.py <workdir>/storyboard.json
 ```
 
-`check_storyboard.cjs` は警告だけなら終了コード 0。出力に「辺 … に label がない」があれば、誤りと同じに writer へ戻す。
+`check_storyboard.cjs` は警告だけなら終了コード 0。出力に「辺 … に label がない」があれば、誤りと同じに機械検査の差し戻しで writer へ戻す。
 
 ## 5 画面
 
@@ -148,7 +157,7 @@ python3 ${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/tts.py <workdir>/storyboard.js
 node ${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/check_storyboard.cjs <workdir>/storyboard.json --theme <テーマ> --timeline <workdir>/voice/timeline.json
 ```
 
-誤りか「辺 … に label がない」があれば、writer を phase `screen`・画面の最後の周の番号で呼び、検査の出力を添えて「動作 `do` だけを直す」と頼む（台帳には取り込まない。戻すのは 5 回まで）。writer が `text` か `read` を変えたら、`tts.py` をもう一度実行してから検査し直す。
+誤りか「辺 … に label がない」があれば、機械検査の差し戻しで writer を呼び、検査の出力（`--timeline` の結果）を渡して「動作 `do` だけを直す」と頼む（フェーズと周の番号は渡さない。台帳には載せない。戻すのは 5 回まで）。もし `text` か `read` が変わったら、`tts.py` をもう一度実行してから検査し直す。
 
 ## 7 組み立てと公開
 

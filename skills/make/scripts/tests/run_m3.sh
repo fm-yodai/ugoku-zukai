@@ -76,5 +76,13 @@ for ph in "0 準備" "1 インタビュー" "2 取材と契約" "3 人の確認"
   grep -q "$ph" references/criteria/README.md || { echo "NG: criteria/README.md に「$ph」がない"; fail=1; }
 done
 [ -f references/run-chat.md ] && { grep -q -- "--max-rounds 2" references/run-chat.md || { echo "NG: run-chat.md に --max-rounds 2 がない"; fail=1; }; }
+# 機械検査の差し戻しは writer の別の呼び方（応答を書かない）。進行役の文書と loop-protocol から指す
+grep -q "^## 機械検査の差し戻し" ../../agents/writer.md || { echo "NG: writer.md に「機械検査の差し戻し」の節がない"; fail=1; }
+for f in $docs references/loop-protocol.md; do
+  grep -q "機械検査の差し戻し" "$f" || { echo "NG: $f に「機械検査の差し戻し」がない"; fail=1; }
+done
+grep -q "ledger.py reset" references/loop-protocol.md || { echo "NG: loop-protocol.md に ledger.py reset がない"; fail=1; }
+# チャットのスキルの探し方は /mnt/skills を先に見る
+grep -q "/mnt/skills/\*/make" references/run-chat.md || { echo "NG: run-chat.md が /mnt/skills を先に見ていない"; fail=1; }
 [ $fail = 0 ] && echo "M3 の検査: すべて OK" || echo "M3 の検査: NG あり"
 exit $fail

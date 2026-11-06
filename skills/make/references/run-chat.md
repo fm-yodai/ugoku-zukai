@@ -30,7 +30,7 @@
 python3 <skill>/scripts/ledger.py respond <workdir> <phase> <workdir>/review/<phase>/r<N>/responses.json
 ```
 
-2. 機械検査（段ごとに下に書く）。誤りがあれば作り手に戻って直す（同じ周で 5 回まで）
+2. 機械検査（段ごとに下に書く）。誤りがあれば作り手に戻って、出力に出た誤りだけを直す（機械検査の差し戻し。応答 `responses.json` は書かない。同じ周で 5 回まで）
 3. 宣言をしてから、評価役を **1 回にまとめて**演じる。その段の評価役の担当（下の表）をすべて判定し、全基準の判定を 1 つのファイル `<workdir>/review/<phase>/r<N>/combined.json` に書く。形は `review-format.md` の checker の出力と同じで、`reviewer` は `combined`
 4. 取り込んで判定する。**判定には必ず `--max-rounds 2` を付ける**
 
@@ -49,15 +49,26 @@ python3 <skill>/scripts/ledger.py status <workdir> <phase> --max-rounds 2
 
 ## 0 準備
 
-スキルのフォルダを探し、作業フォルダを作る。
+スキルのフォルダを探す。まず `/mnt/skills` の下で、`scripts/build_player.py` と `player/template.html` の両方があるフォルダを挙げる。
 
 ```sh
-find / -path "*/make/scripts/tts.py" 2>/dev/null | head -1
+for d in /mnt/skills/*/make /mnt/skills/*/*/make; do [ -f "$d/scripts/build_player.py" ] && [ -f "$d/player/template.html" ] && echo "$d"; done
+```
+
+1 つも出なければ、ほかの場所を探す（出たパスから `/player/template.html` を除き、そこに `scripts/build_player.py` があるものを候補にする）。
+
+```sh
+find / -xdev -path "*/make/player/template.html" -not -path "*/uz-work/*" -not -path "/mnt/user-data/*" 2>/dev/null
+```
+
+候補がちょうど 1 つならそれが `<skill>`。2 つ以上残ったら、先へ進まずにユーザーにどれを使うか聞く。次に作業フォルダを作る。
+
+```sh
 mkdir -p uz-work/sources uz-work/review
 realpath uz-work
 ```
 
-1 行目の出力から `/scripts/tts.py` を除いたものが `<skill>`、3 行目の出力が `<workdir>`。題材のファイルが添付されていれば `/mnt/user-data/uploads/` にある。zip なら作業フォルダに展開して一次資料にする（`unzip` がなくても動く）:
+最後の出力が `<workdir>`。題材のファイルが添付されていれば `/mnt/user-data/uploads/` にある。zip なら作業フォルダに展開して一次資料にする（`unzip` がなくても動く）:
 
 ```sh
 python3 -m zipfile -e /mnt/user-data/uploads/<添付>.zip <workdir>/src
@@ -65,7 +76,7 @@ python3 -m zipfile -e /mnt/user-data/uploads/<添付>.zip <workdir>/src
 
 ## 1 インタビュー
 
-質問のフォーム（ask_user_input など）があれば使い、なければ文章でまとめて聞く。答えを `<workdir>/interview.md` に書く。デザインに合わせるなら:
+質問のフォーム（ask_user_input など）があれば使い、なければ文章でまとめて聞く。答えを `<workdir>/interview.md` に書く（題目だけのときは材料の方針も）。デザインに合わせるなら:
 
 ```sh
 python3 <skill>/scripts/extract_design.py <資料…> --report <workdir>/design-report.json --theme <workdir>/theme.json --name <名前>
@@ -82,9 +93,10 @@ python3 <skill>/scripts/check_contract.py <workdir>
 
 ## 3 人の確認
 
-契約の要約を見せて了承をもらう（SKILL.md の 3）。直すなら、要望を `interview.md` に書き足し、周を数え直してから 2 に戻る。
+契約の要約を見せて了承をもらう（SKILL.md の 3）。閉じなかった指摘は residual が書く `<workdir>/review/residual.md` の表を見せる。直すなら、要望を `interview.md` に書き足し、周を数え直してから 2 取材と契約に戻る。
 
 ```sh
+python3 <skill>/scripts/ledger.py residual <workdir>
 python3 <skill>/scripts/ledger.py reset <workdir> contract
 ```
 
@@ -128,7 +140,7 @@ python3 <skill>/scripts/tts.py <workdir>/storyboard.json -o <workdir>/voice
 node <skill>/scripts/check_storyboard.cjs <workdir>/storyboard.json --theme <テーマ> --timeline <workdir>/voice/timeline.json
 ```
 
-誤りか「辺 … に label がない」があれば、動作 `do` だけを直して検査し直す。`text` か `read` を変えたら `tts.py` をもう一度実行する。
+誤りか「辺 … に label がない」があれば、機械検査の差し戻しとして動作 `do` だけを直して検査し直す（台帳には載せない）。もし `text` か `read` を変えたら `tts.py` をもう一度実行する。
 
 ## 7 組み立てと公開
 

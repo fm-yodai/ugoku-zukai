@@ -7,7 +7,7 @@
 ## 1 周の流れ
 
 1. **maker** が `criteria/` の該当ファイルを読んで作る（2 周目以降は台帳 `review/ledger.json` の open / regressed の項目を直し、項目ごとの応答 `review/<phase>/r<N>/responses.json` を書く）
-2. **機械検査**を本体が回す。契約は `check_contract.py`、台本は `check_storyboard.cjs` と `check_text.py`、画面は `frames.cjs`（見積もりの時刻でコマを書く）と `check_storyboard.cjs`。誤りがあれば maker に戻す。`check_storyboard.cjs` の警告のうち must の基準に当たるもの（少なくとも「辺 … に label がない」。S-M1・G-M2）も、誤りと同じに maker に戻す（終了コードは 0 のままなので、本体が出力の警告を読んで判断する）（機械の直しは周回に数えないが、同じ周で 5 回を超えたら打ち切り）
+2. **機械検査**を本体が回す。契約は `check_contract.py`、台本は `check_storyboard.cjs` と `check_text.py`、画面は `frames.cjs`（見積もりの時刻でコマを書く）と `check_storyboard.cjs`。誤りがあれば maker に戻す（「機械検査の差し戻し」として検査の出力だけを渡す。maker は応答を書かない）。`check_storyboard.cjs` の警告のうち must の基準に当たるもの（少なくとも「辺 … に label がない」。S-M1・G-M2）も、誤りと同じに maker に戻す（終了コードは 0 のままなので、本体が出力の警告を読んで判断する）（機械の直しは周回に数えないが、同じ周で 5 回を超えたら打ち切り）
 3. **checker** を本体が起動する（Claude Code では役ごとに並列。チャットでは 1 回にまとめる）。渡すのは成果物のパス・基準ファイル・前の周の台帳・出力先だけで、maker の推論や取材メモ（brief.md）は渡さない（fact-checker は契約モードでも brief.md を読まない）
 4. `python3 scripts/ledger.py ingest <workdir> <phase> <checker の出力 …>` で台帳に取り込む
 5. `python3 scripts/ledger.py status <workdir> <phase>` の判定に従う: `PASS` → 次のフェーズへ / `CONTINUE` → 次の周 / `STOP_*` → 打ち切って次のフェーズへ（残論点として持ち越す）
@@ -30,6 +30,7 @@
   - `STOP_MAX`: 最大の周（Claude Code は 3、チャットは 2。`ledger.py status … --max-rounds 2`）を終えても合格しない
   - `STOP_OSC`: 同じキーの `reopen` が 2 に達した（直す → 壊れる の振動）。最大の周を待たない
   - `STOP_DISPUTE`: 同じキーの反論が 2 回認められなかった（maker と checker の意見が割れたまま）
+- 3 人の確認で契約を直すことになって 2 取材と契約に戻るときは、`python3 scripts/ledger.py reset <workdir> contract` で周を 1 から数え直す（前の項目は台帳の `archived` に移り、判定と残論点には使わない）
 - 打ち切ったら、閉じていない項目は**残論点**になる。`ledger.py residual` で一覧を作り、7 組み立てと公開の再生ページ（たたんだ「未解決の指摘 N 件」）と 8 報告に必ず出す。黙って公開しない
 
 ## checker の約束
