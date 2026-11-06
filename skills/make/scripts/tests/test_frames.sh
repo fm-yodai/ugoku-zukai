@@ -37,6 +37,30 @@ for (const ln of lines) {
 process.exit(bad);
 ' "$sb" "$out/a" || fail=1
 
+# 時刻の決まり: 各行の t は行の終わり（start + dur）以上、次の行の始まり未満。sub_forced と settled がある
+node -e '
+const fs = require("fs"), path = require("path");
+const [sbf, dir] = process.argv.slice(1);
+const { load, theme } = require(path.resolve("scripts/uz_node.cjs"));
+(async () => {
+  const UZ = load();
+  const M = await UZ.build(JSON.parse(fs.readFileSync(sbf, "utf8")), theme("flat"), null);
+  const fr = JSON.parse(fs.readFileSync(path.join(dir, "frames.json"), "utf8"));
+  const L = M.timeline.lines;
+  let bad = 0;
+  const ng = m => { console.log("NG: " + m); bad = 1; };
+  fr.lines.forEach((f, i) => {
+    if (typeof f.sub_forced !== "boolean" || typeof f.settled !== "boolean") ng(`行 ${f.id} に sub_forced か settled がない`);
+    const ln = L.find(x => x.id === f.id);
+    if (!ln) { ng(`行 ${f.id} が時刻表にない`); return; }
+    if (f.t < ln.start + ln.dur - 1e-6) ng(`行 ${f.id} の t=${f.t} が行の終わり ${(ln.start + ln.dur).toFixed(3)} より前`);
+    const next = L[L.indexOf(ln) + 1];
+    if (next && !(f.t < next.start)) ng(`行 ${f.id} の t=${f.t} が次の行の始まり ${next.start} 以上`);
+  });
+  process.exit(bad);
+})();
+' "$sb" "$out/a" || fail=1
+
 png=$(node -e 'console.log(JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")).png)' "$out/a/frames.json")
 if [ "$png" = "true" ]; then
   [ $code = 0 ] || ng "png: true なのに終了コードが $code"
@@ -44,7 +68,7 @@ if [ "$png" = "true" ]; then
 const b = require("fs").readFileSync(process.argv[1]);
 if (b.slice(0, 4).toString("latin1") !== "\x89PNG") { console.log("NG: sheet-01.png が PNG でない"); process.exit(1); }
 const w = b.readUInt32BE(16), h = b.readUInt32BE(20);
-if (w !== 1280 || h !== 1080) { console.log(`NG: sheet-01.png が ${w}x${h}（1280x1080 のはず）`); process.exit(1); }
+if (w !== 1280 || h !== 1170) { console.log(`NG: sheet-01.png が ${w}x${h}（1280x1170 のはず）`); process.exit(1); }
 ' "$out/a/sheet-01.png" || fail=1
 else
   echo "（resvg がないので PNG の検査を飛ばした。python3 scripts/setup_render.py で入れる）"

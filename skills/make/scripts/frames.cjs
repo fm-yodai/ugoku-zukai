@@ -2,7 +2,9 @@
 // 台本の各行の「落ち着いたコマ」を SVG に書き、6 コマずつ並べたシートを PNG にする（評価役が画面を見るため）
 // 使い方: node frames.cjs <storyboard.json> --theme <名前|パス> -o <出力先> [--timeline timeline.json]
 // 書くもの: <出力先>/svg/<行 id>.svg、<出力先>/sheet-NN.png、<出力先>/frames.json
-// 終了コード: 0 = PNG まで書けた、1 = 台本の誤り、2 = 使い方の誤り、4 = resvg を読めず SVG と frames.json だけ書いた
+// シート: 1280×1170。1 コマは 640×390（上に 30 の帯「行 id ＋字幕の頭 20 字」、その下に 640×360 のコマ）を 2 列 × 3 行
+// frames.json の lines[].sub_forced = 再生ではその時刻に字幕が出ていない（または薄い）ので補った、settled = その行の動作がすべて終わっている
+// 終了コード: 0 = PNG まで書けた、1 = 台本の誤りか想定外の誤り、2 = 使い方の誤り、4 = resvg を読めず SVG と frames.json だけ書いた
 "use strict";
 const fs = require("fs"), path = require("path"), vm = require("vm"), os = require("os"), cp = require("child_process");
 const { load, theme, PLAYER } = require("./uz_node.cjs");
@@ -16,7 +18,8 @@ const outDir = opt("-o");
 if (!file || !outDir) { console.error("使い方: node frames.cjs <storyboard.json> --theme <名前|パス> -o <出力先> [--timeline timeline.json]"); process.exit(2); }
 
 const W = 1280, H = 720, CW = 640, CH = 360, COLS = 2, ROWS = 3, PER = COLS * ROWS;
-const BAND = 30;   // シートのコマの上に重ねる帯の高さ（シートの座標）
+const BAND = 30;   // シートのコマの上に置く帯の高さ（シートの座標）。コマには重ねない（章の題を隠さない）
+const CELL = BAND + CH;
 
 function renderHome() {
   if (process.env.UZ_RENDER_HOME) return process.env.UZ_RENDER_HOME;
@@ -73,6 +76,10 @@ const esc = s => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(
     if (next && next.scene !== ln.scene && sceneStart[next.scene] != null) t = Math.min(t, sceneStart[next.scene] - 0.01);
     t = Math.min(t, M.endCard - 0.01);
     t = Math.max(t, ln.start);
+    // 再生と同じ frame() でその時刻の字幕と動作を調べる
+    const fr0 = frameOrig(M, t);
+    const subForced = !(fr0.sub && fr0.sub.id === ln.id && fr0.sub.opacity >= 0.99);
+    const settled = actsEnd === -Infinity || actsEnd <= t + 1e-9;
     const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
     forceSub = { id: ln.id, text: textOf[ln.id] };
     new UZ.View(svg, M).render(t);
@@ -80,27 +87,27 @@ const esc = s => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(
     const rel = `svg/${ln.id}.svg`;
     fs.writeFileSync(path.join(outDir, rel), serialize(svg, { xmlns: "http://www.w3.org/2000/svg", width: W, height: H }));
     inner.push(svg.childNodes.map(c => serialize(c)).join(""));
-    frames.push({ id: ln.id, scene: ln.scene, t: +t.toFixed(3), text: textOf[ln.id], svg: rel });
+    frames.push({ id: ln.id, scene: ln.scene, t: +t.toFixed(3), text: textOf[ln.id], svg: rel, sub_forced: subForced, settled });
   });
 
-  // シート: 6 コマずつ、入れ子の <svg>（はみ出しを切る）を <g transform> で並べ、帯を重ねる
+  // シート: 6 コマずつ、帯の下に入れ子の <svg>（はみ出しを切る）を置き、<g transform> で並べる
   const fonts = jpFonts();
   const famList = fonts.map(f => `"${f}"`).join(", ");
   const sheets = [];
   for (let s = 0; s * PER < frames.length; s++) {
     const group = frames.slice(s * PER, (s + 1) * PER);
-    let body = `<rect width="${CW * COLS}" height="${CH * ROWS}" fill="#ffffff"/>`;
+    let body = `<rect width="${CW * COLS}" height="${CELL * ROWS}" fill="#ffffff"/>`;
     group.forEach((f, k) => {
-      const x = (k % COLS) * CW, y = Math.floor(k / COLS) * CH, idx = s * PER + k;
+      const x = (k % COLS) * CW, y = Math.floor(k / COLS) * CELL, idx = s * PER + k;
       const label = `${f.id}  ${[...f.text].slice(0, 20).join("")}`;
-      body += `<g transform="translate(${x},${y})"><svg width="${CW}" height="${CH}" viewBox="0 0 ${W} ${H}">${inner[idx]}</svg>` +
-        `<rect width="${CW}" height="${BAND}" fill="#000000" fill-opacity="0.72"/>` +
+      body += `<g transform="translate(${x},${y})"><svg y="${BAND}" width="${CW}" height="${CH}" viewBox="0 0 ${W} ${H}">${inner[idx]}</svg>` +
+        `<rect width="${CW}" height="${BAND}" fill="#2b2f36"/>` +
         `<text x="10" y="${BAND / 2}" font-size="16" font-family="${esc(famList)}" font-weight="700" fill="#ffffff" dominant-baseline="central">${esc(label)}</text>` +
-        `<rect x="0.5" y="0.5" width="${CW - 1}" height="${CH - 1}" fill="none" stroke="#888888"/></g>`;
+        `<rect x="0.5" y="0.5" width="${CW - 1}" height="${CELL - 1}" fill="none" stroke="#888888"/></g>`;
     });
     // テーマの字体（Web フォントなど）は入っていないことが多いので、日本語の字体を最後の候補に足す
     body = body.replace(/font-family="([^"]*)"/g, (m0, v) => `font-family="${v}, ${esc(famList)}"`);
-    const svgStr = `<svg xmlns="http://www.w3.org/2000/svg" width="${CW * COLS}" height="${CH * ROWS}">${body}</svg>`;
+    const svgStr = `<svg xmlns="http://www.w3.org/2000/svg" width="${CW * COLS}" height="${CELL * ROWS}">${body}</svg>`;
     sheets.push({ file: `sheet-${String(s + 1).padStart(2, "0")}.png`, lines: group.map(f => f.id), svg: svgStr });
   }
 
@@ -124,4 +131,4 @@ const esc = s => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(
   }
   writeJson(true);
   console.log(`${frames.length} コマ、シート ${sheets.length} 枚 → ${outDir}`);
-})().catch(e => { console.error(e); process.exit(2); });
+})().catch(e => { console.error(e); process.exit(1); });
