@@ -16,7 +16,7 @@
   "findings": [
     {
       "id": "W1",
-      "line_id": "c3-2",
+      "line_id": "l7",
       "rule": "TW-2",
       "severity": "must",
       "problem": "client_id が何と一致するのかが書かれていない",
@@ -31,7 +31,7 @@
 | キー | 内容 |
 |------|------|
 | `id` | レビュアー内で一意。文章 `W`、事実 `F`、演出 `D` で始める |
-| `line_id` | 対象の行（台本なら `c3-2`、文書なら見出しや段落を特定できる文字列）。全体への指摘は `"*"` |
+| `line_id` | 対象の行（台本なら `l7`、文書なら見出しや段落を特定できる文字列）。全体への指摘は `"*"` |
 | `rule` | 規則の番号。文章 `TW-n`（references/writing/rules.md）、演出 `VG-n`（references/visual-grammar.md の約束番号）、事実は `FC-wrong`（誤り）/ `FC-overclaim`（言い過ぎ）/ `FC-nosource`（根拠が見つからない） |
 | `severity` | `must` か `should`（下の基準） |
 | `problem` | 何が起きているか。読んだ人がどう誤解するかまで書く |
@@ -59,7 +59,7 @@
 
 - `finding` は `<reviewer>/r<round>/<id>` で指す（`id` はラウンドごとに W1 から振り直されるので、ラウンドを省くと別の指摘と取り違える）
 - `action` は `fixed`（直した）か `rebutted`（理由を付けて直さない）。黙って無視しない
-- must を rebutted にした場合、その指摘は人の承認ゲートで「残った論点」として示す
+- must を rebutted にしたまま閉じなかった指摘は残論点になり、再生ページの下の「未解決の指摘」の一覧と最後の報告に出す
 
 ## maker-checker 形式（ugoku-zukai）
 
@@ -75,16 +75,16 @@ ugoku-zukai の 2 取材と契約・4 台本・5 画面（フェーズ名 `contr
   "phase": "script",
   "round": 2,
   "checks": [
-    {"criterion": "S-F1", "verdict": "FAIL", "evidence": "全 30 行の source を読んだ。c3-2 だけ言えない"},
+    {"criterion": "S-F1", "verdict": "FAIL", "evidence": "全 30 行の source を読んだ。l7 だけ言えない"},
     {"criterion": "S-F2", "verdict": "PASS", "evidence": "図 flow の辺 9 本の source をすべて読み、向きが合っている"}
   ],
   "findings": [
-    {"key": "c3-2:S-F1", "line_id": "c3-2", "criterion": "S-F1", "rule": "FC-overclaim", "severity": "must",
+    {"key": "l7:S-F1", "line_id": "l7", "criterion": "S-F1", "rule": "FC-overclaim", "severity": "must",
      "problem": "…", "suggestion": "…", "evidence": "src/apps/api/src/middleware/auth.ts:82"}
   ],
   "rechecks": [
-    {"key": "c4-5:S-F1", "verdict": "PASS", "evidence": "直した字幕は post-confirmation.ts:30 から言える"},
-    {"key": "c5-2:S-F3", "verdict": "FAIL", "accept_dispute": false, "evidence": "反論は契約 K2 と矛盾する"}
+    {"key": "l9:S-F1", "verdict": "PASS", "evidence": "直した字幕は post-confirmation.ts:30 から言える"},
+    {"key": "l12:S-F3", "verdict": "FAIL", "accept_dispute": false, "evidence": "反論は契約 K2 と矛盾する"}
   ],
   "summary": "1〜3 文"
 }
@@ -104,8 +104,8 @@ UNKNOWN の基準は `findings` にも `<line_id or *>:<criterion>` で載せ、
 
 ```json
 {"phase": "script", "round": 2, "responses": [
-  {"key": "c3-2:S-F1", "action": "fixed", "note": "字幕を auth.ts:82 の条件に合わせた"},
-  {"key": "c5-2:S-D4", "action": "disputed", "note": "S-F1 が優先（事実 > 演出）。値を書き換えると根拠の無い値になる"}
+  {"key": "l7:S-F1", "action": "fixed", "note": "字幕を auth.ts:82 の条件に合わせた"},
+  {"key": "l12:S-D4", "action": "disputed", "note": "S-F1 が優先（事実 > 演出）。値を書き換えると根拠の無い値になる"}
 ]}
 ```
 

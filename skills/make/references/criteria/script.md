@@ -4,7 +4,7 @@
 
 | ID | 合格の条件 | 検査 | 重さ |
 |---|---|---|---|
-| S-M1 | `check_storyboard.cjs` の誤り（形・id の解決・印・点の経路）と配置の問題（はみ出し・小さい・重なり）が 0。警告のうち「辺 … に label がない」も 0（G-M2） | 機械（`node scripts/check_storyboard.cjs <storyboard.json> --theme <テーマ>`。時刻は見積もり） | must |
+| S-M1 | `check_storyboard.cjs` の誤り（形・id の解決・印・点の経路）と配置の問題（はみ出し・小さい・重なり）と、警告「辺 … に label がない」（G-M2）が 0 | 機械（`node scripts/check_storyboard.cjs <storyboard.json> --theme <テーマ>`。時刻は見積もり） | must |
 | S-M2 | 字幕と読みに禁止語（比喩・造語・スキル内部の用語。`../../assets/banned_terms.json`）が無い | 機械（`check_text.py`） | must |
 | S-M3 | 口調の語尾が徹底している。ずんだもん（話者 1・3・5・7・22・38・75・76）では**全文の文末**が「〜のだ」「〜なのだ」（問いは「〜のだ？」「〜なのだ？」）。「〜よ」「〜んだ」「〜だね」で終わる文が無い | 機械（`check_text.py`） | must |
 | S-M4 | 読む文（`read` があれば `read`、なければ `text`）に、`read` で読みを書いておらず、ユーザー辞書（`../../assets/voicevox_user_dict.json`）にもない英字の語が無い | 機械（`check_text.py`） | must |

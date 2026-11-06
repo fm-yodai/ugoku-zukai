@@ -5,7 +5,7 @@
 | ID | 合格の条件 | 検査 | 重さ |
 |---|---|---|---|
 | G-M1 | 図の宣言が形どおり。ノード・手順・段階・参加者に label があり、辺とメッセージの両端が宣言にあり、メッセージに label があり、グループの `members` が宣言にあり、1 つのノードが 2 つの枠に入っていない | 機械（`check_storyboard.cjs` の誤り。S-M1 と同じ実行） | must |
-| G-M2 | `graph` のすべての辺に label がある | 機械（`check_storyboard.cjs` の警告「辺 … に label がない」） | must |
+| G-M2 | `graph` のすべての辺に label がある。`check_storyboard.cjs` の誤りと、この警告「辺 … に label がない」が 0 | 機械（`check_storyboard.cjs` の警告。終了コードは 0 のままなので、本体が警告を読んで maker に戻す） | must |
 | G-M3 | 点（`trace`）は宣言した辺の上だけを動き、いまいる所から経路を書いている。戻りの矢印（`reply`）の各区間に逆向きの辺の宣言がある（VG-7） | 機械（`check_storyboard.cjs` の誤り） | must |
 | G-M4 | 画面で、文字が区画からはみ出さず、15px 未満に縮まず、文字どうし・ラベルや注記と別の箱や枠の縁が重ならない | 機械（`check_storyboard.cjs` の配置。種類は はみ出し / 小さい / 重なり） | must |
 | G-D1 | **復元テスト**: 図（`figures` と `do`）だけを見て「何がどこからどこへ、どの順で流れるか」を言葉で書き出すと、契約の `paths` と一致する。checker は字幕を読む前に復元を書き、`evidence` にその文を残す | director（計画モード） | must |

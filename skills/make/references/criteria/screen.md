@@ -4,7 +4,7 @@
 
 - `sheet-NN.png`: 各行の落ち着いたコマを 2 列 × 3 行に並べたシート。各コマの上の帯に「行 id ＋字幕の頭」が出る
 - `svg/<行 id>.svg`: 各行のコマ（640×360 に縮める前の SVG）
-- `frames.json`: 行ごとの `{id, scene, t, text, svg, sub_forced, settled}`。`settled: false` の行は、そのコマの時点でまだ動作が続いている（途中の画面）。`sub_forced: true` の行は、再生ではその時点で字幕がもう消えている（動作が声より長い）ので、コマの字幕は補ったもの。どちらも、1 行の動作が声に対して多すぎないかを見る手がかりにする（S-D2・VG-3）
+- `frames.json`: 行ごとの `{id, scene, t, text, svg, sub_forced, settled}`。`settled: false` の行は、そのコマの時点でまだ動作が続いている（途中の画面）。`sub_forced: true` の行は、そのコマの時刻に再生ページでは字幕が消えている（動作が声より長いか、次の場面の始まりでコマの時刻を切った）ので、コマの字幕は補ったもの。どちらも、1 行の動作が声に対して多すぎないかを見る手がかりにする（S-D2・VG-3）
 
 resvg を入れられず PNG が無いときは、`svg/` と `frames.json` だけで判定し、見えない基準は UNKNOWN にする。
 

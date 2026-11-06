@@ -7,14 +7,14 @@
 ## 1 周の流れ
 
 1. **maker** が `criteria/` の該当ファイルを読んで作る（2 周目以降は台帳 `review/ledger.json` の open / regressed の項目を直し、項目ごとの応答 `review/<phase>/r<N>/responses.json` を書く）
-2. **機械検査**を本体が回す。契約は `check_contract.py`、台本は `check_storyboard.cjs` と `check_text.py`、画面は `frames.cjs`（見積もりの時刻でコマを書く）と `check_storyboard.cjs`。誤りがあれば maker に戻す（機械の直しは周回に数えないが、同じ周で 5 回を超えたら打ち切り）
+2. **機械検査**を本体が回す。契約は `check_contract.py`、台本は `check_storyboard.cjs` と `check_text.py`、画面は `frames.cjs`（見積もりの時刻でコマを書く）と `check_storyboard.cjs`。誤りがあれば maker に戻す。`check_storyboard.cjs` の警告のうち must の基準に当たるもの（少なくとも「辺 … に label がない」。S-M1・G-M2）も、誤りと同じに maker に戻す（終了コードは 0 のままなので、本体が出力の警告を読んで判断する）（機械の直しは周回に数えないが、同じ周で 5 回を超えたら打ち切り）
 3. **checker** を本体が起動する（Claude Code では役ごとに並列。チャットでは 1 回にまとめる）。渡すのは成果物のパス・基準ファイル・前の周の台帳・出力先だけで、maker の推論や取材メモ（brief.md）は渡さない（fact-checker は契約モードでも brief.md を読まない）
 4. `python3 scripts/ledger.py ingest <workdir> <phase> <checker の出力 …>` で台帳に取り込む
 5. `python3 scripts/ledger.py status <workdir> <phase>` の判定に従う: `PASS` → 次のフェーズへ / `CONTINUE` → 次の周 / `STOP_*` → 打ち切って次のフェーズへ（残論点として持ち越す）
 
 ## 台帳の状態
 
-指摘のキーは `<行 ID または contract または *>:<基準 ID>`（例 `c3-2:S-W2`）。checker が変わっても、同じ問題は同じキーになる。
+指摘のキーは `<行 ID または contract または *>:<基準 ID>`（例 `l7:S-W2`）。checker が変わっても、同じ問題は同じキーになる。
 
 | 状態 | 意味 | 次に起きること |
 |---|---|---|
