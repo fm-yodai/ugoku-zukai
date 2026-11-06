@@ -1,7 +1,7 @@
 {
   "format": "ugoku-zukai/2",
   "title": "経費精算の承認ルート",
-  "voice": { "speaker": 3, "speed": 1.1 },
+  "voice": { "speaker": 8, "speed": 1.1 },
   "figures": {
     "q": { "type": "title", "text": "経費の申請は、誰の手を通って\n経理に届くのでしょうか", "sub": "金額で変わる承認ルート" },
     "flow": {

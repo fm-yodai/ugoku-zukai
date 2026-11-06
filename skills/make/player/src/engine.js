@@ -35,9 +35,14 @@
     }
     return u;
   }
+  // 話者ごとの速さの係数（ずんだもんを 1 とした実測。春日部つむぎは 9 本の見本で 0.78）
+  const PACE = { 1: 1, 3: 1, 5: 1, 7: 1, 8: 0.78 };
+  UZ.DEFAULT_SPEAKER = 8;
+  UZ.SPEAKER_NAMES = { 0: "四国めたん", 2: "四国めたん", 4: "四国めたん", 6: "四国めたん", 1: "ずんだもん", 3: "ずんだもん", 5: "ずんだもん", 7: "ずんだもん", 8: "春日部つむぎ", 10: "雨晴はう" };
   UZ.estimateTimeline = function (sb) {
     const speed = (sb.voice && sb.voice.speed) || 1.1;
-    const per = 0.168 * 1.1 / speed;
+    const sp = (sb.voice && sb.voice.speaker) ?? UZ.DEFAULT_SPEAKER;
+    const per = 0.168 * 1.1 / speed * (PACE[sp] ?? 0.85);
     const lines = [];
     let t = 0.8;
     sb.scenes.forEach((sc, si) => {
@@ -145,7 +150,8 @@
       for (const fid of sc.figs) if (figs[fid].autoShow) acts.push({ verb: "show", keys: figs[fid].order.map(id => figs[fid].items[id].key), start: sc.start + 0.25, dur: 0.8, each: 0.8, stagger: 0.35, end: sc.start + 1.2 + 0.35 * figs[fid].order.length });
       for (const ln of sc.lines) {
         const tl = TL[ln.id];
-        if (!tl) { err(`行 ${ln.id}: 時刻表にない`); continue; }
+        if (!tl) { err(`行 ${ln.id}: 時刻表にない（台本を直したら tts.py をもう一度実行する）`); continue; }
+        if (tl.text != null && tl.text !== UZ.parseText(ln.read || ln.text).text) { err(`行 ${ln.id}: 音声が古い（合成した後に文が変わった）。tts.py をもう一度実行する`); continue; }
         let cursor = tl.start + 0.05;
         (ln.do || []).forEach((a, ai) => {
           const verb = verbOf(a), where = `行 ${ln.id} の do[${ai}]（${verb}）`;
@@ -323,7 +329,8 @@
       const any = acts.some(a => a.verb === "show" && a.keys.some(k => k.startsWith(fid + "/")) && a.start < sc.end);
       if (!any) warn(`場面 ${sc.id}: 図「${fid}」を show していない（何も出ない）`);
     }
-    const credit = sb.credit || (sb.voice && sb.voice.credit) || "VOICEVOX:ずんだもん";
+    const sp = (sb.voice && sb.voice.speaker) ?? UZ.DEFAULT_SPEAKER;
+    const credit = sb.credit || (sb.voice && sb.voice.credit) || timeline.credit || `VOICEVOX:${UZ.SPEAKER_NAMES[sp] || "話者 " + sp}`;
     return { errors, warnings, sb, theme, S, timeline, TL, scenes, figs, acts, itemByKey, duration, endCard, credit, title: sb.title || "" };
   };
 

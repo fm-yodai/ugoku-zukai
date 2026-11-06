@@ -227,3 +227,12 @@ ugoku-zukai/
 - `trace` / `reply` は箱と辺のある図ならどれでも使える。`move` の `to: {x, y}` で 2×2 の点を動かせる
 - まとめの id（`axis` `grid` `axes` `quadrants` `categories` `legend`）で、目盛りや枠を一度に出せる
 - 見本: `examples/proposal-{process,analysis,numbers,concept}.json`（架空のくも運輸の配車改善の提案）。全テーマで検査を通る
+
+### M2 の実装（2026-11-06）
+
+- `setup_voice.py --agree`: voicevox_core 0.17.1・ONNX Runtime・辞書・0.vvm を GitHub から取って入れる。置き場は `UZ_VOICE_HOME` → `${CLAUDE_PLUGIN_DATA}/voicevox` → `~/.cache/ugoku-zukai/voicevox`。何度実行してもよい（Claude Code では初回だけ 11 秒ほど）
+- `tts.py`: 1 行ずつ合成して `audio/<行>.<ハッシュ>.wav` に残す（文・読み・声・速さ・辞書・版が同じなら作り直さない）。`--budget` 秒で区切り、終了コード 3 で続きを知らせる（claude.ai の 1 回のコマンドの長さに合わせる）
+- 印の時刻: 印までの文の AudioQuery のモーラ列を、全文のモーラ列と頭から照らし合わせ、印の直後のモーラの始まりを取る。音素の長さを話速で割ってフレーム（1/93.75 秒）に丸めて足すと、合成した wav の長さと一致する。見本 9 本の印をすべて目で確かめ、語の頭に乗っていた
+- 時刻表の並べ方（最初 0.8 秒、行の間 0.45 秒、場面の間 +0.7 秒）は、音声なしの見積もりと同じにした。時刻表の各行に合成した文を入れ、台本の文と違えば組み立てを止める（音声が古い）
+- 既定の声は春日部つむぎ（話者 8）。ずんだもんの見積もりに 0.78 を掛けると、つむぎの実測に合う（見本 9 本の全体で）
+- 見本帳は音声つき（9 本で 5MB）。claude.ai で同じ結果になるかは、検証用スキル `tools/probe/uz-voice-check`（`tools/build_voice_check.py` で zip を作る）で確かめる。Claude Code の中で zip を展開して走らせると、PCM まで一致した

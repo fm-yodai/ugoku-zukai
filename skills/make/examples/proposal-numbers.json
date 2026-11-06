@@ -1,7 +1,7 @@
 {
   "format": "ugoku-zukai/2",
   "title": "試した営業所で、数字はどう変わったか",
-  "voice": { "speaker": 3, "speed": 1.1 },
+  "voice": { "speaker": 8, "speed": 1.1 },
   "figures": {
     "kpi": {
       "type": "kpi", "title": "試した 3 か月の結果",

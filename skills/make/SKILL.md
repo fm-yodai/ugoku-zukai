@@ -17,7 +17,7 @@ metadata:
 
 # 動く図解を作る
 
-> **開発中（0.1.0）**: プレーヤーの芯（台本の形式・テーマ・箱と矢印/シーケンス/箇条・比較・表）までできた。音声（M2）と進行の手順（M3）はまだない。動画が必要なら、音声なしの下見までしか作れないことをユーザーに伝える。設計は `docs/design.md`（リポジトリの直下）が正。
+> **開発中（0.1.0）**: プレーヤー（台本の形式・テーマ・図 16 種）と声（VOICEVOX での合成と時刻表）までできた。進行の手順（M3）はまだないので、下の流れを Claude が自分で順に進める。設計は `docs/design.md`（リポジトリの直下）が正。
 
 ## 役割
 
@@ -37,11 +37,14 @@ metadata:
 1. **インタビュー**: 読者・一番分かってほしいこと・範囲・構成の型（`references/structures.md`）・長さ・声・画風・描き方を聞く。AskUserQuestion、なければフォーム、なければ文章で聞く
    - 画風は「3b1b 調 / フラットな図解 / 手持ちのデザインに合わせる」から選んでもらう。合わせる場合は、デザインシステムでなくても手元の資料（Web ページ・画像・PowerPoint・CSS など）を何でも受け取り、`references/themes.md` の手順でテーマにして検査する
    - 描き方の既定は「標準（宣言型の台本＋SVG プレーヤー）」。数式・3D・手作りの絵が要る題材だけ manim-web を勧める
-   - VOICEVOX の音声モデルの利用規約への同意も、ここで取る
+   - VOICEVOX の音声モデルの利用規約（https://github.com/VOICEVOX/voicevox_vvm/blob/main/TERMS.txt ）への同意も、ここで取る。声の既定は春日部つむぎ（話者 8、話速 1.1）。ほかの声は `setup_voice.py` の一覧から選んでもらい、台本の `voice.speaker` に書く
 2. **取材と契約**: 一次資料を読み、根拠つきの契約 `contract.json` を書く。検査には `scripts/check_contract.py` を使い、基準は `references/criteria/contract.md`
 3. **台本**: `storyboard.json`（図の宣言・字幕と文中の印・根拠・動作）を書く。形式は `references/storyboard.md`、見本は `examples/`、文章の規則は `references/writing/rules.md`。書いたら `node scripts/check_storyboard.cjs` で検査する
-4. **音声**: voicevox_core で 1 行ずつ合成して mp3 にまとめる（未実装）
-5. **組み立て**: `python3 scripts/build_player.py storyboard.json --theme … [--timeline … --audio …] -o player.html [--artifact]` で、台本・テーマ・音声をプレーヤーの HTML 1 枚に埋め込む（音声と時刻表は M2）
+4. **音声**: 同意を得てから `python3 scripts/setup_voice.py --agree` で VOICEVOX を入れる（初回だけ約 94MB。Claude Code では入れた場所を使い回す）。次に `python3 scripts/tts.py storyboard.json -o work` で 1 行ずつ合成し、時刻表 `work/timeline.json`（印の時刻つき）と `work/narration.mp3` を作る
+   - 終了コード 3 は「時間で区切った。続きがある」。同じコマンドを繰り返す（合成済みの行は作り直さない）
+   - 時刻表ができたら `node scripts/check_storyboard.cjs storyboard.json --timeline work/timeline.json` で検査し直す（実際の声の長さで、動きが次の行にはみ出していないかを見る）
+   - 読み間違いは、字幕を変えずに行の `read` で直す。何度も出る語は `assets/voicevox_user_dict.json` に足す
+5. **組み立て**: `python3 scripts/build_player.py storyboard.json --theme … --voice work -o player.html [--artifact]` で、台本・テーマ・時刻表・音声をプレーヤーの HTML 1 枚に埋め込む。台本の文を合成の後に変えると「音声が古い」と止まるので、`tts.py` をもう一度実行する
 6. **公開**: Artifact で公開する。閉じなかった指摘は残論点として、ページとチャットの両方に示す
 
 ## 不変条件

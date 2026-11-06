@@ -1,7 +1,7 @@
 {
   "format": "ugoku-zukai/2",
   "title": "打刻が給与に届くまで",
-  "voice": { "speaker": 3, "speed": 1.1 },
+  "voice": { "speaker": 8, "speed": 1.1 },
   "figures": {
     "seq": {
       "type": "sequence",

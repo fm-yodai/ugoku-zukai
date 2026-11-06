@@ -3,7 +3,7 @@
 
 使い方:
   python3 build_player.py storyboard.json -o out.html [--theme 3b1b|flat|theme.json]
-                          [--timeline timeline.json] [--audio narration.mp3] [--artifact]
+                          [--timeline timeline.json] [--audio narration.mp3] [--voice WORKDIR] [--artifact]
 
 - 時刻表がなければ、プレーヤーが文字数から時刻を見積もる（音声なしの下見）
 - --artifact: Artifact で公開する形（<html>・<head>・<body> を外した断片）で書く
@@ -64,9 +64,13 @@ def main():
     ap.add_argument("--theme", default="3b1b")
     ap.add_argument("--timeline")
     ap.add_argument("--audio")
+    ap.add_argument("--voice", help="tts.py の出力先。timeline.json と narration.mp3（か .wav）をまとめて読む")
     ap.add_argument("--artifact", action="store_true")
     a = ap.parse_args()
     sb = json.load(open(a.storyboard, encoding="utf-8"))
+    if a.voice:
+        a.timeline = a.timeline or os.path.join(a.voice, "timeline.json")
+        a.audio = a.audio or next((p for p in (os.path.join(a.voice, "narration.mp3"), os.path.join(a.voice, "narration.wav")) if os.path.exists(p)), None)
     tl = json.load(open(a.timeline, encoding="utf-8")) if a.timeline else None
     au = base64.b64encode(open(a.audio, "rb").read()).decode() if a.audio else None
     html = build(sb, load_theme(a.theme), tl, au, a.artifact)

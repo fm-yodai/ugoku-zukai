@@ -1,7 +1,7 @@
 {
   "format": "ugoku-zukai/2",
   "title": "下の層と 2 つの図の並べ方",
-  "voice": { "speaker": 3, "speed": 1.1 },
+  "voice": { "speaker": 8, "speed": 1.1 },
   "figures": {
     "flow": {
       "type": "graph",
@@ -43,7 +43,7 @@
   "scenes": [
     { "id": "s1", "figure": ["flow", "kpi"], "title": "流れと効果を並べる", "lines": [
       { "id": "l1", "text": "{a}左に流れを、{b}右に一件あたりの時間を並べます。",
-        "do": [ { "at": "a", "show": "flow" }, { "at": "b", "show": "kpi" }, { "badge": "1 / 2" } ] },
+        "do": [ { "at": "a", "show": "flow" }, { "at": "b", "show": "kpi", "stagger": 0.12 }, { "at": "b", "badge": "1 / 2" } ] },
       { "id": "l2", "text": "{a}承認にかかる時間は、{b}二日から半日に縮みます。",
         "do": [ { "at": "a", "focus": ["k2"] }, { "at": "b", "relabel": "k2.after", "text": "半日！" }, { "at": "b", "tint": "k2", "as": "good" } ] }
     ]},

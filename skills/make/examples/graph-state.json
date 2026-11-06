@@ -1,7 +1,7 @@
 {
   "format": "ugoku-zukai/2",
   "title": "申請の状態の移り変わり",
-  "voice": { "speaker": 3, "speed": 1.1 },
+  "voice": { "speaker": 8, "speed": 1.1 },
   "figures": {
     "st": {
       "type": "graph",
@@ -25,7 +25,7 @@
   },
   "scenes": [
     { "id": "s1", "figure": "st", "lines": [
-      { "id": "l1", "text": "申請には{a}五つの状態があります。", "do": [ { "at": "a", "show": "st" } ] },
+      { "id": "l1", "text": "申請には{a}五つの状態があり、矢印で移り変わります。", "do": [ { "at": "a", "show": "st" } ] },
       { "id": "l2", "text": "{a}下書きを提出すると、{b}承認待ちになります。",
         "do": [ { "at": "a", "trace": ["draft"], "label": "いまの状態" }, { "at": "b", "trace": ["draft", "wait"] } ] },
       { "id": "l3", "text": "不備があると{a}差し戻しになり、{b}直して出し直せば、また承認待ちに戻ります。",

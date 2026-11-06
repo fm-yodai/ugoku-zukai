@@ -25,15 +25,15 @@ python3 scripts/build_player.py storyboard.json -o preview.html     # 音声な�
 {
   "format": "ugoku-zukai/2",
   "title": "経費精算の承認ルート",
-  "voice": { "speaker": 3, "speed": 1.1 },
-  "credit": "VOICEVOX:ずんだもん",
+  "voice": { "speaker": 8, "speed": 1.1 },
   "figures": { "flow": { "type": "graph", ... } },
   "scenes": [ { "id": "s1", "figure": "flow", "lines": [ ... ] } ],
   "custom": { "ring": "({ g, p, el, S, area }) => { ... }" }
 }
 ```
 
-- `credit` を省くと「VOICEVOX:ずんだもん」。画面の右下と終わりの札に出る
+- `voice.speaker` は VOICEVOX の話者 id（既定 8 = 春日部つむぎ。一覧は `setup_voice.py` が出す）、`speed` は話速（既定 1.1）
+- クレジットは声から決まる（例「VOICEVOX:春日部つむぎ」）。画面の右下と終わりの札に出る。`credit` で書き換えられる
 - id には英数字・`_`・`-`・`.`・かな漢字が使える。`/` `:` 空白は使えない（`図/id` の区切りに使うため）
 
 ## 2. 図（figures）の種類
@@ -243,7 +243,8 @@ python3 scripts/build_player.py storyboard.json -o preview.html     # 音声な�
 
 - `at` を省いた動作は、同じ行の直前の動作が終わってから始まる（最初の動作は行の頭）
 - `after: 0.3` で印から少し遅らせる。`dur` で長さを変える
-- 時刻は音声の時刻表（M2 の tts が作る `timeline.json`）から決まる。時刻表がなければ文字数から見積もる
+- 時刻は音声の時刻表（`tts.py` が作る `timeline.json`）から決まる。`tts.py` は印までの文を別に解析して全文のモーラ列と照らし合わせ、印の直後の語が鳴り始める時刻を書く。時刻表がなければ文字数から見積もる（実際の声より ±20% ほどずれるので、合成の後に検査し直す）
+- 印は語の頭に置く。語の途中（「最{a}初に」など）に置くと読みが変わり、時刻がずれる
 - 動作が行の終わりを 1.2 秒以上はみ出すと警告（次の行の声に重なる）
 
 ## 5. 動作（do）の一覧

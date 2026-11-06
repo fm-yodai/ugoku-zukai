@@ -2,7 +2,7 @@
 
 題材を、自然な日本語ナレーション付きの「動く図解」にする Claude のプラグインです。題材は、コード・リポジトリ・PR・Web ページ・手元の文書・題目だけ、のどれでも構いません。claude.ai / Claude Desktop のチャットでも、Claude Code でも動くことを目指しています。
 
-> **開発中（0.1.0）**: プレーヤーの芯と提案資料の図（M1a・M1b）までできました。音声と進行の手順はまだなので、音声なしの下見までです。設計は [docs/design.md](docs/design.md) を見てください。前身は個人用のスキル explain-video-anywhere（Manim＋VOICEVOX）です。
+> **開発中（0.1.0）**: プレーヤー（M1）と声（M2: VOICEVOX での合成と時刻表）までできました。進行の手順（M3）はまだなので、各スクリプトを順に手で動かします。設計は [docs/design.md](docs/design.md) を見てください。前身は個人用のスキル explain-video-anywhere（Manim＋VOICEVOX）です。
 
 ## できること（目標）
 
@@ -22,7 +22,7 @@
 | プレーヤー | `skills/make/player/` | 台本を描く JS（配置・描画・テーマ）。node の検査と同じコードを使う |
 | 見本 | `skills/make/examples/` | 図の種類ごとの見本台本と、デザインから作ったテーマの例。`python3 tools/build_gallery.py` で見本帳を作る |
 | 試作 | `prototypes/compare/` | 画風の見比べ（Manim / SVG 3b1b 調 / SVG 手描き調 / manim-web）。新しいプレーヤーの試作 `svg/player_template.html` を含む |
-| 検証用スキル | `tools/probe/` | claude.ai のサンドボックスで、VOICEVOX と再生方法が使えるかを確かめたもの |
+| 検証用スキル | `tools/probe/` | claude.ai のサンドボックスで、VOICEVOX と再生方法が使えるか（evx-probe）、同じ音声が作れるか（uz-voice-check）を確かめる |
 | zip の作成 | `tools/build_claude_ai_zip.py` | claude.ai にアップロードするスキルの zip を作る |
 
 ## 入れ方（予定）
@@ -45,5 +45,5 @@ python3 tools/build_claude_ai_zip.py   # dist/ugoku-zukai-make.zip ができる
 ## クレジットとライセンス
 
 - このリポジトリのライセンスは未定です（公開する前に決めます）
-- **VOICEVOX**: 音声モデルには利用規約があります（[VOICEVOX 音声モデル 利用規約](https://github.com/VOICEVOX/voicevox_vvm/blob/main/TERMS.txt)）。キャラクターごとの規約にも従ってください。例えば、ずんだもんの音声には「VOICEVOX:ずんだもん」のクレジットが必要です。作った動画と再生ページには、クレジットを自動で表示します
+- **VOICEVOX**: 音声モデルには利用規約があります（[VOICEVOX 音声モデル 利用規約](https://github.com/VOICEVOX/voicevox_vvm/blob/main/TERMS.txt)）。キャラクターごとの規約にも従ってください。例えば、既定の春日部つむぎの音声には「VOICEVOX:春日部つむぎ」のクレジットが必要です。作った動画と再生ページには、クレジットを自動で表示します
 - **使う予定のライブラリ**: elkjs（EPL-2.0）、rough.js（MIT）、manim-web（MIT）、voicevox_core（MIT）、Mediabunny（MPL-2.0、検討中）

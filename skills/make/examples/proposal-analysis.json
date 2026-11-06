@@ -1,7 +1,7 @@
 {
   "format": "ugoku-zukai/2",
   "title": "遅配の原因と、手を付ける順番",
-  "voice": { "speaker": 3, "speed": 1.1 },
+  "voice": { "speaker": 8, "speed": 1.1 },
   "figures": {
     "why": {
       "type": "tree", "title": "なぜ遅配が起きるのか", "direction": "right",

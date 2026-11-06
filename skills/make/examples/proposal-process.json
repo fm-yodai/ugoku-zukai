@@ -1,7 +1,7 @@
 {
   "format": "ugoku-zukai/2",
   "title": "配車の受付を一つにまとめる提案",
-  "voice": { "speaker": 3, "speed": 1.1 },
+  "voice": { "speaker": 8, "speed": 1.1 },
   "figures": {
     "lane": {
       "type": "swimlane", "title": "いまの配車の流れ",
@@ -60,7 +60,7 @@
       { "id": "l1", "text": "いまの配車は、{a}荷主からの電話を受けるところから始まります。", "do": [ { "show": ["ninushi", "uketsuke", "haisha", "driver"] }, { "at": "a", "show": "irai" } ] },
       { "id": "l2", "text": "受付は{a}紙に書き取り、{b}それを表計算に打ち直しています。", "do": [ { "at": "a", "show": ["memo", "irai>memo"] }, { "at": "b", "show": ["excel", "memo>excel"] } ] },
       { "id": "l3", "text": "配車係は{a}共有フォルダの表を見て車両を決め、{b}ドライバーに電話します。", "do": [ { "at": "a", "show": ["wariate", "excel>wariate"] }, { "at": "b", "show": ["renraku", "wariate>renraku", "shuka", "renraku>shuka"] } ] },
-      { "id": "l4", "text": "一件の依頼が、{a}三人の手を順に渡っていきます。", "do": [ { "at": "a", "trace": ["irai", "memo", "excel", "wariate", "renraku", "shuka"], "label": "依頼", "dur": 3.2 } ] },
+      { "id": "l4", "text": "一件の依頼が、{a}三人の手を順に渡っていきます。", "do": [ { "at": "a", "trace": ["irai", "memo", "excel", "wariate", "renraku", "shuka"], "label": "依頼", "dur": 2.6 } ] },
       { "id": "l5", "text": "{a}手で写す所が二か所あり、ここで書き間違いが起きます。", "do": [ { "at": "a", "mark": "excel", "as": "cross" }, { "mark": "renraku", "as": "cross" }, { "note": "excel", "text": "転記の誤り 月 12 件" } ] }
     ] },
     { "id": "s2", "figure": "ba", "lines": [

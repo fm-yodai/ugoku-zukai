@@ -72,8 +72,8 @@ PAGE = r"""<title>ugoku-zukai 見本帳</title>
 </style>
 <div class="wrap">
   <header>
-    <h1>ugoku-zukai 見本帳（M1）</h1>
-    <p>新しい台本の形式で書いた見本を、テーマを切り替えて再生できます。音声はまだ入っていません（M2）。動きの時刻は字幕の文字数からの見積もりで、文中の印 <code>{a}</code> の位置に合わせて動きます。</p>
+    <h1>ugoku-zukai 見本帳（M2）</h1>
+    <p>新しい台本の形式で書いた見本を、テーマを切り替えて再生できます。ナレーションは VOICEVOX（春日部つむぎ）で合成し、文中の印 <code>{a}</code> の語を話し始める瞬間に動きが始まります。音が出るのは再生ボタンを押してからです。</p>
   </header>
   <div class="pick">
     <div class="row" id="samples"><span>見本</span></div>
@@ -110,7 +110,27 @@ const G = /*UZ:DATA*/null;
   const esc = s => String(s).replace(/[&<>]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" })[c]);
   let cur = { sample: G.samples[0].id, theme: G.themes[0].id }, M = null, view = null, playing = false, t0 = 0, pausedAt = 0, token = 0;
   try { const s = JSON.parse(localStorage.getItem("uz-gallery") || "null"); if (s && G.samples.some(x => x.id === s.sample) && G.themes.some(x => x.id === s.theme)) cur = s; } catch (e) {}
-  const now = () => playing ? (performance.now() - t0) / 1000 : pausedAt;
+  // 時計: 音声があれば WebAudio の時計、なければ performance.now()
+  let ctx = null, src = null, buffers = {};
+  const S0 = () => G.samples.find(s => s.id === cur.sample);
+  const hasAudio = () => !!S0().audio;
+  const now = () => !playing ? pausedAt : (src ? ctx.currentTime - t0 : (performance.now() - t0) / 1000);
+  async function audioBuf(S) {
+    if (!S.audio) return null;
+    if (!ctx) ctx = new (window.AudioContext || window.webkitAudioContext)();
+    if (!buffers[S.id]) { const bin = atob(S.audio), u = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i); buffers[S.id] = await ctx.decodeAudioData(u.buffer); }
+    return buffers[S.id];
+  }
+  function stopAudio() { if (src) { try { src.stop(); } catch (e) {} src.disconnect(); src = null; } }
+  async function startAt(t) {
+    stopAudio();
+    const buf = await audioBuf(S0());
+    if (buf && t < buf.duration) {
+      if (ctx.state === "suspended") await ctx.resume();
+      src = ctx.createBufferSource(); src.buffer = buf; src.connect(ctx.destination);
+      t0 = ctx.currentTime - t; src.start(0, t);
+    } else t0 = performance.now() - t * 1000;
+  }
   function chips(box, list, key) {
     for (const it of list) {
       const b = document.createElement("button"); b.className = "chip"; b.type = "button"; b.textContent = it.label; b.dataset.id = it.id;
@@ -122,7 +142,7 @@ const G = /*UZ:DATA*/null;
   function tick() {
     if (!M) return;
     const D = M.duration, t = Math.min(now(), D);
-    if (playing && now() >= D) { playing = false; pausedAt = D; $("play").textContent = "▶ もう一度"; }
+    if (playing && now() >= D) { playing = false; pausedAt = D; stopAudio(); $("play").textContent = "▶ もう一度"; }
     view.render(t);
     $("seek").value = Math.round(t / D * 1000);
     $("clock").textContent = `${fmt(t)} / ${fmt(D)}`;
@@ -131,22 +151,22 @@ const G = /*UZ:DATA*/null;
     for (const b of $("lines").querySelectorAll("button")) b.classList.toggle("cur", ln && b.dataset.id === ln.id);
     if (playing) requestAnimationFrame(tick);
   }
-  function seek(t) { pausedAt = t; if (playing) t0 = performance.now() - t * 1000; tick(); }
-  $("play").onclick = () => {
+  async function seek(t) { pausedAt = t; if (playing) await startAt(t); tick(); }
+  $("play").onclick = async () => {
     if (!M) return;
-    if (playing) { pausedAt = now(); playing = false; $("play").textContent = "▶ 再生"; }
-    else { if (pausedAt >= M.duration - 0.05) pausedAt = 0; t0 = performance.now() - pausedAt * 1000; playing = true; $("play").textContent = "❚❚ 一時停止"; requestAnimationFrame(tick); }
+    if (playing) { pausedAt = now(); playing = false; stopAudio(); $("play").textContent = "▶ 再生"; }
+    else { if (pausedAt >= M.duration - 0.05) pausedAt = 0; await startAt(pausedAt); playing = true; $("play").textContent = "❚❚ 一時停止"; requestAnimationFrame(tick); }
   };
   $("seek").oninput = () => M && seek($("seek").value / 1000 * M.duration);
   $("subs").onchange = () => { if (view) { view.subtitles = $("subs").checked; view._sub = null; tick(); } };
   async function load() {
     const my = ++token;
-    playing = false; $("play").textContent = "▶ 再生"; $("err").hidden = true;
+    playing = false; stopAudio(); $("play").textContent = "▶ 再生"; $("err").hidden = true;
     for (const b of document.querySelectorAll(".chip")) b.setAttribute("aria-pressed", String(b.dataset.id === cur.sample || b.dataset.id === cur.theme));
     const S = G.samples.find(s => s.id === cur.sample), T = G.themes.find(t => t.id === cur.theme);
     $("json").textContent = JSON.stringify(S.storyboard, null, 2);
     try { if (document.fonts) await Promise.race([document.fonts.load(`500 24px ${T.theme.font.family}`), new Promise(r => setTimeout(r, 2000))]); } catch (e) {}
-    const m = await UZ.build(S.storyboard, T.theme, null);
+    const m = await UZ.build(S.storyboard, T.theme, S.timeline || null);
     if (my !== token) return;
     if (m.errors.length) { $("err").textContent = m.errors.join("\n"); $("err").hidden = false; return; }
     M = m; view = new UZ.View($("uz-stage"), M); view.subtitles = $("subs").checked;
@@ -160,7 +180,7 @@ const G = /*UZ:DATA*/null;
     // 検査
     const issues = UZ.checkLayout(M);
     $("check").innerHTML = (issues.length ? `<span class="ng">配置の問題 ${issues.length} 件</span>` : `<span class="ok">配置の問題なし</span>`)
-      + `（${M.acts.length} 個の動作、${fmt(M.duration)}）`
+      + `（${M.acts.length} 個の動作、${fmt(M.duration)}、${S.audio ? "音声: " + esc(M.credit) + "。時刻は音声の実測" : "音声なし。時刻は文字数からの見積もり"}）`
       + (issues.length || M.warnings.length ? `<ul class="res">${issues.map(i => `<li>${esc(i.kind)}・${i.at}s: ${esc(i.msg)}</li>`).join("")}${M.warnings.map(w => `<li>警告: ${esc(w)}</li>`).join("")}</ul>` : "");
     // テーマ
     const c = T.theme.colors, sw = [["背景", c.bg], ["文字", c.ink], ["補足", c.muted], ["強調", c.accent], ["actor", c.roles.actor], ["process", c.roles.process], ["store", c.roles.store], ["external", c.roles.external], ["good", c.good], ["bad", c.bad]];
@@ -182,8 +202,18 @@ const G = /*UZ:DATA*/null;
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("-o", "--out", default=os.path.join(ROOT, "dist", "gallery.html"))
+    ap.add_argument("--voice", help="見本ごとの tts.py の出力（DIR/<見本の id>/timeline.json と narration.mp3）。あれば音声つきにする")
     a = ap.parse_args()
     samples = [{"id": sid, "label": label, "storyboard": json.load(open(os.path.join(MAKE, "examples", f"{sid}.json"), encoding="utf-8"))} for sid, label in SAMPLES]
+    if a.voice:
+        import base64
+        for smp in samples:
+            d = os.path.join(a.voice, smp["id"])
+            if os.path.exists(os.path.join(d, "timeline.json")) and os.path.exists(os.path.join(d, "narration.mp3")):
+                smp["timeline"] = json.load(open(os.path.join(d, "timeline.json"), encoding="utf-8"))
+                smp["audio"] = base64.b64encode(open(os.path.join(d, "narration.mp3"), "rb").read()).decode()
+            else:
+                print(f"音声がない: {smp['id']}（{d}）", file=sys.stderr)
     themes = []
     for tid, path in THEMES:
         th = json.load(open(path, encoding="utf-8"))
