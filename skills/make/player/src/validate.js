@@ -183,6 +183,8 @@
           const a = Object.keys(p.marks).sort().join(","), b = Object.keys(r.marks).sort().join(",");
           if (a !== b) E(`${lw}: read（読み）にも text と同じ印を置く（text: ${a || "なし"} / read: ${b || "なし"}）`);
         }
+        if (ln.source != null && typeof ln.source !== "string" && !(Array.isArray(ln.source) && ln.source.every(s => typeof s === "string")))
+          W(`${lw}: source は文字列か文字列の配列で書く（根拠の一覧に出ない）`);
         if (UZ.splitBalanced(p.text, 27, UZ.AREA.sub.w - 40).length > 2) W(`${lw}: 字幕が 2 行に収まらない。文を分ける`);
         const used = new Set();
         (ln.do || []).forEach((a, ai) => {

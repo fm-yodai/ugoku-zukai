@@ -125,7 +125,7 @@ const UZ_DATA = /*UZ:DATA*/null;
     const ul = $("uz-sources").querySelector("ul");
     let n = 0;
     for (const sc of UZ_DATA.storyboard.scenes || []) for (const ln of sc.lines || []) {
-      const srcs = Array.isArray(ln.source) ? ln.source : [];
+      const srcs = (typeof ln.source === "string" ? [ln.source] : Array.isArray(ln.source) ? ln.source : []).filter(s => typeof s === "string" && s);
       if (!srcs.length || !(ln.id in start)) continue;
       const li = document.createElement("li"), b = document.createElement("button");
       b.type = "button"; b.className = "uz-line";
@@ -148,7 +148,8 @@ const UZ_DATA = /*UZ:DATA*/null;
       const firstFull = M.scenes.length > 1 ? M.scenes[1].start + 0.01 : M.duration / 2;
       pausedAt = M.scenes[0].figs.some(f => !M.figs[f].autoShow) ? (M.timeline.lines[0].start + M.timeline.lines[0].dur) : Math.min(firstFull - 0.4, 3);
       tick(); pausedAt = 0; $("uz-seek").value = 0; $("uz-clock").textContent = `0:00 / ${fmt(M.duration)}`;
-      buildLists();
+      // 一覧が壊れても再生は止めない（一覧は出さずにコンソールへ）
+      try { buildLists(); } catch (e) { console.error("一覧を作れなかった:", e); $("uz-residual").hidden = true; $("uz-sources").hidden = true; }
       document.dispatchEvent(new CustomEvent("uz-ready"));
     } catch (e) { showErr("準備に失敗しました: " + e.message); console.error(e); }
   })();

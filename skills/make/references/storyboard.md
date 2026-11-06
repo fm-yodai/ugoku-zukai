@@ -236,7 +236,7 @@ python3 scripts/build_player.py storyboard.json -o preview.html     # 音声な�
 - 場面が変わると、次の場面で使わない図は消え、使い続ける図は新しい区画へ動く
 - `text` は字幕。2 行（1 行およそ全角 38 字）に収まらなければ文を分ける
 - `role` は構成の型の部（`question` `overview` `detail` `recap` など。`structures.md`）。プレーヤーは使わず、評価役が部の並びを照合する
-- `source` は根拠（契約と同じ書き方）。評価役が照合し、再生ページの下の「根拠」の一覧にも行ごとに出る（押すとその行の時刻へ飛ぶ）。読んだ人がたどれるように、`"src/expense/check.ts:42"`・`"PR #12"`・`"https://example.com/guide 「承認は 2 段まで」"` のように場所か引用まで書く
+- `source` は根拠（契約と同じ書き方）。文字列の配列で書く（1 つだけなら文字列でもよい。それ以外の形は `check_storyboard.cjs` が警告し、一覧に出ない）。評価役が照合し、再生ページの下の「根拠」の一覧にも行ごとに出る（押すとその行の時刻へ飛ぶ）。読んだ人がたどれるように、`"src/expense/check.ts:42"`・`"PR #12"`・`"https://example.com/guide 「承認は 2 段まで」"` のように場所か引用まで書く
 
 ## 4. 文中の印と時刻
 

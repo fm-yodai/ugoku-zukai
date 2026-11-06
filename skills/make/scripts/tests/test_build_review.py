@@ -76,5 +76,69 @@ class BuildReviewTest(unittest.TestCase):
         self.assertNotIn("<html", html)
 
 
+TEMPLATE = os.path.join(HERE, "..", "..", "player", "template.html")
+CHECK = os.path.join(HERE, "..", "check_storyboard.cjs")
+
+# template.html の buildLists を、DOM の代わりの小さな部品で node で動かす
+LISTS_JS = r"""
+const fs = require("fs");
+const html = fs.readFileSync(process.argv[1], "utf8");
+const m = html.match(/  function buildLists\(\) \{[\s\S]*?\n  \}\n/);
+if (!m) { console.log("NOFUNC"); process.exit(1); }
+function el() {
+  return { hidden: true, children: [], textContent: "", className: "", type: "",
+    append(...xs) { this.children.push(...xs); }, querySelector() { return this._q || (this._q = el()); } };
+}
+const els = { "uz-residual": el(), "uz-sources": el() };
+const $ = id => els[id];
+const document = { createElement: () => el() };
+const fmt = t => String(t);
+const UZ = { parseText: t => ({ text: t }), player: { seek() {} } };
+const M = { timeline: { lines: [{ id: "l1", start: 0 }, { id: "l2", start: 1 }, { id: "l3", start: 2 }] } };
+const UZ_DATA = JSON.parse(process.argv[2]);
+eval(m[0]);
+buildLists();
+const ul = els["uz-sources"].querySelector("ul");
+console.log(JSON.stringify({ hidden: els["uz-sources"].hidden,
+  rows: ul.children.map(li => li.children.slice(1).map(c => c.textContent)) }));
+"""
+
+
+class ListsTest(unittest.TestCase):
+    def lists(self, lines):
+        data = {"residual": None, "storyboard": {"scenes": [{"lines": lines}]}}
+        r = subprocess.run(["node", "-e", LISTS_JS, TEMPLATE, json.dumps(data, ensure_ascii=False)],
+                           capture_output=True, text=True)
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        return json.loads(r.stdout)
+
+    def test_source_string_and_array(self):
+        out = self.lists([{"id": "l1", "text": "a", "source": "a.py:1"},
+                          {"id": "l2", "text": "b", "source": ["b.py:2", "c.py:3"]},
+                          {"id": "l3", "text": "c"}])
+        self.assertFalse(out["hidden"])
+        self.assertEqual(out["rows"], [["a.py:1"], ["b.py:2", "c.py:3"]])
+
+    def test_lists_failure_is_contained(self):
+        # 一覧の失敗で「準備に失敗」にしない（buildLists の呼び出しを別の try で包む）
+        html = open(TEMPLATE, encoding="utf-8").read()
+        self.assertTrue(re.search(r"try \{ buildLists\(\); \} catch \(e\) \{ console\.error", html), "buildLists() の呼び出しが別の try で包まれていない")
+
+    def test_validate_warns_bad_source(self):
+        sb = json.load(open(SAMPLE, encoding="utf-8"))
+        lines = [l for sc in sb["scenes"] for l in sc["lines"]]
+        lines[0]["source"] = 5
+        lines[1]["source"] = ["a.py:1", 3]
+        lines[2]["source"] = "a.py:1"
+        p = os.path.join(tempfile.mkdtemp(), "sb.json")
+        json.dump(sb, open(p, "w", encoding="utf-8"), ensure_ascii=False)
+        r = subprocess.run(["node", CHECK, p, "--json"], capture_output=True, text=True)
+        warns = json.loads(r.stdout)["warnings"]
+        bad = [w for w in warns if "source" in w]
+        self.assertEqual(len(bad), 2, warns)
+        self.assertIn(lines[0]["id"], bad[0])
+        self.assertIn(lines[1]["id"], bad[1])
+
+
 if __name__ == "__main__":
     unittest.main()
