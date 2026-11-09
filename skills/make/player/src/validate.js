@@ -195,6 +195,18 @@
         for (const k of Object.keys(p.marks)) if (!used.has(k)) W(`${lw}: 印 {${k}} を使う動作がない`);
       }
     }
+    // 題の無い場面が 2 つ以上続くと、チャプター一覧で 1 つの章にまとまって見出しにならない。
+    // 題があるとみなすのは engine の header と同じ: 場面の title か、図が 1 つでその図の title（title 型の図は「はじめに」）
+    const titled = sc => {
+      if (sc.title) return true;
+      const figs = Array.isArray(sc.figure) ? sc.figure : [sc.figure];
+      const f = figs.length === 1 && sb.figures[figs[0]];
+      return !!(f && (f.type === "title" || f.title));
+    };
+    let run = [];
+    const flush = () => { if (run.length >= 2) W(`場面${run.map(id => `「${id}」`).join("")}: 題の無い場面が続く（チャプターに出ない。場面の title か図の title を付ける）`); run = []; };
+    for (const sc of sb.scenes) { if (titled(sc)) flush(); else run.push(sc.id); }
+    flush();
     return { errors, warnings };
   };
 })(globalThis.UZ = globalThis.UZ || {});

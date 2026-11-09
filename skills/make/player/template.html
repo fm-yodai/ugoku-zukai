@@ -18,18 +18,42 @@ __FONT_LINK__
   .uz-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
   .uz-bar button { font: inherit; font-weight: 700; color: var(--ink); background: transparent; border: 1px solid var(--line); border-radius: 999px; padding: 6px 16px; cursor: pointer; min-width: 96px; }
   .uz-bar button:hover, .uz-bar button:focus-visible { border-color: var(--accent); outline: none; }
-  .uz-bar input[type=range] { flex: 1; min-width: 160px; accent-color: var(--accent); }
+  .uz-bar input[type=range] { accent-color: var(--accent); }
   .uz-bar output { font-variant-numeric: tabular-nums; color: var(--muted); min-width: 92px; text-align: right; }
   .uz-bar label { color: var(--muted); display: flex; align-items: center; gap: 6px; cursor: pointer; }
   .uz-note { color: var(--muted); font-size: 12px; }
-  .uz-fold { color: var(--muted); font-size: 12px; border-top: 1px solid var(--line); padding-top: 6px; }
-  .uz-fold summary { cursor: pointer; }
-  .uz-fold ul { margin: 6px 0 0; padding-left: 18px; }
-  .uz-fold li { margin: 4px 0; overflow-wrap: anywhere; }
-  .uz-fold .uz-src { display: block; padding-left: 1em; }
-  .uz-fold button.uz-line { font: inherit; color: var(--ink); background: none; border: 0; padding: 0; text-align: left; cursor: pointer; overflow-wrap: anywhere; }
-  .uz-fold button.uz-line:hover, .uz-fold button.uz-line:focus-visible { color: var(--accent); outline: none; }
-  .uz-fold .uz-sev { color: var(--ink); font-weight: 700; }
+  /* 再生バーの刻み（チャプターの始まり）。つまみの半径ぶん内側に寄せる */
+  .uz-seek { position: relative; flex: 1; min-width: 160px; display: flex; align-items: center; }
+  .uz-seek input[type=range] { flex: 1; min-width: 0; margin: 0; }
+  #uz-ticks { position: absolute; left: 8px; right: 8px; top: 0; bottom: 0; pointer-events: none; }
+  #uz-ticks span { position: absolute; top: 50%; width: 2px; height: 12px; margin-left: -1px; transform: translateY(-50%); background: var(--muted); opacity: .6; border-radius: 1px; }
+  /* チャプター一覧。広い画面では図の右、狭い画面では再生バーの下 */
+  #uz-chapters { border-top: 1px solid var(--line); padding-top: 6px; max-height: 60vh; overflow-y: auto; overscroll-behavior: contain; }
+  #uz-chapters h2 { font-size: 12px; font-weight: 700; color: var(--muted); margin: 0 0 4px; letter-spacing: .05em; }
+  #uz-chapters ol { list-style: none; margin: 0; padding: 0; }
+  #uz-chapters > ol > li { margin: 0 0 6px; }
+  #uz-chapters ol ol { padding-left: 10px; border-left: 2px solid var(--line); margin-left: 6px; }
+  #uz-chapters button { font: inherit; color: var(--ink); background: none; border: 0; border-radius: 4px; text-align: left; cursor: pointer; }
+  #uz-chapters button:hover, #uz-chapters button:focus-visible { color: var(--accent); outline: none; }
+  #uz-chapters button:focus-visible { box-shadow: 0 0 0 2px var(--accent); }
+  #uz-chapters time { font-variant-numeric: tabular-nums; color: var(--muted); margin-right: 8px; font-size: 12px; }
+  #uz-chapters .uz-chapter { display: block; width: 100%; padding: 4px 6px; font-weight: 700; overflow-wrap: anywhere; }
+  .uz-row { display: flex; align-items: flex-start; gap: 2px; }
+  #uz-chapters .uz-line { flex: 1; min-width: 0; padding: 2px 6px; font-size: 13px; overflow-wrap: anywhere; }
+  #uz-chapters .uz-src-btn { flex: none; padding: 2px 6px; color: var(--muted); font-size: 12px; }
+  #uz-chapters .uz-src-btn:hover, #uz-chapters .uz-src-btn:focus-visible, #uz-chapters .uz-src-btn[aria-expanded="true"] { color: var(--accent); }
+  #uz-chapters button[aria-current="true"] { color: var(--accent); }
+  #uz-chapters .uz-line[aria-current="true"] { background: color-mix(in srgb, var(--accent) 12%, transparent); }
+  .uz-line[aria-current="true"] time { color: var(--accent); }
+  .uz-tip { position: fixed; z-index: 10; max-width: min(320px, calc(100vw - 32px)); padding: 6px 10px; font-size: 12px; line-height: 1.5;
+            color: var(--ink); background: var(--page); border: 1px solid var(--line); border-radius: 6px; box-shadow: 0 4px 12px rgba(0, 0, 0, .18); overflow-wrap: anywhere; }
+  .uz-tip div { white-space: pre-wrap; }
+  @media (min-width: 960px) {
+    .uz-wrap { grid-template-columns: minmax(0, 1fr) 300px; align-items: start; }
+    .uz-wrap > * { grid-column: 1; }
+    /* 一覧の高さは図・再生バー・注記の列に合わせる（contain: size で行の高さを押し広げない） */
+    #uz-chapters { grid-column: 2; grid-row: 1 / span 3; align-self: stretch; contain: size; max-height: none; border-top: 0; border-left: 1px solid var(--line); padding: 0 0 0 10px; }
+  }
   .uz-err { color: var(--err); white-space: pre-wrap; }
 </style>
 <!--UZ:HEAD_END-->
@@ -40,13 +64,12 @@ __FONT_LINK__
   <svg class="uz-stage" id="uz-stage" role="img" aria-label="__TITLE__"></svg>
   <div class="uz-bar">
     <button id="uz-play" type="button">▶ 再生</button>
-    <input id="uz-seek" type="range" min="0" max="1000" value="0" aria-label="再生位置">
+    <div class="uz-seek"><input id="uz-seek" type="range" min="0" max="1000" value="0" aria-label="再生位置"><div id="uz-ticks" aria-hidden="true"></div></div>
     <output id="uz-clock">0:00 / 0:00</output>
     <label><input id="uz-subs" type="checkbox" checked> 字幕</label>
   </div>
   <div class="uz-note" id="uz-note"></div>
-  <details class="uz-fold" id="uz-residual" hidden><summary></summary><ul></ul></details>
-  <details class="uz-fold" id="uz-sources" hidden><summary>根拠</summary><ul></ul></details>
+  <nav id="uz-chapters" aria-label="チャプター" hidden><h2>チャプター</h2><ol></ol></nav>
   <div class="uz-err" id="uz-err" hidden></div>
 </div>
 <script>/*UZ:ELK*/</script>
@@ -86,11 +109,13 @@ const UZ_DATA = /*UZ:DATA*/null;
     $("uz-play").textContent = "▶ 再生";
   }
   function tick() {
+    if (!M || !view) return;
     const D = M.duration, t = Math.min(now(), D);
     if (playing && now() >= D) { pause(); pausedAt = D; $("uz-play").textContent = "▶ もう一度"; }
     view.render(t);
     $("uz-seek").value = Math.round(t / D * 1000);
     $("uz-clock").textContent = `${fmt(t)} / ${fmt(D)}`;
+    markCurrent(t);
     if (playing) requestAnimationFrame(tick);
   }
   $("uz-play").onclick = async () => {
@@ -104,38 +129,112 @@ const UZ_DATA = /*UZ:DATA*/null;
   $("uz-subs").onchange = () => { view.subtitles = $("uz-subs").checked; view._sub = null; tick(); };
   document.addEventListener("keydown", e => { if (e.code === "Space" && e.target === document.body) { e.preventDefault(); $("uz-play").click(); } });
   UZ.player = { seek(t) { pausedAt = t; tick(); }, get model() { return M; } };
-  // 残論点と根拠の一覧。データは textContent だけで入れる
-  function buildLists() {
-    const items = UZ_DATA.residual;
-    if (Array.isArray(items)) {
-      const d = $("uz-residual"), ul = d.querySelector("ul");
-      d.querySelector("summary").textContent = items.length ? `未解決の指摘 ${items.length} 件` : "未解決の指摘なし";
-      for (const it of items) {
-        const li = document.createElement("li");
-        const sev = document.createElement("span"); sev.className = "uz-sev";
-        sev.textContent = `[${it.severity || ""}] ${it.key || ""}`;
-        li.append(sev, " " + (it.problem || ""));
-        if (it.response) { const r = document.createElement("span"); r.className = "uz-src"; r.textContent = "対応: " + it.response; li.append(r); }
-        ul.append(li);
-      }
-      d.hidden = false;
-    }
+  // チャプター一覧。題は場面の title か図の title（engine の header）。題の無い場面は直前のチャプターに入れる
+  function chapterData() {
     const start = {};
     for (const l of M.timeline.lines) start[l.id] = l.start;
-    const ul = $("uz-sources").querySelector("ul");
-    let n = 0;
-    for (const sc of UZ_DATA.storyboard.scenes || []) for (const ln of sc.lines || []) {
-      const srcs = (typeof ln.source === "string" ? [ln.source] : Array.isArray(ln.source) ? ln.source : []).filter(s => typeof s === "string" && s);
-      if (!srcs.length || !(ln.id in start)) continue;
-      const li = document.createElement("li"), b = document.createElement("button");
-      b.type = "button"; b.className = "uz-line";
-      b.textContent = `${fmt(start[ln.id])} ${UZ.parseText(ln.text).text}`;
-      b.onclick = () => UZ.player.seek(start[ln.id]);
-      li.append(b);
-      for (const s of srcs) { const e = document.createElement("span"); e.className = "uz-src"; e.textContent = s; li.append(e); }
-      ul.append(li); n++;
+    const out = [];
+    for (const sc of M.scenes) {
+      let title = sc.header || "";
+      if (!title && sc.figs.length === 1 && M.figs[sc.figs[0]] && M.figs[sc.figs[0]].type === "title") title = "はじめに";
+      let ch = out[out.length - 1];
+      if (!ch || (title && title !== ch.title)) { ch = { title: title || "はじめに", start: sc.start, lines: [] }; out.push(ch); }
+      for (const ln of sc.lines || []) {
+        const t = UZ.parseText(ln.text).text, cs = Array.from(t);
+        const sources = (typeof ln.source === "string" ? [ln.source] : Array.isArray(ln.source) ? ln.source : []).filter(x => typeof x === "string" && x);
+        ch.lines.push({ id: ln.id, start: ln.id in start ? start[ln.id] : sc.start, text: cs.length > 24 ? cs.slice(0, 24).join("") + "…" : t, sources });
+      }
     }
-    if (n) $("uz-sources").hidden = false;
+    return out;
+  }
+  let marks = null, curCh = -1, curLn = -1;
+  // 今の時刻に当たるチャプターと行に aria-current を付ける（一覧が無ければ何もしない）
+  function markCurrent(t) {
+    if (!marks) return;
+    // 最初の行より前（0:00 の直後）は最初のチャプターと行を今とみなす
+    const find = arr => { let k = arr.length ? 0 : -1; for (let i = 0; i < arr.length; i++) if (arr[i].start <= t + 0.01) k = i; return k; };
+    const c = find(marks.chapters), l = find(marks.lines);
+    if (c !== curCh) { if (curCh >= 0) marks.chapters[curCh].el.removeAttribute("aria-current"); if (c >= 0) marks.chapters[c].el.setAttribute("aria-current", "true"); curCh = c; }
+    if (l !== curLn) {
+      if (curLn >= 0) marks.lines[curLn].el.removeAttribute("aria-current");
+      if (l >= 0) {
+        const el = marks.lines[l].el, nav = $("uz-chapters");
+        el.setAttribute("aria-current", "true");
+        // 再生中は今の行が一覧の中で見えるように（ページはスクロールしない）
+        if (playing && nav.scrollHeight > nav.clientHeight) {
+          const top = el.offsetTop - nav.offsetTop, bottom = top + el.offsetHeight;
+          if (top < nav.scrollTop || bottom > nav.scrollTop + nav.clientHeight) nav.scrollTop = Math.max(0, top - nav.clientHeight / 3);
+        }
+      }
+      curLn = l;
+    }
+  }
+  // 一覧の描画。データは textContent だけで入れる
+  function buildChapters() {
+    const chapters = chapterData(), nav = $("uz-chapters"), root = nav.querySelector("ol");
+    const btn = (cls, start, text) => {
+      const b = document.createElement("button"), tm = document.createElement("time");
+      b.type = "button"; b.className = cls; tm.textContent = fmt(start);
+      b.append(tm, text); b.onclick = () => UZ.player.seek(start);
+      return b;
+    };
+    // 根拠の吹き出しは 1 つだけ。行に重ねると下に出し、※ を押すと開いたままにする
+    const tip = document.createElement("div");
+    tip.className = "uz-tip"; tip.id = "uz-tip"; tip.setAttribute("role", "tooltip"); tip.hidden = true;
+    document.body.append(tip);
+    let pinned = null;
+    const show = (row, sources) => {
+      tip.replaceChildren(...sources.map(s => { const d = document.createElement("div"); d.textContent = s; return d; }));
+      tip.hidden = false;
+      const r = row.getBoundingClientRect(), w = tip.offsetWidth, h = tip.offsetHeight;
+      const left = Math.max(8, Math.min(r.left, window.innerWidth - w - 8));
+      const top = r.bottom + 4 + h > window.innerHeight ? Math.max(8, r.top - h - 4) : r.bottom + 4;
+      tip.style.left = left + "px"; tip.style.top = top + "px";
+    };
+    const hide = () => { tip.hidden = true; if (pinned) { pinned.setAttribute("aria-expanded", "false"); pinned = null; } };
+    const lines = [], chs = [];
+    for (const ch of chapters) {
+      const li = document.createElement("li"), cb = btn("uz-chapter", ch.start, ch.title), ol = document.createElement("ol");
+      chs.push({ start: ch.start, el: cb });
+      ch.lines.forEach((ln, i) => {
+        const lli = document.createElement("li"), row = document.createElement("div"), lb = btn("uz-line", ln.start, ln.text);
+        row.className = "uz-row"; row.append(lb);
+        // チャプターの頭の行は、チャプターの始まり（行の少し前）から今とみなす
+        lines.push({ start: i === 0 ? Math.min(ch.start, ln.start) : ln.start, el: lb });
+        if (ln.sources.length) {
+          const sb = document.createElement("button");
+          sb.type = "button"; sb.className = "uz-src-btn"; sb.textContent = "※";
+          sb.setAttribute("aria-label", "根拠"); sb.setAttribute("aria-expanded", "false"); sb.setAttribute("aria-controls", "uz-tip");
+          lb.setAttribute("aria-describedby", "uz-tip");
+          const enter = () => { if (!pinned) show(row, ln.sources); };
+          const leave = () => { if (!pinned) tip.hidden = true; };
+          lb.addEventListener("mouseenter", enter); lb.addEventListener("focus", enter);
+          lb.addEventListener("mouseleave", leave); lb.addEventListener("blur", leave);
+          sb.addEventListener("click", e => {
+            e.stopPropagation();
+            if (pinned === sb) { hide(); return; }
+            hide(); pinned = sb; sb.setAttribute("aria-expanded", "true"); show(row, ln.sources);
+          });
+          row.append(sb);
+        }
+        lli.append(row); ol.append(lli);
+      });
+      li.append(cb, ol); root.append(li);
+    }
+    document.addEventListener("click", e => { if (pinned && !tip.contains(e.target)) hide(); });
+    document.addEventListener("keydown", e => { if (e.key === "Escape" && !tip.hidden) hide(); });
+    nav.addEventListener("scroll", () => { if (!tip.hidden) hide(); }, { passive: true });
+    window.addEventListener("resize", () => { if (!tip.hidden) hide(); });
+    // 再生バーの刻み（最初のチャプターは 0:00 なので置かない）
+    const ticks = $("uz-ticks");
+    for (const ch of chapters.slice(1)) {
+      const sp = document.createElement("span");
+      sp.style.left = (ch.start / M.duration * 100) + "%";
+      ticks.append(sp);
+    }
+    nav.hidden = false;
+    marks = { chapters: chs, lines };
+    markCurrent(pausedAt);
   }
   (async () => {
     try {
@@ -149,7 +248,7 @@ const UZ_DATA = /*UZ:DATA*/null;
       pausedAt = M.scenes[0].figs.some(f => !M.figs[f].autoShow) ? (M.timeline.lines[0].start + M.timeline.lines[0].dur) : Math.min(firstFull - 0.4, 3);
       tick(); pausedAt = 0; $("uz-seek").value = 0; $("uz-clock").textContent = `0:00 / ${fmt(M.duration)}`;
       // 一覧が壊れても再生は止めない（一覧は出さずにコンソールへ）
-      try { buildLists(); } catch (e) { console.error("一覧を作れなかった:", e); $("uz-residual").hidden = true; $("uz-sources").hidden = true; }
+      try { buildChapters(); } catch (e) { console.error("チャプター一覧を作れなかった:", e); marks = null; $("uz-chapters").hidden = true; $("uz-ticks").replaceChildren(); }
       document.dispatchEvent(new CustomEvent("uz-ready"));
     } catch (e) { showErr("準備に失敗しました: " + e.message); console.error(e); }
   })();

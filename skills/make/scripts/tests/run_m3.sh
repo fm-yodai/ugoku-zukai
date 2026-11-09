@@ -53,8 +53,8 @@ echo "$out" | grep -q "^警告 SP-6: 行 l3 " || { echo "NG: text/warn.json の 
 python3 scripts/check_text.py scripts/tests/text/warn.json --json | python3 -c 'import json,sys; d=json.load(sys.stdin); assert len(d["warnings"])>=3 and not d["errors"]' || { echo "NG: check_text --json の warnings"; fail=1; }
 # 各行の落ち着いたコマ（SVG と PNG のシート。resvg がなければ PNG の検査は飛ばす）
 sh scripts/tests/test_frames.sh || fail=1
-# 再生ページの残論点と根拠の一覧
-python3 scripts/tests/test_build_review.py >/dev/null 2>&1 || { echo "NG: test_build_review.py"; python3 scripts/tests/test_build_review.py; fail=1; }
+# 再生ページのチャプター一覧と根拠の吹き出し（未解決の指摘は出さない）
+python3 scripts/tests/test_build_chapters.py >/dev/null 2>&1 || { echo "NG: test_build_chapters.py"; python3 scripts/tests/test_build_chapters.py; fail=1; }
 # 作業フォルダ（題材の外に作る。同じ名前は -2 -3…、日本語だけの名前は run）
 rh=$(mktemp -d)
 w1=$(UZ_RUNS_HOME="$rh" python3 scripts/workdir.py new --now 20260101-0000 "this repo" 2>/dev/null)
