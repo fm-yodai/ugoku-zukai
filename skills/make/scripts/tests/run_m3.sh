@@ -91,6 +91,9 @@ docs="SKILL.md references/run-chat.md references/run-code.md"
 grep -q "spoken.md" ../../agents/writer.md && grep -q "spoken.md" ../../agents/writing-reviewer.md || { echo "NG: writer / writing-reviewer が spoken.md を読まない"; fail=1; }
 grep -q "knows" ../../agents/researcher.md || { echo "NG: researcher.md が knows を書かない"; fail=1; }
 grep -q "読みモード" ../../agents/writing-reviewer.md || { echo "NG: writing-reviewer.md に読みモードがない"; fail=1; }
+grep -q "C-D6" ../../agents/director.md || { echo "NG: director.md の担当に C-D6 がない"; fail=1; }
+grep -q "spoken.md" references/run-chat.md || { echo "NG: run-chat.md が spoken.md を読ませていない"; fail=1; }
+grep -q "function seekTo(t) { if (playing) startAt(t)" player/template.html || { echo "NG: template.html の seek が再生中に startAt を呼ばない"; fail=1; }
 for f in $docs; do
   grep -q -- "--readings" "$f" || { echo "NG: $f に tts.py --readings がない"; fail=1; }
   grep -q -- "--review" "$f" && { echo "NG: $f に build_player.py --review が残っている"; fail=1; }

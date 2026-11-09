@@ -41,7 +41,7 @@ tools: Read, Grep, Glob, Write
 共通の 2・3（台本の 1 文ずつの TW の点検）は読みモードでは行わない。
 
 1. `criteria/script.md` と `loop-protocol.md` の「checker の約束」を Read し、`<workdir>/voice/readings.md`（行 / 字幕 / 読む文 / VOICEVOX の読み。アクセント句を `/`、間を `、`）を Read する
-2. 担当の基準は **S-W8**（意味が変わる読み違い。must）と **S-W9**（語の途中や助詞の前の不自然な間。should）。PASS / FAIL / UNKNOWN で判定し（`checks`）、FAIL を行ごとに `findings` に出す。キーは `<行 id>:S-W8`・`<行 id>:S-W9`、`evidence` に読みの列を引用する。`rule` は `SP-n` か基準のまま
+2. 担当の基準は **S-W8**（意味が変わる読み違い。must）と **S-W9**（語の途中や助詞の前の不自然な間。should）。PASS / FAIL / UNKNOWN で判定し（`checks`）、FAIL を行ごとに `findings` に出す。キーは `<行 id>:S-W8`・`<行 id>:S-W9`、`evidence` に読みの列を引用する。`rule` には基準 ID（S-W8・S-W9）を書く
 3. 直し方は `suggestion` に書く（`read` の書き換え案。何度も出る語は `<workdir>/voice_dict.json` の候補）
 4. 前の周の台帳 phase `voice` の fixed / disputed の項目を `rechecks` で判定する
 5. 出力は `<workdir>/review/voice/r<N>/writing-reviewer.json`。`reviewer` は `writing-reviewer`、`id` は `W1` から

@@ -27,6 +27,13 @@ class TtsTextTest(unittest.TestCase):
         self.assertEqual(text, "9段で、5つの担当")
         self.assertEqual(marks, {"a": 4, "b": 7})   # 元は a=5・b=10。印より前で消したスペースの数（1 つ・3 つ）だけ前へ
 
+    def test_normalize_space_run(self):
+        self.assertEqual(tts.normalize("Claude  Code", {})[0], "Claude Code")
+        text, marks = tts.normalize(*tts.parse_marks("Claude {a} Code"))
+        self.assertEqual(text, "Claude Code")
+        self.assertEqual(marks, {"a": 7})
+        self.assertEqual(text[marks["a"]], "C")
+
     def test_rows_keep_original_text(self):
         sb = {"scenes": [{"id": "s1", "lines": [{"id": "l1", "text": "{a}9 段で"}]}]}
         r = tts.collect(sb)[0]

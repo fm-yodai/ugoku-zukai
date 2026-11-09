@@ -64,15 +64,26 @@ def parse_marks(text):
 
 def normalize(text, marks):
     """合成用に文を整える。全角スペースと、英数字に挟まれない半角スペースを消し、印の位置を消した分だけ前へずらす。
+    続いたスペース（印を外した跡の「Claude  Code」など）は 1 かたまりとして、前後の文字で残すかを決め、残すなら半角 1 つにする。
     返すのは (整えた文, 新しい印の位置)。"""
     alnum = re.compile(r"[A-Za-z0-9]")
     out, dropped = [], []
-    for i, c in enumerate(text):
-        drop = c == "\u3000" or (c == " " and not (i > 0 and i + 1 < len(text) and alnum.fullmatch(text[i - 1]) and alnum.fullmatch(text[i + 1])))
-        if drop:
-            dropped.append(i)
+    i = 0
+    while i < len(text):
+        if text[i] not in " \u3000":
+            out.append(text[i])
+            i += 1
+            continue
+        j = i
+        while j < len(text) and text[j] in " \u3000":
+            j += 1
+        keep = " " in text[i:j] and i > 0 and j < len(text) and alnum.fullmatch(text[i - 1]) and alnum.fullmatch(text[j])
+        if keep:
+            out.append(" ")
+            dropped.extend(range(i + 1, j))
         else:
-            out.append(c)
+            dropped.extend(range(i, j))
+        i = j
     new = {k: pos - sum(1 for d in dropped if d < pos) for k, pos in marks.items()}
     return "".join(out), new
 
@@ -288,12 +299,17 @@ def main():
     if not a.readings:
         os.makedirs(adir, exist_ok=True)
     t0 = time.time()
+    if a.dict and not os.path.exists(a.dict):
+        sys.exit(f"--dict で指定した辞書がない: {a.dict}")
     extra = a.dict or os.path.join(os.path.dirname(os.path.abspath(a.out)), "voice_dict.json")
     voice = Voice(a.home, extra if os.path.exists(extra) else None)
     import voicevox_core
     ver = getattr(voicevox_core, "__version__", setup_voice.CORE_VER)
     rows = collect(sb)
     if a.readings:
+        stale = os.path.join(a.out, "readings.md")
+        if os.path.exists(stale):   # 途中で止まった回（終了コード 3）に古い一覧を残さない
+            os.remove(stale)
         write_readings(voice, rows, a.out, speaker, speed, ver, t0, a.budget)
         return
     done, made = {}, 0

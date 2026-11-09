@@ -7,7 +7,7 @@
   S-M4 読む文（read があれば read、なければ text）に、ユーザー辞書にない英字の語がある
   警告（終了コードに響かない。聞いて分かる文の規則 references/writing/spoken.md）
   SP-4 1 文が 50 字を超える。または 1 文に「・」が 3 つ以上（項目 4 つ以上）並ぶ
-  SP-6 1 文に助詞の「の」が 3 つ以上ある（「のだ」「のです」「のか」の「の」は数えない）
+  SP-6 1 文に助詞の「の」が 3 つ以上ある（「のだ」「のです」「のか」と、この・その・あの・どの・ものの「の」は数えない）
 終了コード: 0 = 誤りなし（警告があっても 0）、1 = 誤りあり。--json は {"errors": [{line, rule, msg}], "warnings": [{line, rule, msg}]}
 """
 import json
@@ -28,7 +28,7 @@ MAX_LEN = 50
 MAX_ITEMS = 3
 MAX_NO = 3
 # 助詞の「の」（「のだ」「のです」「のか」は文末の言い回しなので数えない）
-NO = re.compile(r"の(?![だでか])")
+NO = re.compile(r"(?<![こそあども])の(?![だでか])")
 WORD = re.compile(r"[A-Za-z][A-Za-z0-9]*(?:[.\-][A-Za-z0-9]+)*")
 
 
@@ -82,9 +82,10 @@ def check(sb):
                 if items - 1 >= MAX_ITEMS:
                     warnings.append({"line": lid, "rule": "SP-4",
                                      "msg": f"行 {lid} の文に項目が {items} つ並ぶ（{MAX_ITEMS} つまで）"})
-                if len(NO.findall(sent)) >= MAX_NO:
+                n_no = len(NO.findall(sent))
+                if n_no >= MAX_NO:
                     warnings.append({"line": lid, "rule": "SP-6",
-                                     "msg": f"行 {lid} の文に「の」が {MAX_NO} つ続く"})
+                                     "msg": f"行 {lid} の文に「の」が {n_no} つある（{MAX_NO - 1} つまで）"})
             spoken = read if read is not None else text
             seen = set()
             for w in WORD.findall(spoken):

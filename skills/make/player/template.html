@@ -126,10 +126,11 @@ const UZ_DATA = /*UZ:DATA*/null;
       if (playing) pause(); else startAt(pausedAt >= M.duration - 0.05 ? 0 : pausedAt);
     } catch (e) { showErr("音声を再生できませんでした: " + e.message); }
   };
-  $("uz-seek").oninput = () => { const t = $("uz-seek").value / 1000 * M.duration; if (playing) startAt(t); else { pausedAt = t; tick(); } };
+  function seekTo(t) { if (playing) startAt(t); else { pausedAt = t; $("uz-play").textContent = "▶ 再生"; tick(); } }
+  $("uz-seek").oninput = () => seekTo($("uz-seek").value / 1000 * M.duration);
   $("uz-subs").onchange = () => { view.subtitles = $("uz-subs").checked; view._sub = null; tick(); };
   document.addEventListener("keydown", e => { if (e.code === "Space" && e.target === document.body) { e.preventDefault(); $("uz-play").click(); } });
-  UZ.player = { seek(t) { pausedAt = t; tick(); }, get model() { return M; } };
+  UZ.player = { seek: seekTo, get model() { return M; } };
   // チャプター一覧。題は場面の title か図の title（engine の header）。題の無い場面は直前のチャプターに入れる
   function chapterData() {
     const start = {};

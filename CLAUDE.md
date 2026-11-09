@@ -20,7 +20,7 @@ bash skills/make/scripts/tests/run_m1.sh
 bash skills/make/scripts/tests/run_m3.sh
 
 # 台本 1 本の検査（形・id の解決・配置）。--timeline で実際の声の長さでも検査する
-node skills/make/scripts/check_storyboard.cjs skills/make/examples/sequence.json --theme flat [--timeline work/timeline.json] [--json]
+node skills/make/scripts/check_storyboard.cjs skills/make/examples/sequence.json --theme flat [--timeline work/voice/timeline.json] [--json]
 
 # テーマの検査（コントラストなど）
 python3 skills/make/scripts/check_theme.py skills/make/player/themes/3b1b.json
@@ -40,11 +40,11 @@ node skills/make/scripts/frames.cjs skills/make/examples/sequence.json --theme f
 
 # 声: 初回だけ VOICEVOX を入れ（約 94MB）、1 行ずつ合成して timeline.json と narration.mp3 を作る
 python3 skills/make/scripts/setup_voice.py --agree
-python3 skills/make/scripts/tts.py <storyboard.json> -o work --readings   # 合成せずに読みの一覧 work/readings.md を書く（合成の前の確認）
-python3 skills/make/scripts/tts.py <storyboard.json> -o work      # 終了コード 3 = 時間切れで続きあり。同じコマンドを繰り返す
+python3 skills/make/scripts/tts.py <storyboard.json> -o work/voice --readings   # 合成せずに読みの一覧 work/voice/readings.md を書く（合成の前の確認。辞書は既定で work/voice_dict.json を重ねる）
+python3 skills/make/scripts/tts.py <storyboard.json> -o work/voice   # 終了コード 3 = 時間切れで続きあり。同じコマンドを繰り返す
 
 # 組み立て（--artifact は Artifact 用に <html>/<head>/<body> を外した断片を書く）
-python3 skills/make/scripts/build_player.py <storyboard.json> --theme 3b1b --voice work -o player.html [--artifact]
+python3 skills/make/scripts/build_player.py <storyboard.json> --theme 3b1b --voice work/voice -o player.html [--artifact]
 
 # 見本帳（全見本 × 全テーマ）、claude.ai 用 zip、claude.ai での声の検証用 zip（出力は dist/）
 python3 tools/build_gallery.py

@@ -20,7 +20,7 @@
 
 > ここからは評価役として、作り手の推論を使わず、基準ファイル・一次資料・成果物だけで判定する。
 
-取材メモ（`brief.md`）と、作り手として考えた理由は判定の根拠にしない。評価役の定義（スキルの zip には入っていない）の代わりに、基準ファイル `references/criteria/`・`references/writing/rules.md`・`references/writing/review-format.md` を読み直してから判定する。
+取材メモ（`brief.md`）と、作り手として考えた理由は判定の根拠にしない。評価役の定義（スキルの zip には入っていない）の代わりに、基準ファイル `references/criteria/`・`references/writing/rules.md`・`references/writing/spoken.md`・`references/writing/review-format.md` を読み直してから判定する。
 
 ## 1 周の回し方（2・4・5 で共通。6 の読みは 1 周だけで、下の 6 音声）
 
@@ -103,7 +103,7 @@ python3 <skill>/scripts/ledger.py reset <workdir> contract
 
 ## 4 台本
 
-作り手として `<workdir>/storyboard.json` を書く（writer の役。形式は `storyboard.md`、見本は `<skill>/examples/`）。機械検査（時刻は見積もり）:
+作り手として `<workdir>/storyboard.json` を書く（writer の役。形式は `storyboard.md`、見本は `<skill>/examples/`）。書く前に `references/writing/spoken.md` を読み、書いた後に SP-1〜SP-9 で見直す。機械検査（時刻は見積もり）:
 
 ```sh
 node <skill>/scripts/check_storyboard.cjs <workdir>/storyboard.json --theme <テーマ>

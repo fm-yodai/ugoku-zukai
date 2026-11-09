@@ -28,7 +28,7 @@ maker の推論と取材メモ（`brief.md`）は受け取らない。渡され�
 
 | モード | phase | 基準ファイル | 担当の基準 | 見るもの |
 |---|---|---|---|---|
-| 構造 | `contract` | `criteria/contract.md` | C-D1〜C-D4 | `contract.json` |
+| 構造 | `contract` | `criteria/contract.md` | C-D1〜C-D6 | `contract.json` |
 | 計画 | `script` | `criteria/script.md`・`criteria/structure.md` | S-D1〜S-D4、G-D1〜G-D7 | `storyboard.json`（と `contract.json`） |
 | 画面 | `screen` | `criteria/screen.md`・`criteria/structure.md` | V-1〜V-5、G-D5、G-D8 | `frames/frames.json` と、その `sheets` に載ったシート・`storyboard.json` |
 
@@ -39,6 +39,7 @@ maker の推論と取材メモ（`brief.md`）は受け取らない。渡され�
 - C-D2: 契約が `diagram.compared` で比べた図の種類と、選ばなかった理由を読み、**見せたいこと（言い切りと経路）に一番合う種類か**を自分で判断する。往復の順序が主題なのに `graph` を選んでいる、担当ごとの受け渡しが主題なのに `sequence` を選んでいる、などは FAIL。挙がっていない種類のほうが合うなら `suggestion` に書く
 - C-D3: 構成の型（`structure`）が題材と読者の問いに合い、`structures.md` のその型の「契約の追加条件」を満たしているか。主に使う図が全体図（`graph`・`swimlane` など）でないなら、一覧の図で全体を見渡せる理由が `diagram.reason` にあるか
 - C-D1・C-D4 は基準どおり
+- C-D5・C-D6 は `contract.json` の `knows`・`can_do` と照らして判定する
 
 ## 計画モード（台本）
 

@@ -126,7 +126,7 @@ writer が台本 `storyboard.json` を書く → 進行役が `scripts/check_sto
 - 残論点の件数と中身（must の項目の要点。0 件なら「なし」。再生ページには出ないので、ここだけに書く）。PNG を作れなかったときは「コマの画像なし」
 - **足すべき項目**（人がスキルに足すかを決める。進行役はスキルのファイルを書き換えない）
   - 禁止語の候補: 台帳の指摘の `suggestion` から（`assets/banned_terms.json` 向け）
-  - 読み: 6 音声で `read` を足して直した語（`assets/voicevox_user_dict.json` 向け）
+  - 読み: 6 音声で `read` を足して直した語と、`<workdir>/voice_dict.json` に足した語（`assets/voicevox_user_dict.json` 向け）。チャットで読みを直したときは「読みは直したが再確認していない」と書く
   - 語彙・型の提案: 図の種類・動作・構成の型で表せなかったこと（`references/storyboard.md`・`structures.md` 向け）と、新しい較正の例（`references/criteria/` 向け）
 
 ## 不変条件

@@ -69,7 +69,7 @@ python3 scripts/build_player.py storyboard.json -o preview.html     # 音声な�
 ```
 
 ```json
-{ "type": "title", "text": "動画作成プラグイン ugoku-zukai について\n説明します", "sub": "題材を渡してから再生ページができるまで" }
+{ "type": "title", "text": "動画作成プラグイン ugoku-zukai について\n説明します", "sub": "資料を渡してから動画のページができるまで" }
 ```
 
 ### list
