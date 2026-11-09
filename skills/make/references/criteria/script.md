@@ -12,9 +12,9 @@
 | S-W2 | 用語を比喩や造語で置き換えていない。禁止語の辞書に無い新しい造語（例: 「目印」「試行印」「読み書き役」）も含む。見つけたら辞書に足す候補として `suggestion` に書く | writing-reviewer | must |
 | S-W3 | 口調のために文の主体・相手が崩れていない（語尾を付けるための受け身化など） | writing-reviewer | must |
 | S-W4 | 読みの分かれる単独の漢字（「方」「他」「行」など）を、意図した読みで読ませるよう `read` に書いている | writing-reviewer | should |
-| S-W5 | 視聴者（`interview.md` の `knows`）の前提で分からない語や内部の呼び名が、意味の説明なしに出ていない（SP-2・SP-3） | writing-reviewer | must |
+| S-W5 | 視聴者（`contract.json` の `knows`。`interview.md` の答えを写したもの）の前提で分からない語や内部の呼び名が、意味の説明なしに出ていない（SP-2・SP-3） | writing-reviewer | must |
 | S-W6 | 冒頭の 1 行目と `title` 図の文で、何の説明かが分かる（SP-1） | writing-reviewer | must |
-| S-W7 | 聞いて分かる文の規則 SP-4〜SP-9 に反していない。場面の題も見る | writing-reviewer | must（意味が取れない・誤解する）/ should（もっと自然にできる） |
+| S-W7 | 聞いて分かる文の規則 SP-4〜SP-9 に反していない。場面の題（`scenes[].title`。無ければその場面の図の `title`）にも SP-2〜SP-9 を当てる | writing-reviewer | must（意味が取れない・誤解する）/ should（もっと自然にできる） |
 | S-W8 | 読みの一覧（`voice/readings.md`）で、意味が変わる読み違いが無い（例: 作り手→ツクリシュ） | writing-reviewer（読みモード） | must |
 | S-W9 | 読みの一覧で、語の途中や助詞の前に不自然な間が無い | writing-reviewer（読みモード） | should |
 | S-F1 | 各行の主張が `source` から言える（FC-wrong / FC-overclaim / FC-nosource が無い） | fact-checker（台本モード） | must |
