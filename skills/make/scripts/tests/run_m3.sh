@@ -21,12 +21,17 @@ done
 for l in l4 l5; do
   echo "$out" | grep -q "^S-M3: 行 $l " || { echo "NG: text/bad.json の $l で S-M3 が出ない"; fail=1; }
 done
-for f in scripts/tests/text/ok.json scripts/tests/text/bad.json; do
+for f in scripts/tests/text/ok.json scripts/tests/text/bad.json scripts/tests/text/warn.json; do
   node scripts/check_storyboard.cjs "$f" >/dev/null 2>&1 || { echo "NG: $f が台本の形を通らない"; fail=1; }
 done
 for f in examples/*.json; do
   python3 scripts/check_text.py "$f" >/dev/null 2>&1 || { echo "NG: 見本 $f が字幕と読みの検査を通らない"; python3 scripts/check_text.py "$f"; fail=1; }
 done
+# 聞いて分かる文の警告（SP-4・SP-6）。終了コードは 0 のまま
+out=$(python3 scripts/check_text.py scripts/tests/text/warn.json 2>&1) || { echo "NG: text/warn.json が誤りになった（警告だけのはず）"; fail=1; }
+for l in l1 l2; do echo "$out" | grep -q "^警告 SP-4: 行 $l " || { echo "NG: text/warn.json の $l で SP-4 が出ない"; fail=1; }; done
+echo "$out" | grep -q "^警告 SP-6: 行 l3 " || { echo "NG: text/warn.json の l3 で SP-6 が出ない"; fail=1; }
+python3 scripts/check_text.py scripts/tests/text/warn.json --json | python3 -c 'import json,sys; d=json.load(sys.stdin); assert len(d["warnings"])>=3 and not d["errors"]' || { echo "NG: check_text --json の warnings"; fail=1; }
 # 各行の落ち着いたコマ（SVG と PNG のシート。resvg がなければ PNG の検査は飛ばす）
 sh scripts/tests/test_frames.sh || fail=1
 # 再生ページの残論点と根拠の一覧

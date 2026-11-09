@@ -5,7 +5,10 @@
   S-M2 text と read に禁止語（assets/banned_terms.json）がある
   S-M3 話者がずんだもんなのに、文末が「のだ」「なのだ」でない（文は「。」「？」「！」で切る。「」の中では切らない。句点の無い最後の文も見る）
   S-M4 読む文（read があれば read、なければ text）に、ユーザー辞書にない英字の語がある
-終了コード: 0 = 誤りなし、1 = 誤りあり。--json は {"errors": [{line, rule, msg}], "warnings": []}
+  警告（終了コードに響かない。聞いて分かる文の規則 references/writing/spoken.md）
+  SP-4 1 文が 50 字を超える。または 1 文に「・」が 3 つ以上（項目 4 つ以上）並ぶ
+  SP-6 1 文に助詞の「の」が 3 つ以上ある（「のだ」「のです」「のか」の「の」は数えない）
+終了コード: 0 = 誤りなし（警告があっても 0）、1 = 誤りあり。--json は {"errors": [{line, rule, msg}], "warnings": [{line, rule, msg}]}
 """
 import json
 import os
@@ -20,6 +23,12 @@ ZUNDA = {1, 3, 5, 7, 22, 38, 75, 76}
 DEFAULT_SPEAKER = 8
 MARK = re.compile(r"\{[A-Za-z0-9_]+\}")
 # 英字の連なり。数字・ピリオド・ハイフンが中に入るものは 1 語（JSON, tts.py, e-mail）
+# 警告の閾値
+MAX_LEN = 50
+MAX_ITEMS = 3
+MAX_NO = 3
+# 助詞の「の」（「のだ」「のです」「のか」は文末の言い回しなので数えない）
+NO = re.compile(r"の(?![だでか])")
 WORD = re.compile(r"[A-Za-z][A-Za-z0-9]*(?:[.\-][A-Za-z0-9]+)*")
 
 
@@ -46,7 +55,7 @@ def sentences(text):
 
 
 def check(sb):
-    errors = []
+    errors, warnings = [], []
     terms = banned()
     surfaces = user_surfaces()
     speaker = (sb.get("voice") or {}).get("speaker", DEFAULT_SPEAKER)
@@ -65,6 +74,17 @@ def check(sb):
                     if not sent.endswith("のだ"):
                         errors.append({"line": lid, "rule": "S-M3",
                                        "msg": f"行 {lid} の文「{sent[-12:]}」の文末が「のだ」「なのだ」でない（ずんだもんの語尾）"})
+            for sent in sentences(text):
+                if len(sent) > MAX_LEN:
+                    warnings.append({"line": lid, "rule": "SP-4",
+                                     "msg": f"行 {lid} の文が {len(sent)} 字（{MAX_LEN} 字以内に分ける）"})
+                items = sent.count("・") + 1
+                if items - 1 >= MAX_ITEMS:
+                    warnings.append({"line": lid, "rule": "SP-4",
+                                     "msg": f"行 {lid} の文に項目が {items} つ並ぶ（{MAX_ITEMS} つまで）"})
+                if len(NO.findall(sent)) >= MAX_NO:
+                    warnings.append({"line": lid, "rule": "SP-6",
+                                     "msg": f"行 {lid} の文に「の」が {MAX_NO} つ続く"})
             spoken = read if read is not None else text
             seen = set()
             for w in WORD.findall(spoken):
@@ -72,20 +92,22 @@ def check(sb):
                     seen.add(w)
                     errors.append({"line": lid, "rule": "S-M4",
                                    "msg": f"行 {lid} の `{w}` は read でカタカナにする（ユーザー辞書にもない）"})
-    return errors
+    return errors, warnings
 
 
 def main():
     args = [a for a in sys.argv[1:] if a != "--json"]
     if len(args) != 1:
         sys.exit(__doc__)
-    errors = check(json.load(open(args[0], encoding="utf-8")))
+    errors, warnings = check(json.load(open(args[0], encoding="utf-8")))
     if "--json" in sys.argv:
-        print(json.dumps({"errors": errors, "warnings": []}, ensure_ascii=False, indent=2))
+        print(json.dumps({"errors": errors, "warnings": warnings}, ensure_ascii=False, indent=2))
     else:
         for e in errors:
             print(f"{e['rule']}: {e['msg']}")
-        print("check_text: " + (f"{len(errors)} 件の誤り" if errors else "OK"))
+        for w in warnings:
+            print(f"警告 {w['rule']}: {w['msg']}")
+        print("check_text: " + (f"{len(errors)} 件の誤り" if errors else f"OK（警告 {len(warnings)} 件）"))
     sys.exit(1 if errors else 0)
 
 
