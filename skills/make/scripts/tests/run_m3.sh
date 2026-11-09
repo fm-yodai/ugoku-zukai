@@ -87,6 +87,17 @@ done
 grep '^tools:' ../../agents/researcher.md | grep -q "/scripts/check_contract.py " || { echo "NG: researcher の tools: に check_contract.py がない"; fail=1; }
 # 進行役の手順（SKILL.md・run-chat.md・run-code.md）
 docs="SKILL.md references/run-chat.md references/run-code.md"
+# 視聴者の言葉と読みの確認が、エージェントと進行役の文書に入っている
+grep -q "spoken.md" ../../agents/writer.md && grep -q "spoken.md" ../../agents/writing-reviewer.md || { echo "NG: writer / writing-reviewer が spoken.md を読まない"; fail=1; }
+grep -q "knows" ../../agents/researcher.md || { echo "NG: researcher.md が knows を書かない"; fail=1; }
+grep -q "読みモード" ../../agents/writing-reviewer.md || { echo "NG: writing-reviewer.md に読みモードがない"; fail=1; }
+for f in $docs; do
+  grep -q -- "--readings" "$f" || { echo "NG: $f に tts.py --readings がない"; fail=1; }
+  grep -q -- "--review" "$f" && { echo "NG: $f に build_player.py --review が残っている"; fail=1; }
+  grep -q "見終わったらできること" "$f" || { echo "NG: $f のインタビューに「見終わったらできること」がない"; fail=1; }
+done
+grep -q '`voice`' references/loop-protocol.md || { echo "NG: loop-protocol.md にフェーズ voice がない"; fail=1; }
+grep -q "未解決の指摘" SKILL.md references/run-code.md references/run-chat.md references/loop-protocol.md references/writing/review-format.md && { echo "NG: 再生ページの「未解決の指摘」の記述が残っている"; fail=1; }
 for f in $docs; do
   [ -f "$f" ] || { echo "NG: $f がない"; fail=1; continue; }
   # 出てくる scripts/ のファイルがすべて実在する

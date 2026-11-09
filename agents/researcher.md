@@ -23,7 +23,8 @@ tools: Read, Write, Edit, Glob, Grep, WebFetch, WebSearch, Bash(git show *), Bas
 4. `${CLAUDE_PLUGIN_ROOT}/skills/make/references/structures.md`（構成の型。型の選び方と、その型の節の「契約の追加条件」）
 5. `${CLAUDE_PLUGIN_ROOT}/skills/make/references/storyboard.md` の 2 章（図の種類。図の種類を比べるときに使う）
 6. `${CLAUDE_PLUGIN_ROOT}/skills/make/references/writing/rules.md`（契約の言葉も TW-1〜に従う）
-7. `<workdir>/interview.md`（読者・一番分かってほしいこと・範囲・構成の型・長さ・材料の方針）
+7. `${CLAUDE_PLUGIN_ROOT}/skills/make/references/writing/spoken.md`（聞いて分かる文の規則 SP-1〜SP-9。契約の言葉も、聞く人に分かる言葉にする）
+8. `<workdir>/interview.md`（読者・見終わったらできること・知っている前提・一番分かってほしいこと・範囲・構成の型・長さ・材料の方針）
 
 ## 1 周目: 取材して書く
 
@@ -39,7 +40,8 @@ tools: Read, Write, Edit, Glob, Grep, WebFetch, WebSearch, Bash(git show *), Bas
 3. `<workdir>/contract.json` を書く（形は check_contract.py の docstring）:
    - **題材の種類 `mode`・構成の型 `structure`**。型は `interview.md` で決まっていればそれ。「おまかせ」なら `structures.md` の「型の選び方」で選び、`brief.md` に理由を書く
    - **読者 `audience`・一番分かってほしいこと `takeaway`**（1 文）・範囲 `scope` は `interview.md` から
-   - **言い切ること `claims`** を 3〜5 項。読者が持ち帰る主張で、各項に根拠（`source`）。`web`・`topic` は URL と引用
+   - **`can_do`（見終わったらできること）・`knows`（知っている前提）**も `interview.md` から写す（ユーザーの言葉のまま。言い換えて広げない）
+   - **言い切ること `claims`** を 3〜5 項。読者が持ち帰る主張で、各項に根拠（`source`）。`web`・`topic` は URL と引用。`claims[].text` は `knows` の人が聞いて分かる言葉で書く。コードの名前（ファイル名・関数名・状態の名前）は、視聴者が `can_do` のために自分で打つか画面で探すものだけにする。`can_do` に要らない内部の仕組みを言い切りにしない（C-D5・C-D6）
    - **見せる経路 `paths`**。部品・参加者・担当の id の並び（`steps`）と根拠。この id が台本の図の宣言の id になる。`diagram.type` が `graph`・`sequence`・`swimlane` なら 1 項以上要る
    - **図の種類 `diagram`**。`type` にプレーヤーの図の種類（`storyboard.md` の 2 章。`canvas` を除く 16 種）から主に使うものを 1 つ選び、`reason` に理由を書く。`compared` にほかの種類を 2 つ以上挙げ、見せたいこと（言い切りと経路）に照らして選ばなかった理由を書く。ほかにも使う図があれば `others` に並べる。主に使う図が全体図（`graph`・`swimlane` など部品と矢印の図）でないなら、一覧の図で全体を見渡せる理由を `reason` に書く（C-D3）
    - **尺の配分 `budget`**。`interview.md` の長さ（既定は 3 分）を `max_seconds` にし、`structures.md` の型の部の並びと尺の目安で `parts` に配る

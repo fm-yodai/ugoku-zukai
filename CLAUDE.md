@@ -40,6 +40,7 @@ node skills/make/scripts/frames.cjs skills/make/examples/sequence.json --theme f
 
 # 声: 初回だけ VOICEVOX を入れ（約 94MB）、1 行ずつ合成して timeline.json と narration.mp3 を作る
 python3 skills/make/scripts/setup_voice.py --agree
+python3 skills/make/scripts/tts.py <storyboard.json> -o work --readings   # 合成せずに読みの一覧 work/readings.md を書く（合成の前の確認）
 python3 skills/make/scripts/tts.py <storyboard.json> -o work      # 終了コード 3 = 時間切れで続きあり。同じコマンドを繰り返す
 
 # 組み立て（--artifact は Artifact 用に <html>/<head>/<body> を外した断片を書く）
@@ -53,7 +54,7 @@ python3 tools/build_voice_check.py
 
 ## 全体の構造
 
-**流れ**: 0 準備 → 1 インタビュー → 2 取材と契約（`contract.json`）→ 3 人の確認（1 回だけ）→ 4 台本（`storyboard.json`）→ 5 画面（`frames.cjs`、見積もりの時刻）→ 6 音声（`tts.py`）→ 7 組み立て（`build_player.py`）と Artifact での公開 → 8 報告。手順は `skills/make/SKILL.md`、環境ごとのコマンドは `references/run-code.md`（Claude Code）と `references/run-chat.md`（チャット）。
+**流れ**: 0 準備 → 1 インタビュー → 2 取材と契約（`contract.json`）→ 3 人の確認（1 回だけ）→ 4 台本（`storyboard.json`）→ 5 画面（`frames.cjs`、見積もりの時刻）→ 6 音声（`tts.py --readings` で読みを確かめてから合成）→ 7 組み立て（`build_player.py`）と Artifact での公開 → 8 報告。手順は `skills/make/SKILL.md`、環境ごとのコマンドは `references/run-code.md`（Claude Code）と `references/run-chat.md`（チャット）。
 
 **プレーヤー（`skills/make/player/src/`）は、ブラウザと node で同じコードを動かす**のが要。
 - `util → figures → figures2 → validate → engine → check` は DOM に触らない。グローバルの `UZ` に生えていく（`UZ.build(storyboard, theme, timeline)` が配置と時刻を計算する）。DOM に触るのは `view_svg.js` だけ
@@ -66,7 +67,7 @@ python3 tools/build_voice_check.py
 
 **テーマ**（`player/themes/*.json`、`references/themes.md`）: 色・文字・線の定義。`extract_design.py` が手持ちのデザイン（トークン・CSS・HTML・Tailwind・Office・画像・PDF）からテーマを作り、`check_theme.py` で検査する。
 
-**maker-checker**: Claude Code では `agents/` のサブエージェント（作り手 researcher / writer、評価役 fact-checker / writing-reviewer / director。animator は保留中で呼ばない）で回し、チャットでは 1 会話で役を順に演じる。成功基準は `references/criteria/`、周回の約束は `references/loop-protocol.md`、台帳は `scripts/ledger.py`（判定は終了コード: PASS 0 / CONTINUE 10 / STOP_* 20〜22）。
+**maker-checker**: Claude Code では `agents/` のサブエージェント（作り手 researcher / writer、評価役 fact-checker / writing-reviewer / director。animator は保留中で呼ばない）で回し、チャットでは 1 会話で役を順に演じる。成功基準は `references/criteria/`、周回の約束は `references/loop-protocol.md`、台帳は `scripts/ledger.py`（フェーズは `contract`・`script`・`screen`・`voice`。判定は終了コード: PASS 0 / CONTINUE 10 / STOP_* 20〜22）。
 
 ## 守ること
 

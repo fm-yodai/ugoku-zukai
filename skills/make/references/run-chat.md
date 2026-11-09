@@ -22,7 +22,7 @@
 
 取材メモ（`brief.md`）と、作り手として考えた理由は判定の根拠にしない。評価役の定義（スキルの zip には入っていない）の代わりに、基準ファイル `references/criteria/`・`references/writing/rules.md`・`references/writing/review-format.md` を読み直してから判定する。
 
-## 1 周の回し方（2・4・5 で共通）
+## 1 周の回し方（2・4・5 で共通。6 の読みは 1 周だけで、下の 6 音声）
 
 1. 作り手として作る（N≥2 は台帳 `review/ledger.json` の open の項目に応答して直し、`<workdir>/review/<phase>/r<N>/responses.json` を書いて取り込む）
 
@@ -32,7 +32,7 @@ python3 <skill>/scripts/ledger.py respond <workdir> <phase> <workdir>/review/<ph
 
 2. 機械検査（段ごとに下に書く）。誤りがあれば作り手に戻って、出力に出た誤りだけを直す（機械検査の差し戻し。応答 `responses.json` は書かない。同じ周で 5 回まで）
 3. 宣言をしてから、評価役を **1 回にまとめて**演じる。その段の評価役の担当（下の表）をすべて判定し、全基準の判定を 1 つのファイル `<workdir>/review/<phase>/r<N>/combined.json` に書く。形は `review-format.md` の checker の出力と同じで、`reviewer` は `combined`
-4. 取り込んで判定する。**判定には必ず `--max-rounds 2` を付ける**
+4. 取り込んで判定する。**判定には必ず `--max-rounds 2` を付ける**（6 の読みは `--max-rounds 1`）
 
 ```sh
 python3 <skill>/scripts/ledger.py ingest <workdir> <phase> <workdir>/review/<phase>/r<N>/combined.json
@@ -46,6 +46,7 @@ python3 <skill>/scripts/ledger.py status <workdir> <phase> --max-rounds 2
 | 2 取材と契約 | `contract` | fact-checker（契約モード）・director（構造モード） | `criteria/contract.md` |
 | 4 台本 | `script` | writing-reviewer・fact-checker（台本モード）・director（計画モード） | `criteria/script.md`・`structure.md` |
 | 5 画面 | `screen` | director（画面モード） | `criteria/screen.md`・`structure.md` |
+| 6 音声 | `voice` | writing-reviewer（読みモード）だけ | `criteria/script.md` の S-W8・S-W9 |
 
 ## 0 準備
 
@@ -76,7 +77,7 @@ python3 -m zipfile -e /mnt/user-data/uploads/<添付>.zip <workdir>/src
 
 ## 1 インタビュー
 
-質問のフォーム（ask_user_input など）があれば使い、なければ文章でまとめて聞く。答えを `<workdir>/interview.md` に書く（題目だけのときは材料の方針も）。デザインに合わせるなら:
+質問のフォーム（ask_user_input など）があれば使い、なければ文章でまとめて聞く。答えを `<workdir>/interview.md` に書く（読者・一番分かってほしいこと・**見終わったらできること**・**知っている前提**など。答えはユーザーの言葉のまま。題目だけのときは材料の方針も）。デザインに合わせるなら:
 
 ```sh
 python3 <skill>/scripts/extract_design.py <資料…> --report <workdir>/design-report.json --theme <workdir>/theme.json --name <名前>
@@ -127,28 +128,41 @@ node <skill>/scripts/frames.cjs <workdir>/storyboard.json --theme <テーマ> -o
 
 ## 6 音声
 
-VOICEVOX を入れる（約 94MB を GitHub から。会話ごとに要る）。次に 1 行ずつ合成する。
+VOICEVOX を入れる（約 94MB を GitHub から。会話ごとに要る）。次に、合成せずに読みの一覧を書く。
 
 ```sh
 python3 <skill>/scripts/setup_voice.py --agree
+python3 <skill>/scripts/tts.py <workdir>/storyboard.json -o <workdir>/voice --readings
+```
+
+`setup_voice.py` の一覧が出たら、`interview.md` の声が既定（春日部つむぎ、8）でないときだけ、一覧で番号を確かめて `<workdir>/storyboard.json` の `voice.speaker` を進行役として直してから（作り手の役に戻らずに進行役が台本を直す、ただ 1 つの例外。番号のほかは変えない） `--readings` を実行する（`text` は変えないので台本の周回には戻らない）。
+
+`tts.py` が終了コード 3 で終わったら、0 になるまで同じコマンドを繰り返す（100 秒ずつ区切って進む）。`<workdir>/voice/readings.md` ができたら、評価役の宣言をしてから writing-reviewer の読みモードとして一覧を S-W8・S-W9 で**1 回だけ**判定し、`<workdir>/review/voice/r1/combined.json` に書く（形は checker の出力と同じ、`reviewer` は `combined`）。取り込んで判定する（周の上限は 1）:
+
+```sh
+python3 <skill>/scripts/ledger.py ingest <workdir> voice <workdir>/review/voice/r1/combined.json
+python3 <skill>/scripts/ledger.py status <workdir> voice --max-rounds 1
+```
+
+CONTINUE（10）なら、作り手として行の `read`（と `<workdir>/voice_dict.json`）だけを直し、`--readings` をもう一度だけ実行する。字幕 `text` は変えない。PASS か STOP になった、または 1 回直したら、合成する。閉じなかった読みの指摘は残論点（8 報告に出す）。
+
+```sh
 python3 <skill>/scripts/tts.py <workdir>/storyboard.json -o <workdir>/voice
 ```
 
-`setup_voice.py` の一覧が出たら、`interview.md` の声が既定（春日部つむぎ、8）でないときだけ、一覧で番号を確かめて `<workdir>/storyboard.json` の `voice.speaker` を進行役として直してから（作り手の役に戻らずに進行役が台本を直す、ただ 1 つの例外。番号のほかは変えない） `tts.py` を実行する（`text` は変えないので台本の周回には戻らない）。
-
-`tts.py` が終了コード 3 で終わったら、0 になるまで同じコマンドを繰り返す（100 秒ずつ区切って進む）。終わったら実際の声の長さで検査する:
+終了コード 3 は同じく、0 になるまで繰り返す。終わったら実際の声の長さで検査する:
 
 ```sh
 node <skill>/scripts/check_storyboard.cjs <workdir>/storyboard.json --theme <テーマ> --timeline <workdir>/voice/timeline.json
 ```
 
-誤りか「辺 … に label がない」があれば、機械検査の差し戻しとして動作 `do` だけを直して検査し直す（台帳には載せない）。もし `text` か `read` を変えたら `tts.py` をもう一度実行する。
+誤りか「辺 … に label がない」があれば、機械検査の差し戻しとして動作 `do` だけを直して検査し直す（台帳には載せない）。もし `text` か `read` を変えたら `tts.py`（`--readings` なし）をもう一度実行する。
 
 ## 7 組み立てと公開
 
 ```sh
 python3 <skill>/scripts/ledger.py residual <workdir>
-python3 <skill>/scripts/build_player.py <workdir>/storyboard.json --theme <テーマ> --voice <workdir>/voice --review <workdir> -o <workdir>/player.html --artifact
+python3 <skill>/scripts/build_player.py <workdir>/storyboard.json --theme <テーマ> --voice <workdir>/voice -o <workdir>/player.html --artifact
 ```
 
 音声を作らなかったときは `--voice` を外す。`<workdir>/player.html` は、サンドボックスのファイルをそのまま Artifact として公開する（中身を書き写さない。長いので写すと壊れる）。`/mnt/user-data/outputs/` があれば、そこへ写してから公開する。チャットのプレビューでは audio 要素が鳴らないが、プレーヤーは WebAudio で鳴らすので問題ない。

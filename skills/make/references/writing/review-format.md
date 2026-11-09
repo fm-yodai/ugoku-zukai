@@ -59,11 +59,11 @@
 
 - `finding` は `<reviewer>/r<round>/<id>` で指す（`id` はラウンドごとに W1 から振り直されるので、ラウンドを省くと別の指摘と取り違える）
 - `action` は `fixed`（直した）か `rebutted`（理由を付けて直さない）。黙って無視しない
-- must を rebutted にしたまま閉じなかった指摘は残論点になり、再生ページの下の「未解決の指摘」の一覧と最後の報告に出す
+- must を rebutted にしたまま閉じなかった指摘は残論点になり、最後の報告に出す
 
 ## maker-checker 形式（ugoku-zukai）
 
-ugoku-zukai の 2 取材と契約・4 台本・5 画面（フェーズ名 `contract`・`script`・`screen`）では、上の形式に「基準ごとの判定」と「前の周の再確認」を足した次の形式を使う。台帳 `review/ledger.json` に取り込むのは `${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/ledger.py` で、ループの約束は `${CLAUDE_PLUGIN_ROOT}/skills/make/references/loop-protocol.md` が正。
+ugoku-zukai の 2 取材と契約・4 台本・5 画面（フェーズ名 `contract`・`script`・`screen`・`voice`）では、上の形式に「基準ごとの判定」と「前の周の再確認」を足した次の形式を使う。台帳 `review/ledger.json` に取り込むのは `${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/ledger.py` で、ループの約束は `${CLAUDE_PLUGIN_ROOT}/skills/make/references/loop-protocol.md` が正。
 
 ### checker の出力（`<workdir>/review/<phase>/r<N>/<reviewer>.json`）
 

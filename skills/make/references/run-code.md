@@ -25,8 +25,8 @@ SKILL.md の流れ（0 準備〜8 報告）を、Claude Code のサブエージ�
 | `ugoku-zukai:researcher` | 2 | 題材の場所。手元のファイル・フォルダ・リポジトリは絶対パス（作業ツリーのまま）。リポジトリの URL なら URL と clone 先 `<workdir>/repo`。ほかに PR 番号・Web ページの URL | N=1 は `<workdir>/contract.json` と `<workdir>/brief.md`、N≥2 は `<workdir>/review/contract/r<N>/responses.json` |
 | `ugoku-zukai:fact-checker` | 2・4 | 題材の場所（researcher に渡したのと同じ絶対パス。URL を clone したなら `<workdir>/repo`）。`brief.md` は渡さない | `<workdir>/review/<phase>/r<N>/fact-checker.json` |
 | `ugoku-zukai:director` | 2・4・5 | なし | `<workdir>/review/<phase>/r<N>/director.json` |
-| `ugoku-zukai:writing-reviewer` | 4 | なし | `<workdir>/review/script/r<N>/writing-reviewer.json` |
-| `ugoku-zukai:writer` | 4・5・6 | テーマ（`3b1b`・`flat`・`<workdir>/theme.json`） | `<workdir>/storyboard.json`、N≥2 と画面の直しは `<workdir>/review/<phase>/r<N>/responses.json`。機械検査の差し戻しでは応答を書かない |
+| `ugoku-zukai:writing-reviewer` | 4・6 | 6 は「読みモード。`<workdir>/voice/readings.md`」。4 はなし | `<workdir>/review/<phase>/r<N>/writing-reviewer.json`（6 は `<workdir>/review/voice/r<N>/writing-reviewer.json`） |
+| `ugoku-zukai:writer` | 4・5・6 | テーマ（`3b1b`・`flat`・`<workdir>/theme.json`）。6 は phase `voice`（応答は `read` と `voice_dict.json` だけ） | `<workdir>/storyboard.json`、N≥2 と画面・読みの直しは `<workdir>/review/<phase>/r<N>/responses.json`。機械検査の差し戻しでは応答を書かない |
 
 頼み方の例（評価役は同じメッセージで複数呼んで並列にする）:
 
@@ -46,7 +46,7 @@ SKILL.md の流れ（0 準備〜8 報告）を、Claude Code のサブエージ�
 （check_storyboard.cjs・check_text.py の出力をそのまま貼る）
 ```
 
-## 1 周の回し方（2・4・5 で共通）
+## 1 周の回し方（2・4・5 で共通。6 の読みは下の 6 音声）
 
 周の番号 N は 1 から始める。
 
@@ -88,7 +88,7 @@ python3 ${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/workdir.py new <題材の短�
 
 ## 1 インタビュー
 
-AskUserQuestion でまとめて聞き、`<workdir>/interview.md` に書く。デザインに合わせるなら、受け取った資料からテーマを作って検査する（直し方は `themes.md`）。
+AskUserQuestion でまとめて聞き、`<workdir>/interview.md` に書く（読者・一番分かってほしいこと・**見終わったらできること**・**知っている前提**など。答えはユーザーの言葉のまま）。デザインに合わせるなら、受け取った資料からテーマを作って検査する（直し方は `themes.md`）。
 
 ```sh
 python3 ${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/extract_design.py <資料…> --report <workdir>/design-report.json --theme <workdir>/theme.json --name <名前>
@@ -148,24 +148,41 @@ node ${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/frames.cjs <workdir>/storyboard.j
 
 ```sh
 python3 ${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/setup_voice.py --agree
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/tts.py <workdir>/storyboard.json -o <workdir>/voice --readings
+```
+
+`setup_voice.py` の一覧が出たら、`interview.md` の声が既定（春日部つむぎ、8）でないときだけ、一覧で番号を確かめて `<workdir>/storyboard.json` の `voice.speaker` を進行役が直してから（「成果物を自分で書かない」のただ 1 つの例外。番号のほかは変えない） `--readings` を実行する（`text` は変えないので台本の周回には戻らない）。`tts.py` の終了コード 3 は時間で区切っただけ。0 になるまで同じコマンドを繰り返す。
+
+`--readings` は合成せずに `<workdir>/voice/readings.md`（行・字幕・読む文・VOICEVOX の読み）を書く。読みの周（フェーズ名 `voice`。N は 1 から）:
+
+1. writing-reviewer を読みモードで呼ぶ（出力先 `<workdir>/review/voice/r<N>/writing-reviewer.json`）
+2. 取り込んで判定する（周の上限は 2）
+
+```sh
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/ledger.py ingest <workdir> voice <workdir>/review/voice/r<N>/writing-reviewer.json
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/ledger.py status <workdir> voice --max-rounds 2
+```
+
+3. CONTINUE（10）なら writer を phase `voice`・周 N+1 で呼ぶ。直すのは行の `read` と `<workdir>/voice_dict.json` だけ（応答は `<workdir>/review/voice/r<N+1>/responses.json`。進行役が `ledger.py respond <workdir> voice …` で取り込む）。直したら `--readings` を回し直して 1 に戻る
+4. PASS（0）か STOP（20〜22）なら合成する。閉じなかった読みの指摘は残論点（8 報告に出す）
+
+```sh
 python3 ${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/tts.py <workdir>/storyboard.json -o <workdir>/voice
 ```
 
-`setup_voice.py` の一覧が出たら、`interview.md` の声が既定（春日部つむぎ、8）でないときだけ、一覧で番号を確かめて `<workdir>/storyboard.json` の `voice.speaker` を進行役が直してから（「成果物を自分で書かない」のただ 1 つの例外。番号のほかは変えない） `tts.py` を実行する（`text` は変えないので台本の周回には戻らない）。
-
-`tts.py` の終了コード 3 は時間で区切っただけ。0 になるまで同じコマンドを繰り返す。終わったら実際の声の長さで検査する:
+終了コード 3 は同じく時間で区切っただけ。0 になるまで繰り返す。終わったら実際の声の長さで検査する:
 
 ```sh
 node ${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/check_storyboard.cjs <workdir>/storyboard.json --theme <テーマ> --timeline <workdir>/voice/timeline.json
 ```
 
-誤りか「辺 … に label がない」があれば、機械検査の差し戻しで writer を呼び、検査の出力（`--timeline` の結果）を渡して「動作 `do` だけを直す」と頼む（フェーズと周の番号は渡さない。台帳には載せない。戻すのは 5 回まで）。もし `text` か `read` が変わったら、`tts.py` をもう一度実行してから検査し直す。
+誤りか「辺 … に label がない」があれば、機械検査の差し戻しで writer を呼び、検査の出力（`--timeline` の結果）を渡して「動作 `do` だけを直す」と頼む（フェーズと周の番号は渡さない。台帳には載せない。戻すのは 5 回まで）。もし `text` か `read` が変わったら、`tts.py`（`--readings` なし）をもう一度実行してから検査し直す。
 
 ## 7 組み立てと公開
 
 ```sh
 python3 ${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/ledger.py residual <workdir>
-python3 ${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/build_player.py <workdir>/storyboard.json --theme <テーマ> --voice <workdir>/voice --review <workdir> -o <workdir>/player.html --artifact
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/build_player.py <workdir>/storyboard.json --theme <テーマ> --voice <workdir>/voice -o <workdir>/player.html --artifact
 ```
 
 音声を作らなかったときは `--voice` を外す。公開は Artifact ツールで、`file_path` に `<workdir>/player.html`、`title` に台本の題名、`icon` に `video` を渡す（書き写さない）。作業フォルダのファイルを受け付けないと言われたら、スクラッチパッドのフォルダに写してから公開する。
