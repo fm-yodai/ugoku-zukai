@@ -12,6 +12,13 @@ claude.ai では 1 回のコマンドが長いと止められるので、終了�
 印の時刻: 字幕（または read）の {印} の位置までの文を別に解析し、全文のモーラ列と頭から照らし合わせて、
 印の直後のモーラが鳴り始める時刻（行の頭からの秒）を出す。player は印の時刻に動作を始める。
 
+合成の前に、半角スペースと全角スペース（U+3000）を消す（スペースがあると 0.3〜0.7 秒の間が空くため）。
+ただし半角スペースの左右が両方とも英数字（[A-Za-z0-9]）なら残す。印の位置は消した分だけ前へずらす。
+間を入れたいときは、台本の read に読点（、）を書く。時刻表の text は整える前の文のまま（player の「音声が古い」検査と合わせる）。
+
+--dict PATH: スキルの辞書（assets/voicevox_user_dict.json）に重ねる辞書。形は同じ { words: [...] }。
+既定は WORKDIR の親の voice_dict.json（あれば）。同じ surface は --dict の方を採る。
+
 声・速さは、引数 → 台本の voice → 既定（春日部つむぎ 8・1.1）の順に決まる。
 合成の前に assets/voicevox_user_dict.json の語をユーザー辞書として使う（読みの誤りはそこに足す）。
 """
@@ -50,13 +57,39 @@ def parse_marks(text):
     return "".join(out), marks
 
 
+def normalize(text, marks):
+    """合成用に文を整える。全角スペースと、英数字に挟まれない半角スペースを消し、印の位置を消した分だけ前へずらす。
+    返すのは (整えた文, 新しい印の位置)。"""
+    alnum = re.compile(r"[A-Za-z0-9]")
+    out, dropped = [], []
+    for i, c in enumerate(text):
+        drop = c == "\u3000" or (c == " " and not (i > 0 and i + 1 < len(text) and alnum.fullmatch(text[i - 1]) and alnum.fullmatch(text[i + 1])))
+        if drop:
+            dropped.append(i)
+        else:
+            out.append(c)
+    new = {k: pos - sum(1 for d in dropped if d < pos) for k, pos in marks.items()}
+    return "".join(out), new
+
+
+def dict_key_of(paths):
+    """存在する辞書ファイルの中身をつないだ sha1 の頭 8 桁。1 つも無ければ "none"。"""
+    raw = b""
+    found = False
+    for p in paths:
+        if p and os.path.exists(p):
+            raw += open(p, "rb").read()
+            found = True
+    return hashlib.sha1(raw).hexdigest()[:8] if found else "none"
+
+
 def g(o, k):
     v = o.get(k) if isinstance(o, dict) else getattr(o, k, None)
     return v or 0
 
 
 class Voice:
-    def __init__(self, home):
+    def __init__(self, home, extra_dict=None):
         try:
             from voicevox_core.blocking import Onnxruntime, OpenJtalk, Synthesizer, VoiceModelFile, UserDict
         except ImportError:
@@ -67,21 +100,25 @@ class Voice:
             sys.exit(f"VOICEVOX の置き場 {home} に辞書がない。先に python3 setup_voice.py --agree を実行する")
         ort = Onnxruntime.load_once(filename=setup_voice.ort_lib(home))
         self.oj = OpenJtalk(os.path.join(home, setup_voice.DICT_DIR))
-        self.dict_key = self._user_dict(UserDict)
+        self.dict_key = self._user_dict(UserDict, extra_dict)
         self.synth = Synthesizer(ort, self.oj)
         self.home, self.loaded = home, set()
         self.VoiceModelFile = VoiceModelFile
 
-    def _user_dict(self, UserDict):
-        if not os.path.exists(USER_DICT):
+    def _user_dict(self, UserDict, extra_dict=None):
+        paths = [p for p in (USER_DICT, extra_dict) if p and os.path.exists(p)]
+        if not paths:
             return "none"
-        raw = open(USER_DICT, encoding="utf-8").read()
+        words = {}
+        for p in paths:   # 同じ surface は後の辞書を採る
+            for w in json.load(open(p, encoding="utf-8")).get("words", []):
+                words[w["surface"]] = w
         ud = UserDict()
-        for w in json.loads(raw).get("words", []):
+        for w in words.values():
             ud.add_word(self.vc.UserDictWord(surface=w["surface"], pronunciation=w["pronunciation"], accent_type=int(w.get("accent_type", 0)),
                                              word_type=w.get("word_type", "COMMON_NOUN"), priority=int(w.get("priority", 5))))
         self.oj.use_user_dict(ud)
-        return hashlib.sha1(raw.encode()).hexdigest()[:8]
+        return dict_key_of(paths)
 
     def ensure(self, speaker):
         if speaker in self.loaded:
@@ -163,7 +200,8 @@ def collect(sb):
         for i, ln in enumerate(sc["lines"]):
             raw = ln.get("read") or ln["text"]
             text, marks = parse_marks(raw)
-            rows.append({"id": ln["id"], "scene": sc["id"], "first": i == 0, "text": text, "marks": marks})
+            spoken, smarks = normalize(text, marks)
+            rows.append({"id": ln["id"], "scene": sc["id"], "first": i == 0, "text": text, "spoken": spoken, "marks": smarks})
     return rows
 
 
@@ -180,6 +218,7 @@ def main():
     ap.add_argument("--speed", type=float)
     ap.add_argument("--budget", type=float, default=100)
     ap.add_argument("--home", default=setup_voice.default_home())
+    ap.add_argument("--dict", help="スキルの辞書に重ねる辞書（既定は WORKDIR の親の voice_dict.json）")
     ap.add_argument("--no-mix", action="store_true", help="時刻表だけ書き、まとめた音声は作らない")
     a = ap.parse_args()
     sb = json.load(open(a.storyboard, encoding="utf-8"))
@@ -189,21 +228,22 @@ def main():
     adir = os.path.join(a.out, "audio")
     os.makedirs(adir, exist_ok=True)
     t0 = time.time()
-    voice = Voice(a.home)
+    extra = a.dict or os.path.join(os.path.dirname(os.path.abspath(a.out)), "voice_dict.json")
+    voice = Voice(a.home, extra if os.path.exists(extra) else None)
     import voicevox_core
     ver = getattr(voicevox_core, "__version__", setup_voice.CORE_VER)
     rows = collect(sb)
     done, made = {}, 0
     for r in rows:
-        key = hashlib.sha1(json.dumps([r["text"], sorted(r["marks"].items()), speaker, speed, voice.dict_key, ver], ensure_ascii=False).encode()).hexdigest()[:12]
+        key = hashlib.sha1(json.dumps([r["spoken"], sorted(r["marks"].items()), speaker, speed, voice.dict_key, ver], ensure_ascii=False).encode()).hexdigest()[:12]
         base = os.path.join(adir, f"{r['id']}.{key}")
         if os.path.exists(base + ".json") and os.path.exists(base + ".wav"):
             done[r["id"]] = (base, json.load(open(base + ".json", encoding="utf-8")))
             continue
         if time.time() - t0 > a.budget:
             continue
-        wav, dur, moras = voice.line(r["text"], speaker, speed)
-        info = {"id": r["id"], "text": r["text"], "dur": round(dur, 3), "marks": mark_times(voice, r["text"], r["marks"], moras, speaker), "moras": [[k, round(t, 3)] for k, t in moras]}
+        wav, dur, moras = voice.line(r["spoken"], speaker, speed)
+        info = {"id": r["id"], "text": r["text"], "dur": round(dur, 3), "marks": mark_times(voice, r["spoken"], r["marks"], moras, speaker), "moras": [[k, round(t, 3)] for k, t in moras]}
         for old in os.listdir(adir):   # 同じ行の古い版を消す
             if old.startswith(r["id"] + ".") and not old.startswith(os.path.basename(base)):
                 os.remove(os.path.join(adir, old))
