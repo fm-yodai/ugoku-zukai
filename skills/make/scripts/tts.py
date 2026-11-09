@@ -21,6 +21,7 @@ claude.ai では 1 回のコマンドが長いと止められるので、終了�
 
 --readings: 合成はせず、各行の VOICEVOX の読み（かな）を WORKDIR/readings.md に表で書く（誤読を音にする前に見つけるため）。
   行ごとの結果は WORKDIR/readings/<id>.<鍵>.json に残す。--budget を超えたら終了コード 3（同じコマンドで続きから）。
+  読みはアクセント句ごとのかなを「/」でつなぎ、間は前後の「/」なしの「、」で出す（例: テジュンワ/ゼロジュンビカラ、キュウダンデ）。
   audio/・timeline.json・narration は作らない。
 
 声・速さは、引数 → 台本の voice → 既定（春日部つむぎ 8・1.1）の順に決まる。
@@ -165,6 +166,19 @@ class Voice:
         out.append(("", t / fr))
         return out
 
+    def phrases(self, text, speaker):
+        """文をアクセント句ごとのかな文字列の列にする。句の後ろに間があれば「、」を 1 要素として入れる（読みの一覧用。合成はしない）"""
+        if not text.strip():
+            return []
+        self.ensure(speaker)
+        q = self.synth.create_audio_query(text, speaker)
+        out = []
+        for ap in q.accent_phrases:
+            out.append("".join(g(m, "text") for m in ap.moras))
+            if ap.pause_mora:
+                out.append("、")
+        return out
+
     def kana(self, text, speaker):
         """文のモーラのかなの列（印の位置を探すため。合成はしない）"""
         if not text.strip():
@@ -223,17 +237,16 @@ def write_readings(voice, rows, out, speaker, speed, ver, t0, budget):
     """各行の読み（かな）を readings/<id>.<鍵>.json に残し、全行そろったら readings.md を書く。budget 超過は終了コード 3"""
     rdir = os.path.join(out, "readings")
     os.makedirs(rdir, exist_ok=True)
-    voice.ensure(speaker)   # kana() は声のモデルが読み込まれていないと失敗する
     got, made = {}, 0
     for r in rows:
-        key = hashlib.sha1(json.dumps([r["spoken"], speaker, voice.dict_key, ver], ensure_ascii=False).encode()).hexdigest()[:12]
+        key = hashlib.sha1(json.dumps(["phrases", r["spoken"], speaker, voice.dict_key, ver], ensure_ascii=False).encode()).hexdigest()[:12]
         path = os.path.join(rdir, f"{r['id']}.{key}.json")
         if os.path.exists(path):
             got[r["id"]] = json.load(open(path, encoding="utf-8"))
             continue
         if time.time() - t0 > budget:
             continue
-        info = {"id": r["id"], "text": r["text"], "spoken": r["spoken"], "kana": voice.kana(r["spoken"], speaker)}
+        info = {"id": r["id"], "text": r["text"], "spoken": r["spoken"], "kana": voice.phrases(r["spoken"], speaker)}
         for old in os.listdir(rdir):   # 同じ行の古い版を消す
             if old.startswith(r["id"] + ".") and old != os.path.basename(path):
                 os.remove(os.path.join(rdir, old))
@@ -248,7 +261,7 @@ def write_readings(voice, rows, out, speaker, speed, ver, t0, budget):
     md = [f"# 読みの一覧（話者 {speaker}、話速 {speed}）", "", "| 行 | 字幕 | 読む文 | VOICEVOX の読み |", "|---|---|---|---|"]
     for r in rows:
         i = got[r["id"]]
-        md.append(f"| {r['id']} | {md_cell(i['text'])} | {md_cell(i['spoken'])} | {md_cell('/'.join(i['kana']))} |")
+        md.append(f"| {r['id']} | {md_cell(i['text'])} | {md_cell(i['spoken'])} | {md_cell('/'.join(i['kana']).replace('/、/', '、').replace('/、', '、'))} |")
     path = os.path.join(out, "readings.md")
     with open(path, "w", encoding="utf-8") as f:
         f.write("\n".join(md) + "\n")
