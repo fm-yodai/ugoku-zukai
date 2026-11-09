@@ -93,5 +93,10 @@ grep -q '\*\*声\*\*（`voice`）' ../../agents/writer.md || { echo "NG: writer.
 for f in $docs; do
   grep -q "voice.speaker" "$f" || { echo "NG: $f に voice.speaker を直す手順がない"; fail=1; }
 done
+# 聞いて分かる文の規則
+for i in 1 2 3 4 5 6 7 8 9; do grep -q "^| SP-$i " references/writing/spoken.md || { echo "NG: spoken.md に SP-$i がない"; fail=1; }; done
+grep -q "について説明します" references/storyboard.md || { echo "NG: storyboard.md の title に問いでない例がない"; fail=1; }
+grep -q "問い・章の扉" references/storyboard.md && { echo "NG: storyboard.md の title がまだ「問い・章の扉」"; fail=1; }
+grep -q "spoken.md" references/writing/rules.md || { echo "NG: rules.md が spoken.md を指していない"; fail=1; }
 [ $fail = 0 ] && echo "M3 の検査: すべて OK" || echo "M3 の検査: NG あり"
 exit $fail

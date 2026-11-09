@@ -42,7 +42,7 @@ python3 scripts/build_player.py storyboard.json -o preview.html     # 音声な�
 
 | type | 用途 | 部品の id（動作の対象） |
 |---|---|---|
-| `title` | 問い・章の扉。場面の頭で自動で出る | `text` `sub` |
+| `title` | 題。「〜について説明します」の形でも、問いでもよい。場面の頭で自動で出る | `text` `sub` |
 | `list` | 箇条（困りごと・要点） | 各項目の `id` |
 | `compare` | 2〜4 案の比較カード | カードの `id`、点は `カード.1` `カード.2`…（または点の `id`） |
 | `table` | 表 | 行の `id`（行の全セル）、列の `id`（列の全セル）、セル `行.列`、見出し `header` |
@@ -66,6 +66,10 @@ python3 scripts/build_player.py storyboard.json -o preview.html     # 音声な�
 
 ```json
 { "type": "title", "text": "経費の申請は、誰の手を通って\n経理に届くのでしょうか", "sub": "金額で変わる承認ルート" }
+```
+
+```json
+{ "type": "title", "text": "動画作成プラグイン ugoku-zukai について\n説明します", "sub": "題材を渡してから再生ページができるまで" }
 ```
 
 ### list
