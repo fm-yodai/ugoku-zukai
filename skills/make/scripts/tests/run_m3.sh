@@ -6,6 +6,19 @@ fail=0
 bash scripts/tests/run_m1.sh || fail=1
 python3 scripts/tests/test_ledger.py >/dev/null 2>&1 || { echo "NG: test_ledger.py"; python3 scripts/tests/test_ledger.py; fail=1; }
 python3 scripts/tests/test_tts_text.py >/dev/null 2>&1 || { echo "NG: test_tts_text.py"; python3 scripts/tests/test_tts_text.py; fail=1; }
+# 読みの一覧（tts.py --readings。VOICEVOX が手元にあるときだけ。合成はしない）
+vh=$(python3 -c "import sys; sys.path.insert(0,'scripts'); import setup_voice; print(setup_voice.default_home())")
+if python3 -c "import voicevox_core" >/dev/null 2>&1 && [ -d "$vh" ]; then
+  rd=$(mktemp -d)
+  python3 scripts/tts.py scripts/tests/text/warn.json -o "$rd/voice" --readings >/dev/null 2>&1; code=$?
+  while [ $code = 3 ]; do python3 scripts/tts.py scripts/tests/text/warn.json -o "$rd/voice" --readings >/dev/null 2>&1; code=$?; done
+  [ $code = 0 ] && [ -f "$rd/voice/readings.md" ] || { echo "NG: tts.py --readings が readings.md を書かない（終了コード $code）"; fail=1; }
+  [ -f "$rd/voice/readings.md" ] && grep -q "^| l1 " "$rd/voice/readings.md" || { echo "NG: readings.md に l1 の行がない"; fail=1; }
+  ls "$rd/voice"/*.wav "$rd/voice"/audio/*.wav >/dev/null 2>&1 && { echo "NG: --readings が合成している"; fail=1; }
+  rm -rf "$rd"
+else
+  echo "読みの一覧の検査: VOICEVOX がないので飛ばす"
+fi
 for d in scripts/tests/contracts/ok_*; do
   python3 scripts/check_contract.py "$d" >/dev/null 2>&1 || { echo "NG: 契約 $d が通らない"; fail=1; }
 done

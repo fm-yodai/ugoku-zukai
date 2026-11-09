@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """台本のナレーションを VOICEVOX で 1 行ずつ合成し、時刻表（timeline.json）とまとめた音声（narration.mp3）を書く。
 
-使い方: python3 tts.py storyboard.json -o WORKDIR [--speaker 8] [--speed 1.1] [--budget 100] [--home DIR]
+使い方: python3 tts.py storyboard.json -o WORKDIR [--speaker 8] [--speed 1.1] [--budget 100] [--home DIR] [--readings]
   WORKDIR/audio/   行ごとの wav と、モーラの時刻（*.json）。文・読み・声・速さ・辞書が同じ行は作り直さない
   WORKDIR/timeline.json  { source, speaker, speed, credit, lines: [{ id, scene, start, dur, marks: { 印: 秒 }, text }] }
   WORKDIR/narration.mp3  全行を時刻表どおりに並べた 1 本（ffmpeg がなければ narration.wav）
@@ -18,6 +18,10 @@ claude.ai では 1 回のコマンドが長いと止められるので、終了�
 
 --dict PATH: スキルの辞書（assets/voicevox_user_dict.json）に重ねる辞書。形は同じ { words: [...] }。
 既定は WORKDIR の親の voice_dict.json（あれば）。同じ surface は --dict の方を採る。
+
+--readings: 合成はせず、各行の VOICEVOX の読み（かな）を WORKDIR/readings.md に表で書く（誤読を音にする前に見つけるため）。
+  行ごとの結果は WORKDIR/readings/<id>.<鍵>.json に残す。--budget を超えたら終了コード 3（同じコマンドで続きから）。
+  audio/・timeline.json・narration は作らない。
 
 声・速さは、引数 → 台本の voice → 既定（春日部つむぎ 8・1.1）の順に決まる。
 合成の前に assets/voicevox_user_dict.json の語をユーザー辞書として使う（読みの誤りはそこに足す）。
@@ -210,6 +214,47 @@ def to_pcm(wav):
         return w.getparams(), w.readframes(w.getnframes())
 
 
+def md_cell(s):
+    """表の 1 マスに入れる文。| は \| にし、改行は空白にする"""
+    return s.replace("|", "\\|").replace("\n", " ")
+
+
+def write_readings(voice, rows, out, speaker, speed, ver, t0, budget):
+    """各行の読み（かな）を readings/<id>.<鍵>.json に残し、全行そろったら readings.md を書く。budget 超過は終了コード 3"""
+    rdir = os.path.join(out, "readings")
+    os.makedirs(rdir, exist_ok=True)
+    voice.ensure(speaker)   # kana() は声のモデルが読み込まれていないと失敗する
+    got, made = {}, 0
+    for r in rows:
+        key = hashlib.sha1(json.dumps([r["spoken"], speaker, voice.dict_key, ver], ensure_ascii=False).encode()).hexdigest()[:12]
+        path = os.path.join(rdir, f"{r['id']}.{key}.json")
+        if os.path.exists(path):
+            got[r["id"]] = json.load(open(path, encoding="utf-8"))
+            continue
+        if time.time() - t0 > budget:
+            continue
+        info = {"id": r["id"], "text": r["text"], "spoken": r["spoken"], "kana": voice.kana(r["spoken"], speaker)}
+        for old in os.listdir(rdir):   # 同じ行の古い版を消す
+            if old.startswith(r["id"] + ".") and old != os.path.basename(path):
+                os.remove(os.path.join(rdir, old))
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(info, f, ensure_ascii=False)
+        got[r["id"]] = info
+        made += 1
+    left = [r["id"] for r in rows if r["id"] not in got]
+    if left:
+        print(f"{made} 行の読みを出した。残り {len(left)} 行（{', '.join(left[:6])}{' …' if len(left) > 6 else ''}）。同じコマンドをもう一度実行する")
+        sys.exit(3)
+    md = [f"# 読みの一覧（話者 {speaker}、話速 {speed}）", "", "| 行 | 字幕 | 読む文 | VOICEVOX の読み |", "|---|---|---|---|"]
+    for r in rows:
+        i = got[r["id"]]
+        md.append(f"| {r['id']} | {md_cell(i['text'])} | {md_cell(i['spoken'])} | {md_cell('/'.join(i['kana']))} |")
+    path = os.path.join(out, "readings.md")
+    with open(path, "w", encoding="utf-8") as f:
+        f.write("\n".join(md) + "\n")
+    print("読みの一覧:", path)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("storyboard")
@@ -219,6 +264,7 @@ def main():
     ap.add_argument("--budget", type=float, default=100)
     ap.add_argument("--home", default=setup_voice.default_home())
     ap.add_argument("--dict", help="スキルの辞書に重ねる辞書（既定は WORKDIR の親の voice_dict.json）")
+    ap.add_argument("--readings", action="store_true", help="合成せず、読みの一覧 readings.md だけを書く")
     ap.add_argument("--no-mix", action="store_true", help="時刻表だけ書き、まとめた音声は作らない")
     a = ap.parse_args()
     sb = json.load(open(a.storyboard, encoding="utf-8"))
@@ -226,13 +272,17 @@ def main():
     speaker = a.speaker if a.speaker is not None else int(vo.get("speaker", DEFAULT_SPEAKER))
     speed = a.speed if a.speed is not None else float(vo.get("speed", DEFAULT_SPEED))
     adir = os.path.join(a.out, "audio")
-    os.makedirs(adir, exist_ok=True)
+    if not a.readings:
+        os.makedirs(adir, exist_ok=True)
     t0 = time.time()
     extra = a.dict or os.path.join(os.path.dirname(os.path.abspath(a.out)), "voice_dict.json")
     voice = Voice(a.home, extra if os.path.exists(extra) else None)
     import voicevox_core
     ver = getattr(voicevox_core, "__version__", setup_voice.CORE_VER)
     rows = collect(sb)
+    if a.readings:
+        write_readings(voice, rows, a.out, speaker, speed, ver, t0, a.budget)
+        return
     done, made = {}, 0
     for r in rows:
         key = hashlib.sha1(json.dumps([r["spoken"], sorted(r["marks"].items()), speaker, speed, voice.dict_key, ver], ensure_ascii=False).encode()).hexdigest()[:12]
