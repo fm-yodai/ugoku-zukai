@@ -48,11 +48,12 @@ __FONT_LINK__
   .uz-tip { position: fixed; z-index: 10; max-width: min(320px, calc(100vw - 32px)); padding: 6px 10px; font-size: 12px; line-height: 1.5;
             color: var(--ink); background: var(--page); border: 1px solid var(--line); border-radius: 6px; box-shadow: 0 4px 12px rgba(0, 0, 0, .18); overflow-wrap: anywhere; }
   .uz-tip div { white-space: pre-wrap; }
+  /* 2 列にするのは一覧が出ているときだけ（:has を知らないブラウザでは 1 列のまま、一覧は下に出る） */
   @media (min-width: 960px) {
-    .uz-wrap { grid-template-columns: minmax(0, 1fr) 300px; align-items: start; }
-    .uz-wrap > * { grid-column: 1; }
+    .uz-wrap:has(> #uz-chapters:not([hidden])) { grid-template-columns: minmax(0, 1fr) 300px; align-items: start; }
+    .uz-wrap:has(> #uz-chapters:not([hidden])) > * { grid-column: 1; }
     /* 一覧の高さは図・再生バー・注記の列に合わせる（contain: size で行の高さを押し広げない） */
-    #uz-chapters { grid-column: 2; grid-row: 1 / span 3; align-self: stretch; contain: size; max-height: none; border-top: 0; border-left: 1px solid var(--line); padding: 0 0 0 10px; }
+    .uz-wrap:has(> #uz-chapters:not([hidden])) > #uz-chapters { grid-column: 2; grid-row: 1 / span 3; align-self: stretch; contain: size; max-height: none; border-top: 0; border-left: 1px solid var(--line); padding: 0 0 0 10px; }
   }
   .uz-err { color: var(--err); white-space: pre-wrap; }
 </style>
@@ -160,8 +161,10 @@ const UZ_DATA = /*UZ:DATA*/null;
       if (l >= 0) {
         const el = marks.lines[l].el, nav = $("uz-chapters");
         el.setAttribute("aria-current", "true");
-        // 再生中は今の行が一覧の中で見えるように（ページはスクロールしない）
-        if (playing && nav.scrollHeight > nav.clientHeight) {
+        // 再生中は今の行が一覧の中で見えるように（ページはスクロールしない）。
+        // 根拠の吹き出しが出ている間は動かさない（一覧のスクロールで吹き出しが閉じるため）
+        const tip = $("uz-tip");
+        if (playing && (!tip || tip.hidden) && nav.scrollHeight > nav.clientHeight) {
           const top = el.offsetTop - nav.offsetTop, bottom = top + el.offsetHeight;
           if (top < nav.scrollTop || bottom > nav.scrollTop + nav.clientHeight) nav.scrollTop = Math.max(0, top - nav.clientHeight / 3);
         }
@@ -183,7 +186,16 @@ const UZ_DATA = /*UZ:DATA*/null;
     tip.className = "uz-tip"; tip.id = "uz-tip"; tip.setAttribute("role", "tooltip"); tip.hidden = true;
     document.body.append(tip);
     let pinned = null;
-    const show = (row, sources) => {
+    // マウスを乗せて出すのはポインタで重ねられる端末だけ。タッチでは ※ を押して出す。
+    // フォーカスで出すのはキーボードで移ったとき（:focus-visible）だけ（タップでのフォーカスでは出さない）
+    const canHover = !!(window.matchMedia && window.matchMedia("(hover: hover)").matches);
+    const byKeyboard = el => { try { return el.matches(":focus-visible"); } catch (e) { return true; } };
+    // 吹き出しは 1 つを使い回すので、aria-describedby は今出している行にだけ付ける
+    let described = null;
+    const describe = el => { if (described) described.removeAttribute("aria-describedby"); described = el; if (el) el.setAttribute("aria-describedby", "uz-tip"); };
+    const conceal = () => { tip.hidden = true; describe(null); };
+    const show = (row, sources, lb) => {
+      describe(lb);
       tip.replaceChildren(...sources.map(s => { const d = document.createElement("div"); d.textContent = s; return d; }));
       tip.hidden = false;
       const r = row.getBoundingClientRect(), w = tip.offsetWidth, h = tip.offsetHeight;
@@ -191,7 +203,7 @@ const UZ_DATA = /*UZ:DATA*/null;
       const top = r.bottom + 4 + h > window.innerHeight ? Math.max(8, r.top - h - 4) : r.bottom + 4;
       tip.style.left = left + "px"; tip.style.top = top + "px";
     };
-    const hide = () => { tip.hidden = true; if (pinned) { pinned.setAttribute("aria-expanded", "false"); pinned = null; } };
+    const hide = () => { conceal(); if (pinned) { pinned.setAttribute("aria-expanded", "false"); pinned = null; } };
     const lines = [], chs = [];
     for (const ch of chapters) {
       const li = document.createElement("li"), cb = btn("uz-chapter", ch.start, ch.title), ol = document.createElement("ol");
@@ -205,15 +217,15 @@ const UZ_DATA = /*UZ:DATA*/null;
           const sb = document.createElement("button");
           sb.type = "button"; sb.className = "uz-src-btn"; sb.textContent = "※";
           sb.setAttribute("aria-label", "根拠"); sb.setAttribute("aria-expanded", "false"); sb.setAttribute("aria-controls", "uz-tip");
-          lb.setAttribute("aria-describedby", "uz-tip");
-          const enter = () => { if (!pinned) show(row, ln.sources); };
-          const leave = () => { if (!pinned) tip.hidden = true; };
-          lb.addEventListener("mouseenter", enter); lb.addEventListener("focus", enter);
-          lb.addEventListener("mouseleave", leave); lb.addEventListener("blur", leave);
+          const enter = () => { if (!pinned) show(row, ln.sources, lb); };
+          const leave = () => { if (!pinned) conceal(); };
+          if (canHover) { lb.addEventListener("mouseenter", enter); lb.addEventListener("mouseleave", leave); }
+          lb.addEventListener("focus", () => { if (byKeyboard(lb)) enter(); });
+          lb.addEventListener("blur", () => { if (!canHover || !lb.matches(":hover")) leave(); });
           sb.addEventListener("click", e => {
             e.stopPropagation();
             if (pinned === sb) { hide(); return; }
-            hide(); pinned = sb; sb.setAttribute("aria-expanded", "true"); show(row, ln.sources);
+            hide(); pinned = sb; sb.setAttribute("aria-expanded", "true"); show(row, ln.sources, lb);
           });
           row.append(sb);
         }
