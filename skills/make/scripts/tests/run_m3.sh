@@ -11,6 +11,11 @@ done
 for d in scripts/tests/contracts/bad_*; do
   python3 scripts/check_contract.py "$d" >/dev/null 2>&1 && { echo "NG: 契約 $d が通ってしまう"; fail=1; }
 done
+# 視聴者の言葉と読みの基準（C-D5・C-D6・S-W5〜S-W9）と、契約の can_do・knows
+for id in C-D5 C-D6; do grep -q "^| $id " references/criteria/contract.md || { echo "NG: contract.md に $id がない"; fail=1; }; done
+for id in S-W5 S-W6 S-W7 S-W8 S-W9; do grep -q "^| $id " references/criteria/script.md || { echo "NG: script.md に $id がない"; fail=1; }; done
+grep -q '`voice`' references/criteria/README.md || { echo "NG: criteria/README.md に台帳のフェーズ voice がない"; fail=1; }
+grep -q "can_do" scripts/check_contract.py || { echo "NG: check_contract.py が can_do を見ない"; fail=1; }
 # 字幕と読み（S-M2〜S-M4）
 python3 scripts/check_text.py scripts/tests/text/ok.json >/dev/null 2>&1 || { echo "NG: text/ok.json が通らない"; fail=1; }
 out=$(python3 scripts/check_text.py scripts/tests/text/bad.json 2>&1) && { echo "NG: text/bad.json が通ってしまう"; fail=1; }

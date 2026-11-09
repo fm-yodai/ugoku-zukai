@@ -9,9 +9,11 @@ contract.json の形（researcher が書く。台本の物差しになる）:
   "mode": "code" | "repo" | "pr" | "web" | "doc" | "output" | "topic",          題材の種類（SKILL.md Phase 0）
   "structure": "flow" | "diff" | "overview" | "concept" | "compare",            構成の型（references/structures.md）
   "audience": "読者",
+  "can_do": "見終わったらできること（1 文）",
+  "knows": "知っている前提（例: Claude は使っているがプラグインは初めて）",
   "takeaway": "一番分かってほしいこと（1 文）",
   "scope": "範囲と切り口（含めるもの・外すもの）",                              任意（interview.md から）
-  "claims":  [{"id": "K1", "text": "言い切ること", "source": ["path:line" | "PR #n" | "#n" | "https://… 「引用」" | "file:p.N", …]}],   3〜5 項
+  "claims":  [{"id": "K1", "text": "言い切ること。knows の人が聞いて分かる言葉で", "source": ["path:line" | "PR #n" | "#n" | "https://… 「引用」" | "file:p.N", …]}],   3〜5 項
   "paths":   [{"id": "P1", "text": "見せる経路を言葉で", "steps": ["部品 id", …], "source": [...]}],     diagram.type が graph / sequence / swimlane のときだけ 1 項以上必須（それ以外は任意）
   "diagram": {"type": "<主に使う図の種類>", "reason": "選んだ理由",
               "compared": {"<ほかの図の種類>": "選ばなかった理由", …},         2 つ以上
@@ -66,7 +68,7 @@ def main():
         sys.exit(__doc__)
     c = json.load(open(os.path.join(sys.argv[1], "contract.json"), encoding="utf-8"))
     errors, warns = [], []
-    for k in ("mode", "structure", "audience", "takeaway", "claims", "diagram", "budget"):
+    for k in ("mode", "structure", "audience", "can_do", "knows", "takeaway", "claims", "diagram", "budget"):
         if not c.get(k):
             errors.append(f"C-M1: {k} が無い")
     claims = c.get("claims") or []

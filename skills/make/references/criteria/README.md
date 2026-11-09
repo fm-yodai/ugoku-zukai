@@ -5,11 +5,11 @@
 | ファイル | フェーズ | 対象 |
 |---|---|---|
 | `contract.md`（C-） | 2 取材と契約 | `contract.json` と `brief.md` |
-| `script.md`（S-） | 4 台本 | `storyboard.json` の字幕 `text`・読み `read`・根拠 `source`・動作 `do` |
+| `script.md`（S-） | 4 台本・6 音声 | `storyboard.json` の字幕 `text`・読み `read`・根拠 `source`・動作 `do`と、`voice/readings.md`（S-W8・S-W9） |
 | `structure.md`（G-） | 4 台本・5 画面 | 図の宣言（`figures`）と、それを動かす動作（`do`） |
 | `screen.md`（V-） | 5 画面・6 音声 | `frames/` の各行の落ち着いたコマ（`sheet-NN.png`・`svg/<行 id>.svg`・`frames.json`）と `check_storyboard.cjs` の配置の結果 |
 
-フェーズの番号は SKILL.md の流れ（0 準備・1 インタビュー・2 取材と契約・3 人の確認・4 台本・5 画面・6 音声・7 組み立てと公開・8 報告）に合わせてある。台帳のフェーズ名は `contract`（2）・`script`（4）・`screen`（5）。
+フェーズの番号は SKILL.md の流れ（0 準備・1 インタビュー・2 取材と契約・3 人の確認・4 台本・5 画面・6 音声・7 組み立てと公開・8 報告）に合わせてある。台帳のフェーズ名は `contract`（2）・`script`（4）・`screen`（5）・`voice`（6）。
 
 ## 項目の読み方
 
