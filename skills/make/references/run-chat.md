@@ -46,7 +46,7 @@ python3 <skill>/scripts/ledger.py status <workdir> <phase> --max-rounds 2
 | 2 取材と契約 | `contract` | fact-checker（契約モード）・director（構造モード） | `criteria/contract.md` |
 | 4 台本 | `script` | writing-reviewer・fact-checker（台本モード）・director（計画モード） | `criteria/script.md`・`structure.md` |
 | 5 画面 | `screen` | director（画面モード） | `criteria/screen.md`・`structure.md` |
-| 6 音声 | `voice` | writing-reviewer（読みモード）だけ | `criteria/script.md` の S-W8・S-W9 |
+| 6 音声 | `voice` | writing-reviewer（読みモード）だけ（判定は 1 回だけ。下の 6 音声） | `criteria/script.md` の S-W8・S-W9 |
 
 ## 0 準備
 
@@ -137,14 +137,14 @@ python3 <skill>/scripts/tts.py <workdir>/storyboard.json -o <workdir>/voice --re
 
 `setup_voice.py` の一覧が出たら、`interview.md` の声が既定（春日部つむぎ、8）でないときだけ、一覧で番号を確かめて `<workdir>/storyboard.json` の `voice.speaker` を進行役として直してから（作り手の役に戻らずに進行役が台本を直す、ただ 1 つの例外。番号のほかは変えない） `--readings` を実行する（`text` は変えないので台本の周回には戻らない）。
 
-`tts.py` が終了コード 3 で終わったら、0 になるまで同じコマンドを繰り返す（100 秒ずつ区切って進む）。`<workdir>/voice/readings.md` ができたら、評価役の宣言をしてから writing-reviewer の読みモードとして一覧を S-W8・S-W9 で**1 回だけ**判定し、`<workdir>/review/voice/r1/combined.json` に書く（形は checker の出力と同じ、`reviewer` は `combined`）。取り込んで判定する（周の上限は 1）:
+`tts.py` が終了コード 3 で終わったら、0 になるまで同じコマンドを繰り返す（100 秒ずつ区切って進む）。`<workdir>/voice/readings.md` ができたら、評価役の宣言をしてから writing-reviewer の読みモードとして一覧を S-W8・S-W9 で**1 回だけ**判定し、`<workdir>/review/voice/r1/combined.json` に書く（形は checker の出力と同じ、`reviewer` は `combined`）。取り込んで判定する:
 
 ```sh
 python3 <skill>/scripts/ledger.py ingest <workdir> voice <workdir>/review/voice/r1/combined.json
 python3 <skill>/scripts/ledger.py status <workdir> voice --max-rounds 1
 ```
 
-CONTINUE（10）なら、作り手として行の `read`（と `<workdir>/voice_dict.json`）だけを直し、`--readings` をもう一度だけ実行する。字幕 `text` は変えない。PASS か STOP になった、または 1 回直したら、合成する。閉じなかった読みの指摘は残論点（8 報告に出す）。
+チャットでは評価役の判定を 1 回だけ行う。`ingest` → `status … --max-rounds 1` の判定にかかわらず、open の項目があれば作り手として行の `read`（と `<workdir>/voice_dict.json`）だけを 1 回直し、`responses.json` を書いて `ledger.py respond <workdir> voice …` で取り込み、`--readings` をもう一度回してから合成へ進む。再判定はしないので、直した項目は fixed のまま残論点（`residual.md`）に載る。8 報告に「読みは直したが再確認していない」と書く。字幕 `text` は変えない。PASS（open の項目なし）ならそのまま合成する。
 
 ```sh
 python3 <skill>/scripts/tts.py <workdir>/storyboard.json -o <workdir>/voice

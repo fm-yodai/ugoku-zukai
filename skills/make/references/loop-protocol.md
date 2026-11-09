@@ -25,12 +25,12 @@
 
 ## 合格と打ち切り
 
-- `voice` の周の上限は Claude Code 2・チャット 1。直すのは `read` と `<workdir>/voice_dict.json` だけ（字幕 `text` は変えない）
 - **合格（PASS）**: 機械検査のエラーが 0 で、台帳に open / fixed / disputed が 1 つも無い（should も含む。should を閉じる方法は「直す」か「反論を checker に認めてもらう」だけ）
 - **打ち切り**: 次のどれか
-  - `STOP_MAX`: 最大の周（Claude Code は 3、チャットは 2。`ledger.py status … --max-rounds 2`）を終えても合格しない
+  - `STOP_MAX`: 最大の周（Claude Code は 3、チャットは 2。`ledger.py status … --max-rounds 2`。`voice` はチャットでは判定 1 回で、下の記述）を終えても合格しない
   - `STOP_OSC`: 同じキーの `reopen` が 2 に達した（直す → 壊れる の振動）。最大の周を待たない
   - `STOP_DISPUTE`: 同じキーの反論が 2 回認められなかった（maker と checker の意見が割れたまま）
+- **`voice`（6 音声の読み）**: 周の上限は Claude Code 2。直すのは `read` と `<workdir>/voice_dict.json` だけ（字幕 `text` は変えない）。チャットでは評価役の判定を 1 回だけ行い、`status … --max-rounds 1` の判定にかかわらず、open の項目があれば作り手として `read`（と辞書）を 1 回直して `ledger.py respond` で取り込み、`--readings` を回し直してから合成へ進む。再判定しないので、直した項目は fixed のまま残論点に載り、8 報告に「読みは直したが再確認していない」と書く
 - 5 画面で PNG を作れなかった（`frames.json` の `png` が false）ときは、画面の周を 1 回だけ回し、`status` の判定にかかわらず 6 音声へ進む。目で見ないと決められない基準は UNKNOWN のまま残論点になり、8 報告に「コマの画像なし」と書く
 - 3 人の確認で契約を直すことになって 2 取材と契約に戻るときは、`python3 scripts/ledger.py reset <workdir> contract` で周を 1 から数え直す（前の項目は台帳の `archived` に移り、判定と残論点には使わない）
 - 打ち切ったら、閉じていない項目は**残論点**になる。`ledger.py residual` で一覧を作り、8 報告に必ず出す（再生ページには出ない）。黙って公開しない
@@ -57,7 +57,7 @@
 claude.ai のチャットではサブエージェントを起動できないので、1 つの会話で maker と checker を順に演じる。台帳と状態の判定は Claude Code と同じ `ledger.py` を使い、次の点だけを変える。
 
 - **評価役は 1 回にまとめる**。そのフェーズの checker の担当（fact-checker・writing-reviewer・director）をすべて 1 回で判定し、全基準の判定を 1 つのファイル `review/<phase>/r<N>/combined.json` に書く。形は checker の出力と同じで、`reviewer` は `combined`。取り込みは `python3 scripts/ledger.py ingest <workdir> <phase> <workdir>/review/<phase>/r<N>/combined.json`
-- **最大 2 周**。状態は `python3 scripts/ledger.py status <workdir> <phase> --max-rounds 2` で判定する
+- **最大 2 周**（`voice` はチャットでは判定 1 回。「合格と打ち切り」の記述）。状態は `python3 scripts/ledger.py status <workdir> <phase> --max-rounds 2` で判定する
 - **評価役の番の始めに宣言する**。「ここからは評価役として、作り手の推論を使わず、基準ファイル・一次資料・成果物だけで判定する」と書いてから判定に入る。取材メモ（`brief.md`）と、作り手として考えた理由は判定の根拠にしない
 - 機械検査、台帳の状態、残論点の扱いは Claude Code と同じ
 

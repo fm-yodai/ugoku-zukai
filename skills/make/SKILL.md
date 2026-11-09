@@ -44,7 +44,7 @@ metadata:
 4. 進行役が `scripts/ledger.py ingest` で台帳に取り込む
 5. **次へ進むかは `scripts/ledger.py status` の判定（終了コード）だけで決める**: PASS（0）→ 次の段へ / CONTINUE（10）→ 次の周 / STOP_MAX・STOP_OSC・STOP_DISPUTE（20〜22）→ 打ち切って次の段へ（閉じていない項目は残論点として持ち越す）
    - `ingest` と `respond` も件数の要約を出すが、最大の周（`--max-rounds`）を見ていないので、判断に使わない
-   - 最大の周は Claude Code が 3、チャットが 2（チャットでは必ず `--max-rounds 2` を付ける）。6 音声の読み（フェーズ `voice`）は Claude Code が 2、チャットが 1（`--max-rounds 2` / `1`）
+   - 最大の周は Claude Code が 3、チャットが 2（チャットでは必ず `--max-rounds 2` を付ける）。6 音声の読み（フェーズ `voice`）は Claude Code が 2（`--max-rounds 2`）。チャットは判定 1 回で、判定にかかわらず `read` を 1 回直してから合成へ進む（run-chat.md）
 
 ## 流れ
 
@@ -106,7 +106,7 @@ writer が台本 `storyboard.json` を書く → 進行役が `scripts/check_sto
 
 1. `scripts/setup_voice.py --agree` で VOICEVOX を入れる（1 で同意を得たときだけ。最後に入っている声の一覧が出る）。`interview.md` の声が既定（春日部つむぎ）でなければ、進行役がこの一覧で話者の番号を確かめ、台本の `voice.speaker` をその番号にする。進行役が成果物に手を入れる**ただ 1 つの例外**で、番号のほかは変えない（字幕 `text` は変わらないので台本の周回には戻らない）。番号を直してから手順 2 へ進む
 2. `scripts/tts.py <workdir>/storyboard.json -o <workdir>/voice --readings` で、合成せずに読みの一覧 `<workdir>/voice/readings.md` を書く（終了コード 3 は時間で区切っただけ。0 になるまで同じコマンドを繰り返す）
-3. 評価役（writing-reviewer 読みモード）が一覧を S-W8・S-W9 で判定 → 台帳（フェーズ名 `voice`。`ledger.py ingest`・`status`。周の上限は Claude Code 2・チャット 1）
+3. 評価役（writing-reviewer 読みモード）が一覧を S-W8・S-W9 で判定 → 台帳（フェーズ名 `voice`。`ledger.py ingest`・`status`。周の上限は Claude Code 2。チャットは判定 1 回、判定にかかわらず 1 回だけ直して合成へ）
 4. CONTINUE なら writer が台帳に応答し、**行の `read`（と作業フォルダの辞書 `<workdir>/voice_dict.json`）だけ**を直す。字幕 `text` は変えない。直したら手順 2 に戻る
 5. PASS か STOP なら、`scripts/tts.py <workdir>/storyboard.json -o <workdir>/voice`（`--readings` なし）で 1 行ずつ合成する。**終了コード 3 は「時間で区切った。続きがある」**なので、0 になるまで同じコマンドを繰り返す（合成済みの行は作り直さない）。閉じなかった読みの指摘は残論点になる
 6. `scripts/check_storyboard.cjs … --timeline <workdir>/voice/timeline.json` で、実際の声の長さで検査し直す。誤り（と「辺 … に label がない」）があれば、機械検査の差し戻しとして writer が**動作 `do` だけ**を直す（台帳には載せない）。字幕 `text` や読み `read` を変えたときは、手順 5（`tts.py`）をもう一度実行する
