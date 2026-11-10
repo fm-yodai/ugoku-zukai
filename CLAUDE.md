@@ -15,12 +15,19 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 依存のインストール手順はない（python3 と node をそのまま使う。elkjs は `player/vendor/` に同梱）。
 
 ```bash
-# まとめての検査（見本台本 × テーマ 3 種の配置検査・テーマの検査・デザイン抽出）。run_m3.sh は M1 に続けて台帳・字幕・コマ・進行役の文書を検査する
+# まとめての検査（見本台本 × テーマ 3 種の配置検査・テーマの検査・デザイン抽出）。run_m3.sh は M1 に続けて台帳・字幕・コマ・進行役の文書を検査する。run_r1.sh は M3 に続けて構成メモ・台本の章・絵コンテのページを検査する
 bash skills/make/scripts/tests/run_m1.sh
 bash skills/make/scripts/tests/run_m3.sh
+bash skills/make/scripts/tests/run_r1.sh
 
 # 台本 1 本の検査（形・id の解決・配置）。--timeline で実際の声の長さでも検査する
 node skills/make/scripts/check_storyboard.cjs skills/make/examples/sequence.json --theme flat [--timeline work/voice/timeline.json] [--json]
+
+# 構成メモの検査（<workdir>/outline.json か、ファイルを直接渡す。形式は references/outline.md、見本は scripts/tests/outlines/）。--ready は台本に進める状態かも見る
+python3 skills/make/scripts/check_outline.py skills/make/scripts/tests/outlines/ok_ux.json [--ready] [--json]
+
+# 台本と構成メモの突き合わせ（場面の chapter と構成メモの章、章ごとの見積もりの長さ）。--complete は台本を書き終えたものとして見る
+node skills/make/scripts/check_storyboard.cjs skills/make/scripts/tests/outlines/pair/storyboard.json --outline skills/make/scripts/tests/outlines/pair/outline.json [--complete]
 
 # テーマの検査（コントラストなど）
 python3 skills/make/scripts/check_theme.py skills/make/player/themes/3b1b.json
@@ -37,6 +44,10 @@ python3 skills/make/scripts/workdir.py new this-repo
 # 各行の落ち着いたコマ（SVG と PNG のシート）。PNG には初回だけ resvg を入れる。終了コード 4 = PNG なし（SVG と frames.json だけ）
 python3 skills/make/scripts/setup_render.py
 node skills/make/scripts/frames.cjs skills/make/examples/sequence.json --theme flat -o work/frames
+node skills/make/scripts/frames.cjs skills/make/examples/mixed.json --theme flat -o work/frames --scenes s2   # 一部の場面のコマだけ書く（カンマ区切り）
+
+# 利用者向けの絵コンテのページ（コマの横に「s2 / l2 @0:14」と字幕の全文。PNG は要らない。--outline で章の見出しと「Claude が決めたこと」が付く）
+python3 skills/make/scripts/build_sheet.py skills/make/examples/sequence.json --frames work/frames -o work/sheet.html [--outline outline.json] [--artifact]
 
 # 声: 初回だけ VOICEVOX を入れ（約 94MB）、1 行ずつ合成して timeline.json と narration.mp3 を作る
 python3 skills/make/scripts/setup_voice.py --agree

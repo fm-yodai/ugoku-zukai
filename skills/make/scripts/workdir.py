@@ -12,10 +12,12 @@
   brief.md         取材メモ（researcher）
   sources/         取材で集めた一次資料の写し・要約
   contract.json    契約（言い切ること・経路・図の型・尺の配分）
+  outline.json     構成メモ（利用者と合意したことの記録。references/outline.md）
   storyboard.json  台本
   theme.json       デザインから作ったテーマ（デザインを渡されたときだけ）
   review/          評価役の指摘（台帳 ledger と各役の判定）
   frames/          各行の落ち着いたコマ（SVG・PNG のシートと frames.json）
+  sheet.html       利用者向けの絵コンテのページ（build_sheet.py）
   voice/           tts.py の出力（timeline.json・narration.mp3）
   player.html      組み立てた再生ページ
 """
