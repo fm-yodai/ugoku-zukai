@@ -13,7 +13,7 @@
 - CPU 1 つ・メモリ 4GB、chromium はない。届く通信先は GitHub・PyPI・npm など（jsDelivr には届かない）
 - 長いコマンドは止められる。1 回のコマンドを短くし、区切りのあるスクリプト（`tts.py`）は終了コード 3 の間、同じコマンドを繰り返す
 - VOICEVOX とコマの描画の道具は、会話ごとに入れ直す（会話をまたいで残らない）
-- 作業フォルダは会話が変わると消える。直しは、作ったのと同じ会話の中で受ける
+- 作業フォルダは会話が変わると消える。直しは、作ったのと同じ会話の中で受ける（「公開した後の直し」の節）
 
 ## 評価役の番の宣言
 
@@ -119,7 +119,8 @@ python3 <skill>/scripts/build_sheet.py <workdir>/storyboard.json --frames <workd
 ```
 
 - `<workdir>/sheet.html` は、サンドボックスのファイルをそのまま Artifact として公開して見せる（中身を書き写さない）。`/mnt/user-data/outputs/` があれば、そこへ写してから公開する
-- 絵コンテのページの終わりに「Claude が決めたこと」（`proposed` の項目）が出る。会話でも同じ一覧を添える
+- 絵コンテのページの終わりに「Claude が決めたこと」（`proposed` の項目）と「まだ決めていないこと」（構成メモの `open`）が出る。会話でも同じ一覧を添える
+
 動きと間を見たいときは、声なしの粗い再生ページを作って Artifact として見せる（時刻は見積もり）。
 
 ```sh
@@ -180,6 +181,7 @@ python3 <skill>/scripts/ledger.py status <workdir>
 
 - `list` の出力（must は全文、should は 1 件 1 行、nits は件数だけ）を、そのまま利用者に見せる。求められたら `--full` で開く
 - 直しが合意に関わるなら、先に構成メモを直して検査し、それから台本を直す
+- `*` で始まるキー（場所の決まらない指摘）は、シェルに展開されないよう引用符で囲む（`--fix '*:V-1'`）
 - `status` が「今の台本にも構成メモにもない id を指す指摘」を警告したら、行や章の id を振り直していないかを確かめて戻す
 
 ## 声
@@ -190,7 +192,15 @@ python3 <skill>/scripts/ledger.py status <workdir>
 python3 <skill>/scripts/setup_voice.py --agree
 ```
 
-最後に、入っている声の一覧が出る。利用者が選んだ声の番号を一覧で確かめ、`<workdir>/storyboard.json` の `voice.speaker` がその番号になっているかを見て、違えば直す（番号のほかは変えない）。次に、合成せずに読みの一覧を書く。
+最後に、入っている声の一覧が出る。名前だけでは声を選べないときは、候補の話者 2〜3 人に同じ 1 文を読ませた、声の試聴のページを作る。
+
+```sh
+python3 <skill>/scripts/tts.py -o <workdir>/voice --audition 8,2,3 --sample "<聞き比べる 1 文>" --artifact
+```
+
+`--sample` は、台本があれば省ける（`tts.py <workdir>/storyboard.json -o <workdir>/voice --audition 8,2,3 --artifact` で、最初の行を読む）。できた `<workdir>/voice/audition.html` を、サンドボックスのファイルのまま Artifact として公開して見せ、番号で選んでもらう。声の試聴も声を作るので、利用規約への同意の後に行う。
+
+利用者が選んだ声の番号を一覧で確かめ、`<workdir>/storyboard.json` の `voice.speaker` がその番号になっているかを見て、違えば直す（番号のほかは変えない）。次に、合成せずに読みの一覧を書く。
 
 ```sh
 python3 <skill>/scripts/tts.py <workdir>/storyboard.json -o <workdir>/voice --readings
@@ -223,6 +233,39 @@ python3 <skill>/scripts/build_player.py <workdir>/storyboard.json --theme <テ�
 ```
 
 音声を作らなかったときは `--voice` を外す。「音声が古い」で止まったら、`tts.py` をもう一度実行する。`<workdir>/player.html` は、サンドボックスのファイルをそのまま Artifact として公開する（中身を書き写さない。長いので写すと壊れる）。`/mnt/user-data/outputs/` があれば、そこへ写してから公開する。チャットのプレビューでは audio 要素が鳴らないが、プレーヤーは WebAudio で鳴らすので問題ない。
+
+## 公開した後の直し
+
+直しの受け方、流れ、直すものごとの作り直すものと評価役は、SKILL.md の「公開した後の直し」のとおり。チャットでは、公開したのと同じ会話の中だけで直しを受ける（会話が変わると作業フォルダが消える）。公開先の記録と作業フォルダの一覧（`workdir.py` の `publish`・`list`）は使わない。
+
+**1. 箇所を受け取る。** 利用者が Artifact にコメントを付けたと言ったら、そのコメントを会話から読めるかを確かめる。読めなければ、再生ページの「直したい箇所を指す」を開いてコピーした文字（`s2 / l2 @0:14` の形）を、会話に貼ってもらう。
+
+**2. 行を特定して直す。** 指された id を `<workdir>/storyboard.json` で確かめて直す。直しが合意に関わるなら、先に `<workdir>/outline.json` を直して `check_outline.py --ready` を通す。
+
+**3. 機械検査。** 文（`text`・`read`）を変えたら、合成した声が古くなるので、`--timeline` を付けずに回す。図や動作だけを変えたら、`--timeline` を付けて回す。
+
+```sh
+node <skill>/scripts/check_storyboard.cjs <workdir>/storyboard.json --theme <テーマ> --outline <workdir>/outline.json --complete [--timeline <workdir>/voice/timeline.json]
+python3 <skill>/scripts/check_text.py <workdir>/storyboard.json
+```
+
+**4. 評価役。** 評価役の番を宣言して、SKILL.md の表の評価役の基準で、変えた行と場面だけを判定する。出力は新しい連番の `combined.json` に書いて `ingest` し、指摘が出たら `list` で利用者に見せて選んでもらう（先に直すのは初稿だけなので、ここでは先に直さない）。
+
+**5. 変えた場面を見せる。** 変えた場面のコマと絵コンテを、全体とは別の出力先に作って見せる。文を変えていなければ、`frames.cjs` に `--timeline <workdir>/voice/timeline.json` を付ける（時刻が再生ページと同じになる）。
+
+```sh
+node <skill>/scripts/frames.cjs <workdir>/storyboard.json --theme <テーマ> -o <workdir>/frames-part --scenes <変えた場面の id をカンマ区切り>
+python3 <skill>/scripts/build_sheet.py <workdir>/storyboard.json --frames <workdir>/frames-part --outline <workdir>/outline.json -o <workdir>/sheet-part.html --artifact
+```
+
+**6. 声。** 利用者が変えた場面を見てから合成する。文を変えた行があれば、先に `--readings` で読みを確かめる。合成のコマンドは初回と同じで、変えていない行は作り直されない。出力の「新しく合成 N 行」を報告に書く（図や動作だけの直しなら「新しく合成 0 行」）。
+
+```sh
+python3 <skill>/scripts/tts.py <workdir>/storyboard.json -o <workdir>/voice
+node <skill>/scripts/check_storyboard.cjs <workdir>/storyboard.json --theme <テーマ> --outline <workdir>/outline.json --complete --timeline <workdir>/voice/timeline.json
+```
+
+**7. 組み立てて、同じ Artifact に公開し直す。** 組み立ては「組み立てと公開」と同じコマンド。前に公開した Artifact を更新する。新しい Artifact を作らない。
 
 ## 報告
 

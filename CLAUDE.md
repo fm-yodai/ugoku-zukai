@@ -6,8 +6,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 題材（コード・リポジトリ・PR・Web ページ・文書・題目）を、日本語ナレーション付きの「動く図解」（HTML 1 枚の再生ページ）にする Claude プラグイン `ugoku-zukai`。本体はスキル `skills/make/`。claude.ai / Claude Desktop のチャットと Claude Code の両方で動かすことが前提。
 
-- 設計の正は `docs/design.md`。マイルストーン（M1a / M1b / M2 / M3 済み。進め方の作り直しは R1・R2 済みで、R3 = 完成後の直し・声の試聴・両環境での通しが残る。M4 以降は未着手）、合意済みの要件、claude.ai のサンドボックスで確かめた事実（通信先・道具・制約）はここにある。仕様を変えたら、ここの「Mn の実装」節に追記する
-- 文書・コメント・コミットメッセージは日本語。コミットは `M2: 〜` のようにマイルストーンを頭に付ける（進め方の作り直しは `R2: 〜`）
+- 設計の正は `docs/design.md`。マイルストーン（M1a / M1b / M2 / M3 済み。進め方の作り直しは R1・R2 と、R3 の道具 = 完成後の直し・声の試聴まで済み。R3 の両環境での通しが残る。M4 以降は未着手）、合意済みの要件、claude.ai のサンドボックスで確かめた事実（通信先・道具・制約）はここにある。仕様を変えたら、ここの「Mn の実装」節に追記する
+- 文書・コメント・コミットメッセージは日本語。コミットは `M2: 〜` のようにマイルストーンを頭に付ける（進め方の作り直しは `R3: 〜`）
 - 前身は個人用スキル explain-video-anywhere（v1、Manim＋Docker の VOICEVOX）。`agents/` と `references/criteria/` などは v1 からの移植で、M3 で新しいプレーヤー向けに、R2 で構成メモを物差しにする形に書き換えた（保留中の `agents/animator.md` だけ v1 の Manim 用のまま）
 
 ## コマンド
@@ -15,12 +15,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 依存のインストール手順はない（python3 と node をそのまま使う。elkjs は `player/vendor/` に同梱）。
 
 ```bash
-# まとめての検査。ふだんは run_r2.sh だけ回せば全部走る（r2 → r1 → m3 → m1 の順に呼ぶ）
+# まとめての検査。ふだんは run_r3.sh だけ回せば全部走る（r3 → r2 → r1 → m3 → m1 の順に呼ぶ）
 #   run_m1.sh: 見本台本 × テーマ 3 種の配置検査・テーマの検査・デザイン抽出
 #   run_m3.sh: 字幕と読み・コマ・再生ページ・作業フォルダと、文書とスクリプトの食い違い
 #   run_r1.sh: 構成メモ・台本の章・絵コンテのページ
 #   run_r2.sh: 指摘の一覧・成功基準・エージェントの定義・進行役の文書
-bash skills/make/scripts/tests/run_r2.sh
+#   run_r3.sh: 再生ページの位置の表示・公開先の記録と作業フォルダの一覧・声の試聴・直しの文書（VOICEVOX があれば、試聴と声の使い回しも）
+bash skills/make/scripts/tests/run_r3.sh
 
 # 台本 1 本の検査（形・id の解決・配置）。--timeline で実際の声の長さでも検査する
 node skills/make/scripts/check_storyboard.cjs skills/make/examples/sequence.json --theme flat [--timeline work/voice/timeline.json] [--json]
@@ -46,6 +47,9 @@ python3 skills/make/scripts/ledger.py residual <workdir>   # must で直って�
 
 # 作業フォルダを題材の外に作る（${CLAUDE_PLUGIN_DATA}/runs/<日時>-<名前>。パスを 1 行で出す）
 python3 skills/make/scripts/workdir.py new this-repo
+# 公開先を作業フォルダに記録する（published.json）。過去の作業フォルダを新しい順に出す（別のセッションから直すときに使う）
+python3 skills/make/scripts/workdir.py publish <workdir> --url <Artifact の URL> [--theme flat] [--source <題材の場所>]
+python3 skills/make/scripts/workdir.py list [--json]
 
 # 各行の落ち着いたコマ（SVG と PNG のシート）。PNG には初回だけ resvg を入れる。終了コード 4 = PNG なし（SVG と frames.json だけ）
 python3 skills/make/scripts/setup_render.py
@@ -59,6 +63,7 @@ python3 skills/make/scripts/build_sheet.py skills/make/examples/sequence.json --
 python3 skills/make/scripts/setup_voice.py --agree
 python3 skills/make/scripts/tts.py <storyboard.json> -o work/voice --readings   # 合成せずに読みの一覧 work/voice/readings.md を書く（合成の前の確認。辞書は既定で work/voice_dict.json を重ねる）
 python3 skills/make/scripts/tts.py <storyboard.json> -o work/voice   # 終了コード 3 = 時間切れで続きあり。同じコマンドを繰り返す
+python3 skills/make/scripts/tts.py -o work/voice --audition 8,2,3 --sample "聞き比べる文です。" [--artifact]   # 声の試聴。同じ 1 文を話者ごとに読ませたページ work/voice/audition.html を書く（--sample を省くと台本の最初の行）
 
 # 組み立て（--artifact は Artifact 用に <html>/<head>/<body> を外した断片を書く）
 python3 skills/make/scripts/build_player.py <storyboard.json> --theme 3b1b --voice work/voice -o player.html [--artifact]
@@ -71,7 +76,7 @@ python3 tools/build_voice_check.py
 
 ## 全体の構造
 
-**進め方**: 番号の付いた決まった手順はない。進行役（`SKILL.md` を実行しているセッション）が利用者と話して構成を固め、決まったことを構成メモ（`outline.json`。`by` = 誰が言ったか、`state` = 利用者が見たか）に書く。話題ごとに「聞く・案を出す・調べる」を選び、案を出すときは他の選択肢を残す。任されたら、絵コンテまで自分で決めてから見せる。そこから台本（`storyboard.json`。場面の `chapter` で構成メモの章を指す）→ 絵コンテ（`frames.cjs`・`build_sheet.py`）→ 声（`tts.py --readings` で読みを確かめてから合成）→ 組み立て（`build_player.py`）と Artifact での公開、と進む。順番として守るのは 3 つだけ: 声を合成する前に利用者が絵コンテを見ている、公開する前に機械検査が通っている、must を直さずに公開するときは報告に残論点として書く。原則と道具の一覧は `skills/make/SKILL.md`、環境ごとのコマンドは `references/run-code.md`（Claude Code）と `references/run-chat.md`（チャット）。
+**進め方**: 番号の付いた決まった手順はない。進行役（`SKILL.md` を実行しているセッション）が利用者と話して構成を固め、決まったことを構成メモ（`outline.json`。`by` = 誰が言ったか、`state` = 利用者が見たか）に書く。話題ごとに「聞く・案を出す・調べる」を選び、案を出すときは他の選択肢を残す。任されたら、絵コンテまで自分で決めてから見せる。そこから台本（`storyboard.json`。場面の `chapter` で構成メモの章を指す）→ 絵コンテ（`frames.cjs`・`build_sheet.py`）→ 声（`tts.py --readings` で読みを確かめてから合成）→ 組み立て（`build_player.py`）と Artifact での公開、と進む。順番として守るのは 3 つだけ: 声を合成する前に利用者が絵コンテを見ている、公開する前に機械検査が通っている、must を直さずに公開するときは報告に残論点として書く。公開した後は、利用者が再生ページの「直したい箇所を指す」で出る `s2 / l2 @0:14`（場面 / 行 @時刻）を伝えて直しを頼む。直すのは指された行だけで、変えていない行の声は作り直さない。Claude Code では、`workdir.py list` で作業フォルダを探して、別のセッションからも直せる。原則と道具の一覧は `skills/make/SKILL.md`、環境ごとのコマンドは `references/run-code.md`（Claude Code）と `references/run-chat.md`（チャット）。
 
 **プレーヤー（`skills/make/player/src/`）は、ブラウザと node で同じコードを動かす**のが要。
 - `util → figures → figures2 → validate → engine → check` は DOM に触らない。グローバルの `UZ` に生えていく（`UZ.build(storyboard, theme, timeline)` が配置と時刻を計算する）。DOM に触るのは `view_svg.js` だけ

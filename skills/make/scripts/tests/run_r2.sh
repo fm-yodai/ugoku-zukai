@@ -56,7 +56,7 @@ for w in "聞く" "案を出す" "調べる" "他の選択肢" "outline.json" "c
 done
 for c in ingest list decide status residual; do grep -q "$c" $s || ng "SKILL.md に ledger.py $c がない"; done
 grep -nE "contract|interview\.md|check_contract|max-rounds|STOP_|人の確認|既定は 3 分|loop-protocol" $s && ng "SKILL.md に古い進め方の語が残っている"
-grep -q '^  version: "0.3.0"' $s || ng "SKILL.md の version が 0.3.0 でない"
+grep -qE '^  version: "[0-9]+\.[0-9]+\.[0-9]+"' $s || ng "SKILL.md に version がない"
 grep -nE "contract|契約|budget\.parts|interview" references/structures.md && ng "structures.md に契約の語が残っている"
 grep -q "引き出し" references/structures.md || ng "structures.md が型を引き出しとして位置づけていない"
 # 環境ごとの文書（道具ごとのコマンド。フェーズごとの手順は置かない）

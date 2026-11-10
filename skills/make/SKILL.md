@@ -6,10 +6,11 @@ description: >
   「この PR を動画で」「〜を動画で教えて」「ugoku-zukai」. Any source works: code files or directories,
   a repository URL, a PR or issue, a web page, a local document (md / PDF / design doc), the previous
   CLI output, or just a subject with nothing to read yet. Also use when the user points at a line of a
-  storyboard sheet made by this skill and asks to change it. Works in claude.ai / Claude Desktop chat
-  and in Claude Code. Not for static one-page decision documents where a still diagram is enough.
+  storyboard sheet or a published page made by this skill (for example "s2 / l2 @0:14") and asks to
+  change it. Works in claude.ai / Claude Desktop chat and in Claude Code. Not for static one-page
+  decision documents where a still diagram is enough.
 metadata:
-  version: "0.3.0"
+  version: "0.4.0"
 ---
 
 # 動く図解を作る
@@ -71,7 +72,9 @@ metadata:
 | 評価役 | `references/criteria/`、`references/review-protocol.md` | 下の「検査」の場面 |
 | 指摘の一覧 | `scripts/ledger.py`（`ingest`・`list`・`decide`・`status`・`residual`） | 評価役の出力を取り込み、利用者に見せ、選択を記録する |
 | 声 | `scripts/setup_voice.py`、`scripts/tts.py`（`--readings`） | 利用者が絵コンテを見た後 |
+| 声の試聴 | `scripts/tts.py --audition` | 名前だけでは声を選べないとき |
 | 組み立て | `scripts/build_player.py`（`--voice`・`--artifact`） | 機械検査が通った後 |
+| 公開先の記録と一覧 | `scripts/workdir.py`（`publish`・`list`。Claude Code だけ） | 公開した直後。別のセッションで直しを頼まれたとき |
 
 ## 見せるもの
 
@@ -86,7 +89,7 @@ metadata:
 - B と C は、台本の一部（決まった章だけ）でも作れる
 - 利用者は、絵コンテの `s2 / l2` を指して「この行をこうしたい」と言える。指された行から直す
 - **台本を直したら `frames.cjs` を回し直す。** コマが古いと、`build_sheet.py` は書かずに止まる
-- 見せるときは、自分で決めたこと（`proposed` の項目）を必ず添える。黙って決めたままにしない。まだ決めていないこと（構成メモの `open`）があれば、合わせて聞く
+- 見せるときは、自分で決めたこと（`proposed` の項目）を必ず添える。黙って決めたままにしない。まだ決めていないこと（構成メモの `open`）があれば、合わせて聞く（どちらも、`--outline` を渡した絵コンテのページの終わりに出る）
 
 ## 検査
 
@@ -119,6 +122,7 @@ metadata:
 
 - **利用規約への同意を、合成の前に必ず取る**（https://github.com/VOICEVOX/voicevox_vvm/blob/main/TERMS.txt ）。音声モデルなど約 94MB を GitHub から取ること、再生ページに「VOICEVOX:<声の名前>」のクレジットを出すことも伝える。同意がなければ音声は作らず、音声なしの再生ページにする
 - 声は会話で選ぶ。既定は春日部つむぎ（話者 8、話速 1.1）。ほかに四国めたん（2）、ずんだもん（3。文末が「〜のだ」になる）など。`scripts/setup_voice.py` が出す一覧で話者の番号を確かめ、台本の `voice.speaker` に書く
+- 名前だけでは声を選べないときは、利用規約への同意を取ってから、候補の話者 2〜3 人に同じ 1 文を読ませたページ（`scripts/tts.py --audition`）を見せて、番号で選んでもらう
 - 合成の前に `scripts/tts.py … --readings` で読みの一覧を書き、評価役（writing-reviewer の読みモード）に見てもらう。読みの指摘は合意した内容を変えないので、進行役が先に直して再確認を 1 回頼む。直すのは行の `read` と作業フォルダの辞書だけで、字幕 `text` は変えない。通らなかった読みは報告に書く
 - 合成は 1 行ずつで、文・読み・声が変わっていない行は作り直さない。終了コード 3 は「時間で区切った。続きがある」なので、0 になるまで同じコマンドを繰り返す
 - 合成の後に、`check_storyboard.cjs … --timeline` で実際の声の長さでも検査する
@@ -127,12 +131,37 @@ metadata:
 
 1. `scripts/build_player.py … --voice <workdir>/voice -o <workdir>/player.html --artifact` で組み立てる。「音声が古い」で止まったら、台本の文が合成の後に変わっている。`tts.py` をもう一度実行する
 2. `player.html` を Artifact として公開する（ファイルのまま。書き写さない。やり方は環境ごとの文書）
+3. Claude Code では、公開したら `scripts/workdir.py publish` で公開先を作業フォルダに記録する（別のセッションから直すときに読む）
+
+## 公開した後の直し
+
+利用者は、再生ページの「直したい箇所を指す」か絵コンテの行の表記で箇所を伝える。`s2 / l2 @0:14` は 1 点（場面 s2 の行 l2。時刻は、行の中のどの瞬間かの手がかり）、`s2 / l2 @0:14 〜 s3 / l5 @0:41` は範囲（挟まれた行のすべて）である。
+
+- 行は id で特定する。id のない頼み方（「真ん中あたりの図」）なら、行を見当づけて「s3 / l6 のことですか」と確かめてから直す。台本にない id なら、見ているページが古いかもしれないと伝えて確かめる
+- 流れ: 指された行を特定する → 直しが合意に関わるなら、先に構成メモを直す → 台本を直す → 機械検査 → 変えた範囲だけ評価役に見てもらう → 変えた場面の絵コンテか粗い再生ページを見せる → 声を合成する → 組み立てて、同じ Artifact に公開し直す
+- 行と章の id を振り直さない。頼まれた範囲の外の行を変えない
+- 声を合成するのは、利用者が変えた場面を見た後である（「必ず守る条件」の 1 は直しでも同じ）。変えていない行の声は作り直されない。`tts.py` の出力「新しく合成 N 行」を報告に書く
+- 新しいページを作らない。同じ Artifact に公開し直す
+
+| 直すもの | 作り直すもの | 見てもらう評価役（変えた行だけ） |
+|---|---|---|
+| 字幕の言い回し | その行の声。配置と時刻の検査 | writing-reviewer。事実を表す語を変えたら fact-checker も |
+| 読み（`read`・辞書） | その行の声 | writing-reviewer（読みモード） |
+| 図や動作 | 声はそのまま。配置の検査と、その場面のコマ | director（台本と画面） |
+| 章の中身や順番 | 構成メモ、その章の場面。文が変わった行の声 | 構成メモから順に、初稿と同じ評価役 |
+| 見た目（テーマ） | 組み立てだけ | 呼ばない。粗い再生ページか絵コンテで色を見せる |
+| 声（話者・話速） | 全行の声 | 呼ばない。ずんだもんに替えるときは `check_text.py` が語尾を見る |
+
+Claude Code では、公開したのと別のセッションからも直せる（`scripts/workdir.py list` で作業フォルダを探す）。チャットでは、公開したのと同じ会話の中だけで直せる。会話が変わっていたら、作業フォルダが残っていないので作り直しになると伝える。
+
+直した後の報告には、変えた行の id、作り直した声の行数、公開先、残論点を書く。
 
 ## 報告
 
 公開したら、利用者に次を返す。
 
 - 公開したページ（Artifact の URL かリンク）
+- 直したい箇所の伝え方（再生ページの「直したい箇所を指す」を開き、止めた位置でコピーした文字を伝える）
 - 残論点の件数と中身（`ledger.py residual`。0 件なら「なし」。再生ページには出ないので、ここだけに書く）
 - 構成メモに `proposed` のまま残った項目（利用者がまだ見ていない、Claude の決定）
 - **足すべき項目**（人がスキルに足すかを決める。進行役はスキルのファイルを書き換えない）: 禁止語の候補（指摘の `suggestion` から）、読みを足した語、図の種類・動作・構成の型で表せなかったこと、新しい較正の例

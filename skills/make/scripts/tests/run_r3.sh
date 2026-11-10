@@ -24,5 +24,19 @@ if python3 -c "import voicevox_core" >/dev/null 2>&1 && [ -d "$vh" ]; then
 else
   echo "声の試聴の検査: VOICEVOX がないので飛ばす"
 fi
+# 公開した後の直しと声の試聴（進行役の文書）
+grep -q "^## 公開した後の直し" SKILL.md || ng "SKILL.md に「## 公開した後の直し」がない"
+for w in "s2 / l2 @0:14" "直したい箇所を指す" "workdir.py" "audition" "新しく合成" "同じ Artifact"; do grep -q -- "$w" SKILL.md || ng "SKILL.md に $w がない"; done
+for w in "字幕の言い回し" "図や動作" "章の中身や順番" "見た目（テーマ）" "声（話者・話速）"; do grep -q "^| $w" SKILL.md || ng "SKILL.md の直しの表に「$w」の行がない"; done
+grep -q "published page" SKILL.md || ng "SKILL.md の description に、公開したページを指して直す場面がない"
+grep -q 'version: "0.4.0"' SKILL.md || ng "SKILL.md の version が 0.4.0 でない"
+for f in references/run-code.md references/run-chat.md; do
+  grep -q "^## 公開した後の直し" $f || ng "$f に「## 公開した後の直し」がない"
+  for w in "--audition" "--scenes" "frames-part" "新しく合成" "'\*:"; do grep -q -- "$w" $f || ng "$f に $w がない"; done
+done
+for w in "workdir.py list" "workdir.py publish" "published.json" "未公開"; do grep -q -- "$w" references/run-code.md || ng "run-code.md に $w がない"; done
+for w in "同じ会話" "コメント"; do grep -q "$w" references/run-chat.md || ng "run-chat.md の直しの節に $w がない"; done
+grep -q "run_r3.sh" ../../CLAUDE.md && grep -q "workdir.py list" ../../CLAUDE.md && grep -q -- "--audition" ../../CLAUDE.md || ng "CLAUDE.md に R3 のコマンドがない"
+grep -q "^### R3 の実装" ../../docs/design.md || ng "docs/design.md に「### R3 の実装」がない"
 [ $fail = 0 ] && echo "R3 の検査: すべて OK" || echo "R3 の検査: NG あり"
 exit $fail

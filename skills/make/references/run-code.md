@@ -129,7 +129,7 @@ python3 ${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/build_sheet.py <workdir>/story
 ```
 
 - 絵コンテは Artifact ツールで見せる（`file_path` に `<workdir>/sheet.html`、`title` に「<台本の題> 絵コンテ」、`icon` に `storyboard`。書き写さない）。作業フォルダのファイルを受け付けないと言われたら、スクラッチパッドのフォルダに写してから公開する。利用者が手元のファイルで見たいと言ったら、`--artifact` を外して作り、パスを伝える
-- 絵コンテのページの終わりに「Claude が決めたこと」（`proposed` の項目）が出る。会話でも同じ一覧を添える
+- 絵コンテのページの終わりに「Claude が決めたこと」（`proposed` の項目）と「まだ決めていないこと」（構成メモの `open`）が出る。会話でも同じ一覧を添える
 
 動きと間を見たいときは、声なしの粗い再生ページを作って同じように見せる（時刻は見積もり）。
 
@@ -186,6 +186,7 @@ python3 ${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/ledger.py status <workdir>
 
 - `list` の出力（must は全文、should は 1 件 1 行、nits は件数だけ）を、そのまま利用者に見せる。求められたら `--full` で開く
 - どの評価役の指摘かは、`list --full` と `--json` の `reviewer` で分かる（`--reviewer director` で絞れる）
+- `*` で始まるキー（場所の決まらない指摘）は、シェルに展開されないよう引用符で囲む（`--fix '*:V-1'`）
 - 直しが合意に関わるなら、先に構成メモを直して検査し、それから台本を直す
 - `status` が「今の台本にも構成メモにもない id を指す指摘」を警告したら、writer に「行の id を振り直さない約束」を伝えて戻させる
 
@@ -197,7 +198,15 @@ python3 ${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/ledger.py status <workdir>
 python3 ${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/setup_voice.py --agree
 ```
 
-最後に、入っている声の一覧が出る。利用者が選んだ声の番号を一覧で確かめ、`<workdir>/storyboard.json` の `voice.speaker` がその番号になっているかを見て、違えば進行役が直す（番号のほかは変えない）。次に、合成せずに読みの一覧 `<workdir>/voice/readings.md`（行・字幕・読む文・VOICEVOX の読み）を書く。
+最後に、入っている声の一覧が出る。名前だけでは声を選べないときは、候補の話者 2〜3 人に同じ 1 文を読ませた、声の試聴のページを作る。
+
+```sh
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/tts.py -o <workdir>/voice --audition 8,2,3 --sample "<聞き比べる 1 文>" --artifact
+```
+
+`--sample` は、台本があれば省ける（`tts.py <workdir>/storyboard.json -o <workdir>/voice --audition 8,2,3 --artifact` で、最初の行を読む）。できた `<workdir>/voice/audition.html` を Artifact ツールで見せ（`title` は「声の試聴」、`icon` は `audio`）、番号で選んでもらう。声の試聴も声を作るので、利用規約への同意の後に行う。
+
+利用者が選んだ声の番号を一覧で確かめ、`<workdir>/storyboard.json` の `voice.speaker` がその番号になっているかを見て、違えば進行役が直す（番号のほかは変えない）。次に、合成せずに読みの一覧 `<workdir>/voice/readings.md`（行・字幕・読む文・VOICEVOX の読み）を書く。
 
 ```sh
 python3 ${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/tts.py <workdir>/storyboard.json -o <workdir>/voice --readings
@@ -230,6 +239,59 @@ python3 ${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/build_player.py <workdir>/stor
 ```
 
 音声を作らなかったときは `--voice` を外す。「音声が古い」で止まったら、`tts.py` をもう一度実行する。公開は Artifact ツールで、`file_path` に `<workdir>/player.html`、`title` に台本の題名、`icon` に `video` を渡す（書き写さない）。作業フォルダのファイルを受け付けないと言われたら、スクラッチパッドのフォルダに写してから公開する。
+
+公開したら、公開先を作業フォルダに記録する（`<workdir>/published.json`。別のセッションから直すときに読む）。
+
+```sh
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/workdir.py publish <workdir> --url <Artifact の URL> --theme <テーマ> --source <題材の場所。なければ「なし」>
+```
+
+## 公開した後の直し
+
+直しの受け方、流れ、直すものごとの作り直すものと評価役は、SKILL.md の「公開した後の直し」のとおり。ここには、コマンドと、別のセッションから直すときの手順を書く。
+
+**1. 作業フォルダを決める。** 公開したのと同じセッションなら、今の `<workdir>` を使う。別のセッションなら、過去の作業フォルダを一覧する。
+
+```sh
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/workdir.py list
+```
+
+1 件が 2 行で出る（名前・題・公開の回数と日時・URL、その下にパス・テーマ・題材の場所）。題と公開の日時から、利用者に選んでもらう。当てはまるものが 1 つなら、それでよいかを確かめて進む。選んだパスが `<workdir>` になる。`<workdir>/published.json` を読み、テーマ（`theme`）・題材の場所（`source`）・公開先（`url`）を得る。残っている指摘は `ledger.py status <workdir>` で見る。
+
+一覧で「未公開」と出る作業フォルダ（公開先の記録がない。この記録の仕組みより前に作ったもの）を直すときは、Artifact の URL とテーマを利用者に聞き（`<workdir>/theme.json` があれば、テーマはそれ）、上の `workdir.py publish` で記録してから進める。
+
+**2. 行を特定して直す。** 指された id を `<workdir>/storyboard.json` で確かめる。小さな直し（一文の言い回し、動作 1 つ）は進行役が直す。章単位の書き直しは writer に、書く範囲（章の id）を渡して任せる。直しが合意に関わるなら、先に `<workdir>/outline.json` を直して `check_outline.py --ready` を通す。
+
+**3. 機械検査。** 文（`text`・`read`）を変えたら、合成した声が古くなるので、`--timeline` を付けずに回す。図や動作だけを変えたら、`--timeline` を付けて回す。
+
+```sh
+node ${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/check_storyboard.cjs <workdir>/storyboard.json --theme <テーマ> --outline <workdir>/outline.json --complete [--timeline <workdir>/voice/timeline.json]
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/check_text.py <workdir>/storyboard.json
+```
+
+**4. 評価役。** SKILL.md の表の評価役を呼ぶ。渡すのは、`target`、出力先（新しい連番）、見る範囲（変えた行と場面の id）、前の指摘を直したのなら再確認するキー。出力を `ingest` し、指摘が出たら、いつものとおり `list` で利用者に見せて選んでもらう（先に直すのは初稿だけなので、ここでは先に直さない）。
+
+**5. 変えた場面を見せる。** 変えた場面のコマと絵コンテを、全体とは別の出力先に作って見せる。文を変えていなければ、`frames.cjs` に `--timeline <workdir>/voice/timeline.json` を付ける（時刻が再生ページと同じになる）。動きを見せたいときは、粗い再生ページ（`preview.html`）を作る。
+
+```sh
+node ${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/frames.cjs <workdir>/storyboard.json --theme <テーマ> -o <workdir>/frames-part --scenes <変えた場面の id をカンマ区切り>
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/build_sheet.py <workdir>/storyboard.json --frames <workdir>/frames-part --outline <workdir>/outline.json -o <workdir>/sheet-part.html --artifact
+```
+
+**6. 声。** 利用者が変えた場面を見てから合成する。文を変えた行があれば、先に `--readings` で読みを確かめる（変えた行の読みだけを見ればよい）。合成のコマンドは初回と同じで、変えていない行は作り直されない。出力の「新しく合成 N 行」を報告に書く。声だけを変える（話者・話速）ときは、台本の `voice` を直して同じコマンドを回す（全行が作り直される）。
+
+```sh
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/tts.py <workdir>/storyboard.json -o <workdir>/voice
+node ${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/check_storyboard.cjs <workdir>/storyboard.json --theme <テーマ> --outline <workdir>/outline.json --complete --timeline <workdir>/voice/timeline.json
+```
+
+図や動作だけの直しでは、`tts.py` は「新しく合成 0 行」で終わる（時刻表を作り直すだけ）。別のセッションでも、VOICEVOX は `${CLAUDE_PLUGIN_DATA}/voicevox` に入っていれば入れ直さない（`tts.py` が「voicevox_core が入っていない」と止まったら、`setup_voice.py --agree` を実行する。利用規約への同意は、作ったときに取ってある）。
+
+**7. 組み立てて、同じ Artifact に公開し直す。** 組み立ては「組み立てと公開」と同じコマンド。同じセッションなら、同じ `file_path` で公開し直す（同じページが更新される）。別のセッションなら、Artifact ツールの `url` に `published.json` の `url` を渡す。更新の前に今のページを読むよう求められたら、読んでから公開する（公開するのは、組み立て直した `<workdir>/player.html`）。新しいページを作らない。公開し直したら、記録を更新する（テーマを変えたら `--theme` も渡す）。
+
+```sh
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/workdir.py publish <workdir> --url <同じ URL>
+```
 
 ## 報告
 
