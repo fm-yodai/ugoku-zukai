@@ -24,11 +24,19 @@ claude.ai では 1 回のコマンドが長いと止められるので、終了�
   読みはアクセント句ごとのかなを「/」でつなぎ、間は前後の「/」なしの「、」で出す（例: テジュンワ/ゼロジュンビカラ、キュウダンデ）。
   audio/・timeline.json・narration は作らない。
 
+--audition 8,2,3: 声の試聴。合成はせず（audio/・timeline.json・narration は作らない）、同じ 1 文を話者ごとに読ませて、
+  聞き比べるページ WORKDIR/audition.html を書く（名前だけでは声を選べないときに使う）。話者は 6 人まで。
+  文は --sample "…"、なければ台本の最初の行。--sample があれば台本は要らない（声は台本を書く前に選ぶことがある）。
+    python3 tts.py [storyboard.json] -o WORKDIR --audition 8,2,3 [--sample "聞き比べる文"] [--speed 1.1] [--artifact]
+  --artifact は Artifact で公開する形（<html>・<head>・<body> を外した断片）で書く。ページは WebAudio で鳴らし、VOICEVOX のクレジットを出す。
+
 声・速さは、引数 → 台本の voice → 既定（春日部つむぎ 8・1.1）の順に決まる。
 合成の前に assets/voicevox_user_dict.json の語をユーザー辞書として使う（読みの誤りはそこに足す）。
 """
 import argparse
+import base64
 import hashlib
+import html
 import io
 import json
 import os
@@ -240,7 +248,7 @@ def to_pcm(wav):
 
 
 def md_cell(s):
-    """表の 1 マスに入れる文。| は \| にし、改行は空白にする"""
+    r"""表の 1 マスに入れる文。| は \| にし、改行は空白にする"""
     return s.replace("|", "\\|").replace("\n", " ")
 
 
@@ -279,9 +287,138 @@ def write_readings(voice, rows, out, speaker, speed, ver, t0, budget):
     print("読みの一覧:", path)
 
 
+def parse_speakers(s):
+    """--audition の値（カンマ区切りの話者の番号）を整数の列にする。空・整数でない・重複・7 人以上は ValueError"""
+    parts = [p.strip() for p in s.split(",")]
+    if not s.strip() or any(not re.fullmatch(r"\d+", p) for p in parts):
+        raise ValueError("話者はカンマ区切りの番号で書く（例 8,2,3）")
+    ids = [int(p) for p in parts]
+    if len(set(ids)) != len(ids):
+        raise ValueError("同じ話者が 2 回ある")
+    if len(ids) > 6:
+        raise ValueError("話者は 6 人まで")
+    return ids
+
+
+def spoken_of(raw):
+    """字幕か read の文を、合成する文にする（印を外し、スペースを整える）"""
+    text, marks = parse_marks(raw)
+    return normalize(text, marks)[0]
+
+
+def sample_of(sb):
+    """台本の最初の行の、合成する文。行がなければ空の文字列"""
+    for sc in sb.get("scenes") or []:
+        for ln in sc.get("lines") or []:
+            return spoken_of(ln.get("read") or ln.get("text") or "")
+    return ""
+
+
+AUDITION_STYLE = """
+  :root { --page: #f4f5f7; --ink: #1d2433; --muted: #5d6676; --line: #d3d8e0; --accent: #1a5fd0; --err: #b3261e; }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --page: #121418; --ink: #e9eaec; --muted: #9aa1ab; --line: #2c3139; --accent: #7fb0ff; --err: #ff8a80; color-scheme: dark; } }
+  :root[data-theme="dark"] { --page: #121418; --ink: #e9eaec; --muted: #9aa1ab; --line: #2c3139; --accent: #7fb0ff; --err: #ff8a80; color-scheme: dark; }
+  body { background: var(--page); color: var(--ink); font: 15px/1.7 "Noto Sans JP", system-ui, sans-serif;
+         padding-block: 16px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+  .ua-wrap { max-width: 640px; margin: 0 auto; }
+  .ua-wrap h1 { font-size: 20px; margin: 0 0 12px; }
+  .ua-sample { font-size: 17px; margin: 0 0 6px; padding: 10px 14px; border-left: 3px solid var(--accent); overflow-wrap: anywhere; }
+  .ua-note, .ua-credit { color: var(--muted); font-size: 13px; margin: 0 0 14px; }
+  .ua-list { list-style: none; margin: 0 0 16px; padding: 0; display: grid; gap: 8px; }
+  .ua-list button { font: inherit; font-weight: 700; color: var(--ink); background: transparent; border: 1px solid var(--line); border-radius: 10px;
+                    width: 100%; padding: 10px 14px; text-align: left; cursor: pointer; display: flex; gap: 12px; align-items: baseline; flex-wrap: wrap; }
+  .ua-list button:hover, .ua-list button:focus-visible, .ua-list button[aria-pressed="true"] { border-color: var(--accent); outline: none; }
+  .ua-list button[aria-pressed="true"] { color: var(--accent); }
+  .ua-list span { font-weight: 400; font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .ua-err { color: var(--err); }
+"""
+
+# 押したときに WebAudio で復号して鳴らす（チャットのプレビューでは audio 要素が使えないため）。別のボタンを押したら前の音を止める
+AUDITION_JS = """
+(function () {
+  "use strict";
+  const DATA = /*UA:DATA*/[];
+  let ctx = null, cur = null, curBtn = null;
+  const bufs = {};
+  const stop = () => {
+    if (cur) { cur.onended = null; try { cur.stop(); } catch (e) {} }
+    if (curBtn) curBtn.setAttribute("aria-pressed", "false");
+    cur = curBtn = null;
+  };
+  async function play(i, btn) {
+    const err = document.getElementById("ua-err");
+    try {
+      err.hidden = true;
+      ctx = ctx || new (window.AudioContext || window.webkitAudioContext)();
+      if (ctx.state === "suspended") await ctx.resume();
+      const same = curBtn === btn;
+      stop();
+      if (same) return;
+      if (!bufs[i]) {
+        const bin = atob(DATA[i]), u = new Uint8Array(bin.length);
+        for (let k = 0; k < bin.length; k++) u[k] = bin.charCodeAt(k);
+        bufs[i] = await ctx.decodeAudioData(u.buffer);
+      }
+      const src = ctx.createBufferSource();
+      src.buffer = bufs[i]; src.connect(ctx.destination);
+      src.onended = () => { if (cur === src) stop(); };
+      src.start();
+      cur = src; curBtn = btn; btn.setAttribute("aria-pressed", "true");
+    } catch (e) { err.textContent = "音声を再生できませんでした: " + e.message; err.hidden = false; }
+  }
+  document.querySelectorAll(".ua-list button").forEach((b, i) => { b.onclick = () => play(i, b); });
+})();
+"""
+
+
+def audition_html(sample, voices, speed, artifact=False):
+    """声の試聴のページ。voices は [{"id", "name", "style", "wav"（バイト列）}]。外のファイルを読まない 1 枚の HTML を返す"""
+    esc = html.escape
+    items, credits = [], []
+    for v in voices:
+        label = f"{v['name']}（{v['style']}）" if v.get("style") else v["name"]
+        items.append(f'<li><button type="button" aria-pressed="false">▶ {esc(label)}<span>話者 {int(v["id"])}</span></button></li>')
+        if v["name"] not in credits:
+            credits.append(v["name"])
+    data = json.dumps([base64.b64encode(v["wav"]).decode() for v in voices])
+    head = f"<title>声の試聴</title>\n<style>{AUDITION_STYLE}</style>"
+    body = "\n".join([
+        '<div class="ua-wrap">',
+        "<h1>声の試聴</h1>",
+        f'<p class="ua-sample">{esc(sample)}</p>',
+        f'<p class="ua-note">同じ文を、話速 {speed:g} で読んでいます。名前を押すと鳴ります。気に入った声の番号を Claude に伝えてください。</p>',
+        '<ul class="ua-list">', *items, "</ul>",
+        f'<p class="ua-credit">{esc("、".join("VOICEVOX:" + n for n in credits))}</p>',
+        '<p class="ua-err" id="ua-err" hidden></p>',
+        "</div>",
+        "<script>" + AUDITION_JS.replace("/*UA:DATA*/[]", data) + "</script>",
+    ])
+    if artifact:
+        return head + "\n" + body + "\n"
+    return ('<!doctype html>\n<html lang="ja">\n<head>\n<meta charset="utf-8">\n'
+            '<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">\n'
+            f"{head}\n</head>\n<body>\n{body}\n</body>\n</html>\n")
+
+
+def write_audition(voice, speakers, sample, speed, out, home, artifact):
+    """話者ごとに sample を合成して、WORKDIR/audition.html を書く"""
+    known = {v["id"]: v for v in setup_voice.list_voices(home)}
+    voices = []
+    for sp in speakers:
+        wav, _, _ = voice.line(sample, sp, speed)   # 入っていない話者は、ここで止まる（何も書かない）
+        meta = known.get(sp) or {"name": SPEAKER_NAMES.get(sp, f"話者 {sp}"), "style": ""}
+        voices.append({"id": sp, "name": meta["name"], "style": meta["style"], "wav": wav})
+    os.makedirs(out, exist_ok=True)
+    path = os.path.join(out, "audition.html")
+    page = audition_html(sample, voices, speed, artifact)
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(page)
+    print(f"声の試聴: {path}（{len(page.encode()) / 1e6:.1f}MB、{len(voices)} 人）")
+
+
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("storyboard")
+    ap.add_argument("storyboard", nargs="?", help="台本。--audition に --sample を付けるときは省ける")
     ap.add_argument("-o", "--out", required=True)
     ap.add_argument("--speaker", type=int)
     ap.add_argument("--speed", type=float)
@@ -290,13 +427,30 @@ def main():
     ap.add_argument("--dict", help="スキルの辞書に重ねる辞書（既定は WORKDIR の親の voice_dict.json）")
     ap.add_argument("--readings", action="store_true", help="合成せず、読みの一覧 readings.md だけを書く")
     ap.add_argument("--no-mix", action="store_true", help="時刻表だけ書き、まとめた音声は作らない")
+    ap.add_argument("--audition", help="声の試聴。話者の番号をカンマ区切りで渡す（例 8,2,3）。audition.html だけを書く")
+    ap.add_argument("--sample", help="--audition で読ませる文（省くと台本の最初の行）")
+    ap.add_argument("--artifact", action="store_true", help="--audition のページを、Artifact で公開する形で書く")
     a = ap.parse_args()
-    sb = json.load(open(a.storyboard, encoding="utf-8"))
+    # 使い方の誤りは、VOICEVOX を読み込む前に終了コード 2 で止める（何も書かない）
+    if a.audition is None and (a.sample is not None or a.artifact):
+        ap.error("--sample と --artifact は --audition と一緒に使う")
+    if a.audition is None and not a.storyboard:
+        ap.error("台本（storyboard.json）が要る")
+    sb = json.load(open(a.storyboard, encoding="utf-8")) if a.storyboard else {}
+    speakers = sample = None
+    if a.audition is not None:
+        try:
+            speakers = parse_speakers(a.audition)
+        except ValueError as e:
+            ap.error(f"--audition: {e}")
+        sample = spoken_of(a.sample) if a.sample is not None else sample_of(sb)
+        if not sample.strip():
+            ap.error("--audition には、--sample の文か、行のある台本が要る")
     vo = sb.get("voice") or {}
     speaker = a.speaker if a.speaker is not None else int(vo.get("speaker", DEFAULT_SPEAKER))
     speed = a.speed if a.speed is not None else float(vo.get("speed", DEFAULT_SPEED))
     adir = os.path.join(a.out, "audio")
-    if not a.readings:
+    if not a.readings and speakers is None:
         os.makedirs(adir, exist_ok=True)
     t0 = time.time()
     if a.dict and not os.path.exists(a.dict):
@@ -305,6 +459,9 @@ def main():
     voice = Voice(a.home, extra if os.path.exists(extra) else None)
     import voicevox_core
     ver = getattr(voicevox_core, "__version__", setup_voice.CORE_VER)
+    if speakers is not None:
+        write_audition(voice, speakers, sample, speed, a.out, a.home, a.artifact)
+        return
     rows = collect(sb)
     if a.readings:
         stale = os.path.join(a.out, "readings.md")
