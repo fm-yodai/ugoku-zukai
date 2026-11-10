@@ -8,7 +8,7 @@
 |---|---|---|---|---|
 | A-M1 | `check_storyboard.cjs --outline <outline.json> --complete` の誤りが 0（すべての場面に `chapter` があり、構成メモの章にあり、場面のない章がない） | 機械（`node scripts/check_storyboard.cjs <storyboard.json> --theme <テーマ> --outline <outline.json> --complete`） | must | 新設 |
 | A-1 | 各章の言うこと（`says`）が、その章の場面の字幕で言われている。言い回しは違ってよいが、意味が変わっていない | director | must | S-F3 |
-| A-2 | 構成メモにない主張を、台本が足していない。つなぎの文と、言うことを説明するための具体例は主張に数えない | director | must | S-F3 |
+| A-2 | 構成メモにない主張を、台本が足していない。つなぎの文と、言うことを説明するための具体例は主張に数えない（具体例が事実を述べているなら、S-F4 で見る） | director | must | S-F3 |
 | A-3 | 各章の見せるもの（`shows`）と、その章の場面の図が合っている。図の種類が `shows.figure` と違うときは、見せたいことに照らして理由が立つ | director | must | G-D2 |
 | A-4 | 章の順が構成メモと同じで、章ごとの長さが尺の目安から大きく外れていない（`check_storyboard.cjs --outline` の警告と章ごとの見積もりを読む） | director | should | 新設 |
 

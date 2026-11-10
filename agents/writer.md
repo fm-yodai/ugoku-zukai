@@ -13,7 +13,7 @@ tools: Read, Write, Edit, Glob, Grep, Bash(node ${CLAUDE_PLUGIN_ROOT}/skills/mak
 - 作業フォルダの絶対パス（以下 `<workdir>`）
 - テーマ（名前か `<workdir>/theme.json` のパス。以下 `<テーマ>`）
 - **書く範囲**。「全部」か、章の id の一覧（例 `c2,c3`）。章の id のときは、その章の場面だけを書く・書き直す
-- **直す指摘のキー**（あれば）。例 `l7:S-W1`、`c3.1:A-1`。本文は `python3 ${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/ledger.py list <workdir> --state fixing --full` で読む
+- **直す指摘のキー**（あれば）。例 `l7:S-W1`、`c3.1:A-1`。本文は `<workdir>/review/ledger.json` の `items` を Read して読む（そのキーの `problem`・`suggestion`・`evidence`）
 - または「機械検査の差し戻し」と、検査の出力（このとき書く範囲と指摘のキーはない）
 
 出力は `<workdir>/storyboard.json`。

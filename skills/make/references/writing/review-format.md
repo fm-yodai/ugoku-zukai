@@ -32,7 +32,7 @@
 | `reviewer` | 評価役の名前。チャットで評価役を 1 回にまとめるときは `combined` |
 | `target` | 何を見たか。`outline`（構成メモ）・`script`（台本）・`screen`（絵コンテのコマ）・`voice`（読みの一覧） |
 | `checks` | 担当の基準すべてについて `PASS`・`FAIL`・`UNKNOWN`。`evidence` には、PASS なら確かめた範囲、FAIL なら要約、UNKNOWN なら判定に要る情報を書く。`evidence` のない PASS は UNKNOWN として扱われる |
-| `findings` | 基準を満たしていない箇所。1 つの問題を 1 件にする |
+| `findings` | 基準を満たしていない箇所。1 つの問題を 1 件にする。同じ場所・同じ基準の問題が 2 つ以上あるときは、キーが同じになるので 1 件にまとめ、`problem` と `suggestion` に両方を書く（レベルは高いほう） |
 | `rechecks` | 進行役から渡されたキーだけを見直した結果。`verdict` は `PASS` か `FAIL`。渡されていなければ空の配列。再確認だけを頼まれた回は、`checks` と `findings` は空でよい（見る範囲も渡されたら、その範囲で判定した基準だけを `checks` に書く） |
 
 ## 指摘（`findings` の 1 件）
@@ -60,7 +60,7 @@
 | 構成メモの `basics` | `basics.<キー>` | `basics.knows` |
 | 全体 | `*` | `*` |
 
-UNKNOWN と判定した基準は、`findings` にも `*:<基準 ID>`（場所が決まるならその場所）で載せ、`problem` に判定に要る情報を書く。
+FAIL と判定した基準には、必ず `findings` を書く（書かないと、場所の分からない must の指摘として取り込まれる）。UNKNOWN と判定した基準は、`findings` にも `*:<基準 ID>`（場所が決まるならその場所）で載せ、`problem` に判定に要る情報を書く。
 
 ## レベル
 

@@ -20,7 +20,7 @@
 | S-W10 | 口調が構成メモの `basics.tone` に合っている。`tone` がなければ対象外 | writing-reviewer | must（全体の口調が違う）/ should（一部の文だけ違う） |
 | S-F1 | `source` のある行の主張が、その `source` から言える（FC-wrong / FC-overclaim / FC-nosource が無い） | fact-checker | must |
 | S-F2 | 図の宣言（`figures` の辺・メッセージ・表やグラフの値）と動作（`trace`・`reply` の経路、`relabel` の値）が根拠と一致する。根拠は、その場面の行の `source` と、その章の言うことの `source`。利用者の考えを図にしたもの（その章の言うことと見せるものが `by: user`）は対象外 | fact-checker | must |
-| S-F4 | 出どころのない事実の記述がない。`source` がなく、事実を述べていて、その章の言うこと（構成メモの `says`）が `by: user` でない行を挙げる | fact-checker | should |
+| S-F4 | 出どころのない事実の記述がない。`source` がなく、事実を述べている行を挙げる。利用者の言うこと（構成メモの `by: user` の `says`）を言い換えただけの行は見ない。利用者の章でも、台本が足した具体例・数値・固有の名前が事実を述べていれば挙げる | fact-checker | should |
 | S-D1 | 流れを追う場面で、流れているデータ（トークン・リクエスト・レコード等）が画面の主役になっている（VG-1）。流れのない図（表・比較・ベン図など）の場面は対象外 | director | must |
 | S-D2 | 1 行 1 つの画面変化で、字幕の主題と画面の主題が同じ（VG-3・VG-6） | director | must |
 | S-D4 | その他の VG の約束（寄って戻る VG-4・具体的な 1 件を通す VG-5・応答は別の矢印 VG-7・残り物を消す VG-8 など） | director | should |

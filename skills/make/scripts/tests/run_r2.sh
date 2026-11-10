@@ -101,5 +101,22 @@ old=$(grep -rnE "計画モード|画面モード|構造モード|契約モード
 grep -rn 'CLAUDE_PLUGIN_ROOT' references | grep -v "references/run-code.md:" && ng "run-code.md のほかに \${CLAUDE_PLUGIN_ROOT} がある（チャットにはこの変数がない）"
 c=$(awk '/^## 絵コンテと粗い再生ページ/{on=1} on && /setup_render.py/ && !a{a=NR} on && /frames.cjs .*-o/ && !b{b=NR} END{print (a && b && a < b) ? "ok" : "ng"}' references/run-chat.md)
 [ "$c" = ok ] || ng "run-chat.md の絵コンテの節で、setup_render.py が frames.cjs より後にある"
+# 最終レビュー（2026-11-10）の指摘
+# エージェントの本文に書いたスクリプトのコマンドが、tools: で許されている
+for f in researcher writer fact-checker writing-reviewer director; do
+  for sc in $(awk 'n>=2{print} /^---$/{n++}' $A/$f.md | grep -oE 'scripts/[a-z_]+\.(py|cjs)' | sort -u); do
+    grep '^tools:' $A/$f.md | grep -q "/$sc " || ng "agents/$f.md の本文の $sc が tools: にない"
+  done
+done
+# 利用者が言っていない事実は、利用者の章でも S-F4 で見る
+grep "^| S-F4 " references/criteria/script.md | grep -q "言い換え" || ng "script.md の S-F4 が、利用者の言うことを言い換えた行だけを除く形になっていない"
+grep "^| A-2 " references/criteria/agreement.md | grep -q "S-F4" || ng "agreement.md の A-2 が、事実を述べる具体例を S-F4 に回していない"
+grep -q "言い換え" $A/fact-checker.md || ng "fact-checker.md が、利用者の言うことを言い換えた行だけを除く形になっていない"
+# 先に直す範囲（台本の初稿と、その最初の絵コンテ。読みは別に 1 回）が、文書の間でそろっている
+for f in SKILL.md references/review-protocol.md references/run-chat.md references/run-code.md; do
+  grep -q "最初の絵コンテ" $f || ng "$f に、最初の絵コンテの指摘も先に直す対象だという記述がない"
+done
+grep -q "読みの一覧" SKILL.md && grep -q "同じ場所・同じ基準" references/writing/review-format.md || ng "SKILL.md の読みの扱いか、review-format.md の同じキーの扱いがない"
+grep -q "設計書から広げた判断" ../../docs/design.md || ng "docs/design.md に、設計書から広げた判断の記録がない"
 [ $fail = 0 ] && echo "R2 の検査: すべて OK" || echo "R2 の検査: NG あり"
 exit $fail

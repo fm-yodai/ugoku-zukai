@@ -229,10 +229,93 @@ class LedgerTest(unittest.TestCase):
         row = [ln for ln in md.splitlines() if "l3:S-D2" in ln][0]
         self.assertEqual(row.count("|"), 5)   # 4 列の表が崩れない
 
-    def test_residual_empty(self):
+    def test_residual_empty(self):        # 評価役が見て、must が残っていない
+        self.run("ingest", self.wd, self.out("director", [F("l4:G-D3", "should")]))
         self.assertIn("0 件", self.run("residual", self.wd)[1])
         with open(os.path.join(self.wd, "review", "residual.md"), encoding="utf-8") as f:
             self.assertIn("なし", f.read())
+
+    def test_no_ledger_yet(self):         # 評価役の出力をまだ取り込んでいない。「残論点なし」とは言わない
+        for cmd in ("status", "list", "residual"):
+            code, so, _ = self.run(cmd, self.wd)
+            self.assertEqual(code, 0, cmd)
+            self.assertIn("まだない", so, cmd)
+        with open(os.path.join(self.wd, "review", "residual.md"), encoding="utf-8") as f:
+            md = f.read()
+        self.assertIn("まだない", md)
+        self.assertNotIn("なし", md)
+
+    def test_missing_workdir(self):       # 作業フォルダのパスを間違えたら、0 件と答えずに止まる
+        gone = os.path.join(self.tmp.name, "typo")
+        for args in (("status", gone), ("list", gone), ("residual", gone),
+                     ("ingest", gone, self.out("director", [F("l1:S-D2")])), ("decide", gone, "--by", "user", "--fix", "l1:S-D2")):
+            code, _, se = self.run(*args)
+            self.assertEqual(code, 2, args[0])
+            self.assertIn("作業フォルダ", se, args[0])
+        self.assertFalse(os.path.exists(gone))
+
+    def test_broken_output_rejected(self):   # 形の崩れた評価役の出力は、黙って落とさずに止める
+        self.run("ingest", self.wd, self.out("director", [F("l1:S-D2")]))
+        before = self.items()
+        ok = self.out("director", [F("l2:S-D2")])
+        cases = {"JSON でない": "{not json", "最上位が配列": [],
+                 "findings がオブジェクト": {"findings": {"l3:S-D2": F("l3:S-D2")}},
+                 "findings の要素が文字列": {"findings": ["l3:S-D2"]},
+                 "checks がオブジェクト": {"checks": {"S-D2": "FAIL"}},
+                 "checks に criterion がない": {"checks": [{"verdict": "FAIL", "evidence": "x"}]},
+                 "rechecks の要素が文字列": {"rechecks": ["l1:S-D2"]},
+                 "where が配列": {"findings": [F("l3:S-D2", where=["l3"])]}}
+        for name, body in cases.items():
+            self.n += 1
+            path = os.path.join(self.tmp.name, f"broken{self.n}.json")
+            with open(path, "w", encoding="utf-8") as f:
+                f.write(body) if isinstance(body, str) else json.dump(body, f, ensure_ascii=False)
+            code, _, se = self.run("ingest", self.wd, ok, path)
+            self.assertEqual(code, 2, name)
+            self.assertIn(os.path.basename(path), se, name)
+            self.assertEqual(self.items(), before, name)      # 一緒に渡した正しい出力も取り込まない
+
+    def test_fail_check_without_finding(self):   # FAIL と判定したのに指摘がない基準は、must の指摘にする
+        self.run("ingest", self.wd, self.out("fact-checker", checks=[{"criterion": "S-F1", "verdict": "FAIL", "evidence": "l7 が言えない"}]))
+        self.assertEqual(self.items()["*:S-F1"]["level"], "must")
+        self.assertIn("l7 が言えない", self.items()["*:S-F1"]["problem"])
+
+    def test_case_insensitive(self):
+        self.run("ingest", self.wd, self.out("director", [F("l1:G-D3", "SHOULD"), F("l2:S-D2", "Must")],
+                                             checks=[{"criterion": "V-1", "verdict": "unknown", "evidence": "PNG がない"}]))
+        it = self.items()
+        self.assertEqual((it["l1:G-D3"]["level"], it["l2:S-D2"]["level"]), ("should", "must"))
+        self.assertIn("*:V-1", it)
+        self.run("decide", self.wd, "--by", "user", "--fix", "l2:S-D2")
+        self.run("ingest", self.wd, self.out("director", rechecks=[{"key": "l2:S-D2", "verdict": "pass", "evidence": "ok"}]))
+        self.assertEqual(self.items()["l2:S-D2"]["state"], "closed")
+
+    def test_duplicate_key_merged(self):   # 同じ行・同じ基準の指摘が 2 つあっても、片方を黙って消さない
+        _, so, _ = self.run("ingest", self.wd, self.out("writing-reviewer", [
+            F("l9:S-W1", "must", problem="主語が抜けている", suggestion="主語を足す"),
+            F("l9:S-W1", "should", problem="一文が長い", suggestion="二つに分ける")]))
+        it = self.items()["l9:S-W1"]
+        self.assertEqual(it["level"], "must")
+        self.assertIn("主語が抜けている", it["problem"])
+        self.assertIn("一文が長い", it["problem"])
+        self.assertIn("二つに分ける", it["suggestion"])
+        self.assertIn("警告", so)
+
+    def test_kept_reopens_when_level_rises(self):   # 利用者が見ていない must を、直さないと決めたことにしない
+        self.run("ingest", self.wd, self.out("writing-reviewer", [F("l3:S-W1", "should")]))
+        self.run("decide", self.wd, "--by", "user", "--keep", "l3:S-W1")
+        _, so, _ = self.run("ingest", self.wd, self.out("writing-reviewer", [F("l3:S-W1", "must", problem="意味が取れない")]))
+        it = self.items()["l3:S-W1"]
+        self.assertEqual((it["state"], it["level"]), ("open", "must"))
+        self.assertIn("警告", so)
+
+    def test_lead_cannot_fix_kept(self):   # 利用者の「直さない」を、進行役は上書きできない
+        self.run("ingest", self.wd, self.out("director", [F("l1:S-D2")]))
+        self.run("decide", self.wd, "--by", "user", "--keep", "l1:S-D2")
+        code, so, _ = self.run("decide", self.wd, "--by", "lead", "--fix", "l1:S-D2")
+        self.assertEqual(code, 0)
+        self.assertIn("警告", so)
+        self.assertEqual(self.items()["l1:S-D2"]["state"], "kept")
 
     def test_status_warns_missing_id(self):   # 台本にも構成メモにもない where
         shutil.copy(PAIR_SB, os.path.join(self.wd, "storyboard.json"))
@@ -251,7 +334,6 @@ class LedgerTest(unittest.TestCase):
         code, so, _ = self.run("status", self.wd)
         self.assertEqual(code, 0)
         self.assertNotIn("警告", so)
-        self.assertEqual(self.run("status", os.path.join(self.tmp.name, "empty"))[0], 0)   # 台帳がまだない
 
     def test_must_only_reads_new_criteria(self):
         ids = ledger.must_only()

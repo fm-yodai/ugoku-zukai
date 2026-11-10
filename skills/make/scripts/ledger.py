@@ -12,7 +12,7 @@ references/writing/review-format.md が正。
   python3 ledger.py status   <workdir>                          件数の要約と、今の台本・構成メモにない id を指す指摘の警告
   python3 ledger.py residual <workdir>                          must で閉じていない指摘（残論点）を review/residual.md・residual.json に書く
 
-終了コード: 0 = できた、2 = 使い方の誤り・台帳にないキー・古い形の台帳（何も書き換えない）。
+終了コード: 0 = できた、2 = 使い方の誤り・作業フォルダがない・台帳にないキー・古い形の台帳・形の崩れた評価役の出力（何も書き換えない）。
 
 指摘のキーは <where>:<基準 ID>（例 l7:S-F1、c3.1:A-1、basics.knows:O-D3、*:S-D4）。レベルは must / should / nits。
 
@@ -25,16 +25,19 @@ references/writing/review-format.md が正。
 遷移:
   findings に新しいキー            → open で足す
   findings に台帳にあるキー        → open は文面を更新。fixing と closed は open に戻す（by は消さない）。kept は kept のまま文面だけ更新
+                                     （レベルが上がったときだけ open に戻す。利用者が直さないと決めたのは、前のレベルの指摘だから）
   rechecks の PASS                 → closed（どの状態からでも）
   rechecks の FAIL                 → fixing と closed は open に戻す。open と kept はそのまま
-  decide --fix                     → open と kept を fixing にし、by を記録する。closed と fixing は警告して飛ばす
+  decide --fix                     → open を fixing にし、by を記録する。kept を fixing にできるのは --by user だけ。closed と fixing は警告して飛ばす
   decide --keep（--by user だけ）  → open と fixing を kept にし、by を user にする
 
 取り込みの決まり:
   evidence のない指摘と再確認は捨てて警告する。evidence のない PASS は UNKNOWN として扱う
   重さが must だけの基準（criteria/*.md の表の最後の列が must）の指摘は、付いてきたレベルにかかわらず must にする
   レベルが must / should / nits のどれでもなければ should にする
-  checks が UNKNOWN で、同じ基準の指摘がなければ、*:<基準 ID> の must の指摘を足す
+  checks が UNKNOWN か FAIL で、同じ基準の指摘がなければ、*:<基準 ID> の must の指摘を足す
+  1 つの出力に同じキーの指摘が複数あれば、1 件にまとめる（高いほうのレベルを採り、文をつなぐ）
+  verdict とレベルは、大文字と小文字を区別しない
 """
 import argparse
 import json
@@ -81,6 +84,15 @@ def path(workdir):
     return os.path.join(workdir, "review", "ledger.json")
 
 
+def need_workdir(workdir):
+    """作業フォルダのパスを間違えたときに、「0 件」と答えたり新しいフォルダを作ったりしない"""
+    if not os.path.isdir(workdir):
+        raise Refuse(f"作業フォルダがない: {workdir}（パスを確かめる）")
+
+
+NO_LEDGER = "指摘の一覧がまだない（評価役の出力を ingest で取り込んでいない）"
+
+
 def load(workdir):
     p = path(workdir)
     if not os.path.exists(p):
@@ -123,54 +135,113 @@ def summary(led):
             f"直し中 {c['fixing']}、直さない {c['kept']}、閉じた {c['closed']}")
 
 
+def read_output(fp):
+    """評価役の出力を読み、形を確かめる。形が崩れていれば、黙って落とさずに止める"""
+    name = os.path.basename(fp)
+    if not os.path.isfile(fp):
+        raise Refuse(f"評価役の出力がない: {fp}")
+    try:
+        with open(fp, encoding="utf-8") as f:
+            d = json.load(f)
+    except ValueError as e:
+        raise Refuse(f"{name}: JSON として読めない（{e}）")
+    if not isinstance(d, dict):
+        raise Refuse(f"{name}: 最上位はオブジェクトで書く（references/writing/review-format.md）")
+    for k in ("checks", "findings", "rechecks"):
+        v = d.get(k) or []
+        if not isinstance(v, list) or not all(isinstance(x, dict) for x in v):
+            raise Refuse(f"{name}: {k} はオブジェクトの配列で書く")
+        d[k] = v
+    for c in d["checks"]:
+        if not isinstance(c.get("criterion"), str) or not c["criterion"]:
+            raise Refuse(f"{name}: checks に criterion（基準 ID）のない判定がある")
+    for f in d["findings"]:
+        for k in ("key", "where", "criterion"):
+            if k in f and not isinstance(f[k], str):
+                raise Refuse(f"{name}: findings の {k} は文字列で書く")
+    for r in d["rechecks"]:
+        if not isinstance(r.get("key"), str):
+            raise Refuse(f"{name}: rechecks に key のない再確認がある")
+    return d
+
+
+def merge_findings(findings, who, warns):
+    """1 つの出力の中で同じキーの指摘が複数あれば、1 件にまとめる（高いほうのレベルを採り、文をつなぐ）"""
+    out = {}
+    for f in findings:
+        key = f.get("key") or f"{f.get('where', '*')}:{f.get('criterion', '?')}"
+        f = {**f, "key": key}
+        if key not in out:
+            out[key] = f
+            continue
+        g = out[key]
+        warns.append(f"{who}: {key} の指摘が 2 件以上あるので、1 件にまとめた（同じ場所・同じ基準の問題は 1 件に書く約束）")
+        la, lb = str(g.get("level")).lower(), str(f.get("level")).lower()
+        if lb in LEVELS and (la not in LEVELS or LEVELS.index(lb) < LEVELS.index(la)):
+            g["level"] = f.get("level")
+        for k in ("problem", "suggestion", "evidence"):
+            if f.get(k):
+                g[k] = f"{g[k]} ／ {f[k]}" if g.get(k) else f[k]
+    return list(out.values())
+
+
 def ingest(workdir, files):
     led = load(workdir)
-    outs = []
-    for fp in files:
-        if not os.path.isfile(fp):
-            raise Refuse(f"評価役の出力がない: {fp}")
-        with open(fp, encoding="utf-8") as f:
-            outs.append((fp, json.load(f)))
+    outs = [(fp, read_output(fp)) for fp in files]   # 全部読んでから取り込む（1 つでも崩れていれば、何も書き換えない）
     hard, warns = must_only(), []
     for fp, d in outs:
         who = d.get("reviewer") or os.path.basename(fp)
-        findings = [f for f in d.get("findings") or [] if isinstance(f, dict)]
-        for c in d.get("checks") or []:
-            crit, v = c.get("criterion"), c.get("verdict")
+        findings = list(d["findings"])
+        named = {f.get("criterion") or str(f.get("key", "")).rpartition(":")[2] for f in findings}
+        for c in d["checks"]:
+            crit, v = c["criterion"], str(c.get("verdict", "")).upper()
             if v == "PASS" and not c.get("evidence"):
                 warns.append(f"{who}: {crit} の PASS に evidence がない → UNKNOWN として扱う")
                 v = "UNKNOWN"
+            if v not in ("PASS", "FAIL", "UNKNOWN"):
+                warns.append(f"{who}: {crit} の verdict {json.dumps(c.get('verdict'), ensure_ascii=False)} は PASS / FAIL / UNKNOWN のどれでもない → UNKNOWN として扱う")
+                v = "UNKNOWN"
             led["checks"][crit] = {"verdict": v, "reviewer": who, "evidence": c.get("evidence", "")}
-            if v == "UNKNOWN" and not any(f.get("criterion") == crit for f in findings):
+            if v in ("UNKNOWN", "FAIL") and crit not in named:
+                if v == "FAIL":
+                    warns.append(f"{who}: {crit} は FAIL なのに指摘（findings）がない → *:{crit} の must の指摘にした")
+                head = "UNKNOWN（判定に要る情報が足りない）" if v == "UNKNOWN" else "FAIL と判定されたが、場所と直し方が書かれていない"
                 findings.append({"key": f"*:{crit}", "where": "*", "criterion": crit, "level": "must",
-                                 "problem": "UNKNOWN（判定に要る情報が足りない）: " + (c.get("evidence") or "evidence がない"),
+                                 "problem": f"{head}: " + (c.get("evidence") or "evidence がない"),
                                  "evidence": c.get("evidence") or "判定の根拠が書かれていない"})
-        for f in findings:
-            key = f.get("key") or f"{f.get('where', '*')}:{f.get('criterion', '?')}"
+        for f in merge_findings(findings, who, warns):
+            key = f["key"]
             if not f.get("evidence"):
                 warns.append(f"{who}: {key} に evidence がないので捨てた（根拠のない指摘は無効）")
                 continue
             where, _, crit = key.rpartition(":")
-            crit = f.get("criterion") or crit
-            level = f.get("level")
+            for k, v in (("where", where), ("criterion", crit)):
+                if f.get(k) and f[k] != v:
+                    warns.append(f"{who}: {key} の {k}（{f[k]}）がキーと食い違う。キーのほうを採った")
+            level = str(f.get("level")).lower()
             if level not in LEVELS:
-                warns.append(f"{who}: {key} のレベル {json.dumps(level, ensure_ascii=False)} は must / should / nits のどれでもないので、should にした")
+                warns.append(f"{who}: {key} のレベル {json.dumps(f.get('level'), ensure_ascii=False)} は must / should / nits のどれでもないので、should にした")
                 level = "should"
             if crit in hard and level != "must":
                 warns.append(f"{who}: {key} は基準 {crit} が must だけなので、レベル {level} を must に直した")
                 level = "must"
             it = led["items"].get(key)
             if it is None:
-                it = led["items"][key] = {"where": f.get("where") or where or "*", "criterion": crit, "level": level,
+                it = led["items"][key] = {"where": where or "*", "criterion": crit, "level": level,
                                           "state": "open", "by": None, "reviewer": who, "history": []}
                 log(it, "found")
             elif it["state"] in ("fixing", "closed"):
                 log(it, "refound", f"{STATE_LABEL[it['state']]}の指摘がもう一度出た")
                 it["state"] = "open"
+            elif it["state"] == "kept" and LEVELS.index(level) < LEVELS.index(it["level"]):
+                # 利用者が直さないと決めたのは、前のレベルの指摘。重くなった指摘は、まだ見ていない
+                warns.append(f"{who}: {key} は利用者が直さないと決めた指摘だが、レベルが {it['level']} から {level} に上がったので、未対応に戻した")
+                log(it, "reopen:level", f"{it['level']} → {level}")
+                it["state"], it["by"] = "open", None
             it.update({k: f[k] for k in FIELDS if k in f})
             it["level"], it["reviewer"] = level, who
-        for r in d.get("rechecks") or []:
-            key, v = r.get("key"), r.get("verdict")
+        for r in d["rechecks"]:
+            key, v = r["key"], str(r.get("verdict", "")).upper()
             it = led["items"].get(key)
             if it is None:
                 warns.append(f"{who}: rechecks の {key} は台帳にない")
@@ -186,7 +257,7 @@ def ingest(workdir, files):
                     it["state"] = "open"
                 log(it, "recheck:FAIL", r["evidence"])
             else:
-                warns.append(f"{who}: rechecks の {key} の verdict は PASS か FAIL（今は {json.dumps(v, ensure_ascii=False)}）")
+                warns.append(f"{who}: rechecks の {key} の verdict は PASS か FAIL（今は {json.dumps(r.get('verdict'), ensure_ascii=False)}）")
     save(workdir, led)
     for w in warns:
         print("警告:", w)
@@ -206,6 +277,9 @@ def decide(workdir, by, fix, keep):
         it = led["items"][k]
         if it["state"] in ("closed", "fixing"):
             print(f"警告: {k} は {STATE_LABEL[it['state']]} なので飛ばした")
+            continue
+        if it["state"] == "kept" and by != "user":
+            print(f"警告: {k} は利用者が直さないと決めた指摘なので飛ばした（直すと決め直せるのは利用者だけ。--by user）")
             continue
         it["state"], it["by"] = "fixing", by
         log(it, f"fix:{by}")
@@ -239,6 +313,9 @@ def tag(it):
 
 def show(workdir, states, by, reviewer, full, as_json):
     led = load(workdir)
+    if not as_json and not os.path.exists(path(workdir)):
+        print(NO_LEDGER)
+        return
     if states is None:
         states = STATES if by else ("open",)
     rows = select(led, states, by, reviewer)
@@ -296,6 +373,9 @@ def known_ids(workdir):
 
 def status(workdir):
     led = load(workdir)
+    if not os.path.exists(path(workdir)):
+        print(NO_LEDGER)
+        return
     print(summary(led))
     ids = known_ids(workdir)
     if ids is not None:
@@ -307,6 +387,7 @@ def status(workdir):
 
 def residual(workdir):
     led = load(workdir)
+    none_yet = not os.path.exists(path(workdir))
     items = [{"key": k, "level": it["level"], "state": it["state"], "by": it["by"], "where": it["where"],
               "criterion": it["criterion"], "problem": it.get("problem", ""), "suggestion": it.get("suggestion", "")}
              for k, it in led["items"].items() if it["level"] == "must" and it["state"] != "closed"]
@@ -321,9 +402,11 @@ def residual(workdir):
             f.write("| キー | 状態 | 指摘 | 決めた人 |\n|---|---|---|---|\n")
             for i in items:
                 f.write(f"| `{i['key']}` | {STATE_LABEL[i['state']]} | {one_line(i['problem'])[:160]} | {BY_LABEL.get(i['by'], '')} |\n")
+        elif none_yet:
+            f.write(NO_LEDGER + "。残論点があるかは、まだ分からない\n")
         else:
             f.write("なし\n")
-    print(f"{out}: {len(items)} 件")
+    print(f"{out}: {len(items)} 件" + (f"（{NO_LEDGER}）" if none_yet else ""))
 
 
 def main(argv):
@@ -348,6 +431,7 @@ def main(argv):
         sub.add_parser(name).add_argument("workdir")
     a = ap.parse_args(argv)   # 使い方の誤りは argparse が終了コード 2 で止める
     try:
+        need_workdir(a.workdir)
         if a.cmd == "ingest":
             ingest(a.workdir, a.files)
         elif a.cmd == "decide":
