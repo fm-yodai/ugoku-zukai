@@ -240,32 +240,40 @@ python3 <skill>/scripts/build_player.py <workdir>/storyboard.json --theme <テ�
 
 **1. 箇所を受け取る。** 利用者が Artifact にコメントを付けたと言ったら、そのコメントを会話から読めるかを確かめる。読めなければ、再生ページの「直したい箇所を指す」を開いてコピーした文字（`s2 / l2 @0:14` の形）を、会話に貼ってもらう。
 
-**2. 行を特定して直す。** 指された id を `<workdir>/storyboard.json` で確かめて直す。直しが合意に関わるなら、先に `<workdir>/outline.json` を直して `check_outline.py --ready` を通す。
+**2. 直す前に、機械検査を 1 回回す。** 直す前からある誤りを、直しで入った誤りと見分けるためである。コマンドは 4 と同じ（声があれば `--timeline` を付ける）。直す前からある誤り（頼まれた範囲の外）は、黙って直さず、利用者に伝えて、直すかを聞く。直さないと決まったら、そのまま進めて、報告に書く。
 
-**3. 機械検査。** 文（`text`・`read`）を変えたら、合成した声が古くなるので、`--timeline` を付けずに回す。図や動作だけを変えたら、`--timeline` を付けて回す。
+**3. 行を特定して直す。** 指された id を `<workdir>/storyboard.json` で確かめて直す。`read` のある行の字幕を変えるときは、`text` と `read` の両方を直す。直しが合意に関わるなら、先に `<workdir>/outline.json` を直して `check_outline.py --ready` を通す。
+
+**4. 機械検査。** 文（`text`・`read`）を変えたら、合成した声が古くなるので、`--timeline` を付けずに回す。図や動作だけを変えたら、`--timeline` を付けて回す。
 
 ```sh
 node <skill>/scripts/check_storyboard.cjs <workdir>/storyboard.json --theme <テーマ> --outline <workdir>/outline.json --complete [--timeline <workdir>/voice/timeline.json]
 python3 <skill>/scripts/check_text.py <workdir>/storyboard.json
 ```
 
-**4. 評価役。** 評価役の番を宣言して、SKILL.md の表の評価役の基準で、変えた行と場面だけを判定する。出力は新しい連番の `combined.json` に書いて `ingest` し、指摘が出たら `list` で利用者に見せて選んでもらう（先に直すのは初稿だけなので、ここでは先に直さない）。
-
-**5. 変えた場面を見せる。** 変えた場面のコマと絵コンテを、全体とは別の出力先に作って見せる。文を変えていなければ、`frames.cjs` に `--timeline <workdir>/voice/timeline.json` を付ける（時刻が再生ページと同じになる）。
+**5. 変えた場面のコマを作る。** 全体とは別の出力先に書く。文を変えていなければ、`--timeline <workdir>/voice/timeline.json` を付ける（時刻が再生ページと同じになる）。全体のコマ（`<workdir>/frames`）と絵コンテ（`sheet.html`）は、作り直さなくてよい。
 
 ```sh
-node <skill>/scripts/frames.cjs <workdir>/storyboard.json --theme <テーマ> -o <workdir>/frames-part --scenes <変えた場面の id をカンマ区切り>
+node <skill>/scripts/frames.cjs <workdir>/storyboard.json --theme <テーマ> -o <workdir>/frames-part --scenes <変えた場面の id をカンマ区切り> [--timeline <workdir>/voice/timeline.json]
+```
+
+**6. 評価役。** 評価役の番を宣言して、SKILL.md の表の評価役の基準で、変えた行と場面だけを判定する。画面を見るときは、`<workdir>/frames-part` のコマを見る（`<workdir>/frames` は直す前のコマ）。出力は新しい連番の `combined.json` に書いて `ingest` し、指摘が出たら `list` で利用者に見せて選んでもらう（先に直すのは初稿だけなので、ここでは先に直さない）。
+
+**7. 変えた場面を見せる。** 5 のコマから絵コンテを作り、Artifact として見せる（再生ページとは別のページでよい）。動きを見せたいときは、粗い再生ページ（`preview.html`）を作る。文を変えていなければ、`build_player.py` に `--voice <workdir>/voice` を付けて、今の声と時刻で見せられる。
+
+```sh
 python3 <skill>/scripts/build_sheet.py <workdir>/storyboard.json --frames <workdir>/frames-part --outline <workdir>/outline.json -o <workdir>/sheet-part.html --artifact
 ```
 
-**6. 声。** 利用者が変えた場面を見てから合成する。文を変えた行があれば、先に `--readings` で読みを確かめる。合成のコマンドは初回と同じで、変えていない行は作り直されない。出力の「新しく合成 N 行」を報告に書く（図や動作だけの直しなら「新しく合成 0 行」）。
+**8. 声。** 利用者が変えた場面を見てから合成する。文を変えた行があれば、先に `--readings` で読みの一覧を書き直し、評価役の番を宣言して、変えた行の読みだけを判定する（`target` は `voice`）。合成のコマンドは初回と同じで、変えていない行は作り直されない。出力の「新しく合成 N 行」を報告に書く（図や動作だけの直しなら「新しく合成 0 行」）。
 
 ```sh
+python3 <skill>/scripts/tts.py <workdir>/storyboard.json -o <workdir>/voice --readings
 python3 <skill>/scripts/tts.py <workdir>/storyboard.json -o <workdir>/voice
 node <skill>/scripts/check_storyboard.cjs <workdir>/storyboard.json --theme <テーマ> --outline <workdir>/outline.json --complete --timeline <workdir>/voice/timeline.json
 ```
 
-**7. 組み立てて、同じ Artifact に公開し直す。** 組み立ては「組み立てと公開」と同じコマンド。前に公開した Artifact を更新する。新しい Artifact を作らない。
+**9. 組み立てて、同じ Artifact に公開し直す。** 組み立ては「組み立てと公開」と同じコマンド。前に公開した再生ページの Artifact を更新する。新しい Artifact を作らない。
 
 ## 報告
 

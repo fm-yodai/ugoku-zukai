@@ -21,8 +21,11 @@ if python3 -c "import voicevox_core" >/dev/null 2>&1 && [ -d "$vh" ]; then
   out=$(python3 scripts/tts.py -o "$ad/none" --audition 9999 --sample "文です。" 2>&1) && ng "入っていない話者で --audition が通ってしまう"
   [ -e "$ad/none" ] && ng "入っていない話者で --audition が出力先を作っている"
   rm -rf "$ad"
+  # 直した後の声の使い回し（変えた行だけが作り直される）
+  bash scripts/tests/test_fix_voice.sh >/dev/null 2>&1 || { ng "test_fix_voice.sh"; bash scripts/tests/test_fix_voice.sh; }
 else
   echo "声の試聴の検査: VOICEVOX がないので飛ばす"
+  echo "直しの声の検査: VOICEVOX がないので飛ばす"
 fi
 # 公開した後の直しと声の試聴（進行役の文書）
 grep -q "^## 公開した後の直し" SKILL.md || ng "SKILL.md に「## 公開した後の直し」がない"
@@ -38,5 +41,18 @@ for w in "workdir.py list" "workdir.py publish" "published.json" "未公開"; do
 for w in "同じ会話" "コメント"; do grep -q "$w" references/run-chat.md || ng "run-chat.md の直しの節に $w がない"; done
 grep -q "run_r3.sh" ../../CLAUDE.md && grep -q "workdir.py list" ../../CLAUDE.md && grep -q -- "--audition" ../../CLAUDE.md || ng "CLAUDE.md に R3 のコマンドがない"
 grep -q "^### R3 の実装" ../../docs/design.md || ng "docs/design.md に「### R3 の実装」がない"
+# 直しを道具だけで通したときに、文書で迷った箇所
+# （読みの一覧の「字幕」の列は test_tts_text.py が見る。run_m3.sh が回す）
+grep -q "stagger" references/storyboard.md || ng "storyboard.md に stagger（1 つずつ出す間隔）の説明がない"
+for f in SKILL.md references/run-code.md references/run-chat.md; do
+  grep -q "直す前からある" $f || ng "$f に、直す前からある機械検査の誤りの扱いがない"
+done
+grep -q '`text` と `read` の両方' SKILL.md || ng "SKILL.md に、read のある行の字幕を変えるときの扱いがない"
+grep -q "直せる幅に限り" SKILL.md || ng "SKILL.md に、字幕を変えずに直せる幅に限りがあるときの扱いがない"
+grep -q "コマの場所" references/run-code.md && grep -q "コマの場所" ../../agents/director.md || ng "一部の場面のコマの場所を、director に渡す書き方がない"
+grep -q "構成メモのない" references/run-code.md || ng "run-code.md に、構成メモのない作業フォルダ（前の進め方で作ったもの）の扱いがない"
+for f in references/run-code.md references/run-chat.md; do
+  awk '/^## 公開した後の直し/{on=1} /^## 報告/{on=0} on' $f | grep -n "コマを作る\|評価役。" | head -2 | tr '\n' ' ' | grep -q "コマを作る.*評価役" || ng "$f の直しの節で、コマを作るのが評価役の後になっている"
+done
 [ $fail = 0 ] && echo "R3 の検査: すべて OK" || echo "R3 の検査: NG あり"
 exit $fail

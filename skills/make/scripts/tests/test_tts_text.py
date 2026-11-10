@@ -41,6 +41,27 @@ class TtsTextTest(unittest.TestCase):
         self.assertEqual(r["spoken"], "9段で")
         self.assertEqual(r["marks"], {"a": 0})
 
+    READ_SB = {"scenes": [{"id": "s1", "lines": [{"id": "l1", "text": "{a}A案は 安い。", "read": "{a}エーあんは安い。"},
+                                                  {"id": "l2", "text": "次|です。"}]}]}
+
+    def test_rows_have_caption(self):
+        # 行には、字幕（text）と、合成する文のもと（read があれば read）の両方を持たせる
+        r = tts.collect(self.READ_SB)
+        self.assertEqual(r[0]["caption"], "A案は 安い。")
+        self.assertEqual(r[0]["text"], "エーあんは安い。")
+        self.assertEqual(r[1]["caption"], "次|です。")
+        self.assertEqual(r[1]["text"], "次|です。")
+
+    def test_readings_md_shows_caption(self):
+        # 読みの一覧の「字幕」の列には、read ではなく字幕を出す（評価役が字幕と読みを見比べるため）
+        rows = tts.collect(self.READ_SB)
+        got = {"l1": {"text": "エーあんは安い。", "spoken": "エーあんは安い。", "kana": ["エーアンワ", "ヤスイ"]},
+               "l2": {"text": "次|です。", "spoken": "次|です。", "kana": ["ツギ", "、", "デス"]}}
+        md = tts.readings_md(rows, got, 8, 1.1).splitlines()
+        self.assertEqual(md[0], "# 読みの一覧（話者 8、話速 1.1）")
+        self.assertIn("| l1 | A案は 安い。 | エーあんは安い。 | エーアンワ/ヤスイ |", md)
+        self.assertIn("| l2 | 次\\|です。 | 次\\|です。 | ツギ、デス |", md)
+
     def test_dict_key_changes_with_extra(self):
         with tempfile.TemporaryDirectory() as d:
             extra = os.path.join(d, "voice_dict.json")

@@ -238,7 +238,9 @@ def collect(sb):
             raw = ln.get("read") or ln["text"]
             text, marks = parse_marks(raw)
             spoken, smarks = normalize(text, marks)
-            rows.append({"id": ln["id"], "scene": sc["id"], "first": i == 0, "text": text, "spoken": spoken, "marks": smarks})
+            # text = 合成する文のもと（read があれば read）。caption = 字幕（読みの一覧で、読みと見比べるために出す）
+            rows.append({"id": ln["id"], "scene": sc["id"], "first": i == 0, "text": text, "spoken": spoken, "marks": smarks,
+                         "caption": parse_marks(ln["text"])[0]})
     return rows
 
 
@@ -250,6 +252,15 @@ def to_pcm(wav):
 def md_cell(s):
     r"""表の 1 マスに入れる文。| は \| にし、改行は空白にする"""
     return s.replace("|", "\\|").replace("\n", " ")
+
+
+def readings_md(rows, got, speaker, speed):
+    """読みの一覧（表）。字幕の列には read ではなく字幕を出す。got は行の id → { spoken, kana }"""
+    md = [f"# 読みの一覧（話者 {speaker}、話速 {speed}）", "", "| 行 | 字幕 | 読む文 | VOICEVOX の読み |", "|---|---|---|---|"]
+    for r in rows:
+        i = got[r["id"]]
+        md.append(f"| {r['id']} | {md_cell(r['caption'])} | {md_cell(i['spoken'])} | {md_cell('/'.join(i['kana']).replace('/、/', '、').replace('/、', '、'))} |")
+    return "\n".join(md) + "\n"
 
 
 def write_readings(voice, rows, out, speaker, speed, ver, t0, budget):
@@ -277,13 +288,9 @@ def write_readings(voice, rows, out, speaker, speed, ver, t0, budget):
     if left:
         print(f"{made} 行の読みを出した。残り {len(left)} 行（{', '.join(left[:6])}{' …' if len(left) > 6 else ''}）。同じコマンドをもう一度実行する")
         sys.exit(3)
-    md = [f"# 読みの一覧（話者 {speaker}、話速 {speed}）", "", "| 行 | 字幕 | 読む文 | VOICEVOX の読み |", "|---|---|---|---|"]
-    for r in rows:
-        i = got[r["id"]]
-        md.append(f"| {r['id']} | {md_cell(i['text'])} | {md_cell(i['spoken'])} | {md_cell('/'.join(i['kana']).replace('/、/', '、').replace('/、', '、'))} |")
     path = os.path.join(out, "readings.md")
     with open(path, "w", encoding="utf-8") as f:
-        f.write("\n".join(md) + "\n")
+        f.write(readings_md(rows, got, speaker, speed))
     print("読みの一覧:", path)
 
 

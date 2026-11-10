@@ -18,7 +18,7 @@
 | `ugoku-zukai:researcher` | 調べる | 題材の場所（手元のファイル・フォルダ・リポジトリは絶対パス。リポジトリの URL なら URL と clone 先 `<workdir>/repo`。PR 番号、Web ページの URL）、**調べてほしいこと** | `<workdir>/brief.md`（出どころ付きの取材メモ）と `<workdir>/sources/` |
 | `ugoku-zukai:writer` | 台本の初稿、章単位の書き直し、指摘の直し | テーマ（`3b1b`・`flat`・`<workdir>/theme.json`）、書く範囲（「全部」か章の id）、直す指摘のキー（あれば） | `<workdir>/storyboard.json` |
 | `ugoku-zukai:fact-checker` | 事実（`outline`・`script`） | `target`、題材の場所（researcher に渡したのと同じ絶対パス。資料のない題材なら「資料なし」）、出力先、再確認するキー、見る範囲。`brief.md` は渡さない | 出力先の JSON |
-| `ugoku-zukai:director` | 構成メモ・合意との照合・演出・画面（`outline`・`script`・`screen`） | `target`、出力先、再確認するキー、見る範囲。`script` では `check_storyboard.cjs --outline` の出力 | 出力先の JSON |
+| `ugoku-zukai:director` | 構成メモ・合意との照合・演出・画面（`outline`・`script`・`screen`） | `target`、出力先、再確認するキー、見る範囲。`script` では `check_storyboard.cjs --outline` の出力。`screen` で一部の場面だけを見てもらうときは、コマの場所（`<workdir>/frames-part`） | 出力先の JSON |
 | `ugoku-zukai:writing-reviewer` | 文章と読み（`script`・`voice`） | `target`、出力先、再確認するキー、見る範囲 | 出力先の JSON |
 
 評価役の出力先は、呼ぶたびに連番を付けたフォルダにする: `<workdir>/review/<2 桁の連番>-<target>/<評価役の名前>.json`（例 `review/01-outline/director.json`、`review/03-script/fact-checker.json`）。再確認も新しい連番にする。評価役は、同じメッセージで複数呼んで並列にする。
@@ -258,36 +258,63 @@ python3 ${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/workdir.py list
 
 1 件が 2 行で出る（名前・題・公開の回数と日時・URL、その下にパス・テーマ・題材の場所）。題と公開の日時から、利用者に選んでもらう。当てはまるものが 1 つなら、それでよいかを確かめて進む。選んだパスが `<workdir>` になる。`<workdir>/published.json` を読み、テーマ（`theme`）・題材の場所（`source`）・公開先（`url`）を得る。残っている指摘は `ledger.py status <workdir>` で見る。
 
-一覧で「未公開」と出る作業フォルダ（公開先の記録がない。この記録の仕組みより前に作ったもの）を直すときは、Artifact の URL とテーマを利用者に聞き（`<workdir>/theme.json` があれば、テーマはそれ）、上の `workdir.py publish` で記録してから進める。
+- 一覧で「未公開」と出る作業フォルダ（公開先の記録がない。この記録の仕組みより前に作ったもの）を直すときは、Artifact の URL とテーマを利用者に聞き（`<workdir>/theme.json` があれば、テーマはそれ）、「組み立てと公開」の `workdir.py publish` で記録してから進める
+- 構成メモのない作業フォルダ（`outline.json` がない。前の進め方で作ったもの）では、下のコマンドから `--outline <workdir>/outline.json` と `--complete` を外す。合意の記録がないので、言うことや章を変える直しは、変える前に利用者に確かめる
 
-**2. 行を特定して直す。** 指された id を `<workdir>/storyboard.json` で確かめる。小さな直し（一文の言い回し、動作 1 つ）は進行役が直す。章単位の書き直しは writer に、書く範囲（章の id）を渡して任せる。直しが合意に関わるなら、先に `<workdir>/outline.json` を直して `check_outline.py --ready` を通す。
+**2. 直す前に、機械検査を 1 回回す。** 直す前からある誤りを、直しで入った誤りと見分けるためである。コマンドは 4 と同じ（声があれば `--timeline` を付ける）。直す前からある誤り（頼まれた範囲の外）は、黙って直さず、利用者に伝えて、直すかを聞く。直さないと決まったら、そのまま進めて、報告に書く。
 
-**3. 機械検査。** 文（`text`・`read`）を変えたら、合成した声が古くなるので、`--timeline` を付けずに回す。図や動作だけを変えたら、`--timeline` を付けて回す。
+**3. 行を特定して直す。** 指された id を `<workdir>/storyboard.json` で確かめる。指された数行の言い回しや動作は、進行役が直す。章単位の書き直しは writer に、書く範囲（章の id）を渡して任せる。`read` のある行の字幕を変えるときは、`text` と `read` の両方を直す。直しが合意に関わるなら、先に `<workdir>/outline.json` を直して `check_outline.py --ready` を通す。
+
+**4. 機械検査。** 文（`text`・`read`）を変えたら、合成した声が古くなるので、`--timeline` を付けずに回す。図や動作だけを変えたら、`--timeline` を付けて回す。
 
 ```sh
 node ${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/check_storyboard.cjs <workdir>/storyboard.json --theme <テーマ> --outline <workdir>/outline.json --complete [--timeline <workdir>/voice/timeline.json]
 python3 ${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/check_text.py <workdir>/storyboard.json
 ```
 
-**4. 評価役。** SKILL.md の表の評価役を呼ぶ。渡すのは、`target`、出力先（新しい連番）、見る範囲（変えた行と場面の id）、前の指摘を直したのなら再確認するキー。出力を `ingest` し、指摘が出たら、いつものとおり `list` で利用者に見せて選んでもらう（先に直すのは初稿だけなので、ここでは先に直さない）。
-
-**5. 変えた場面を見せる。** 変えた場面のコマと絵コンテを、全体とは別の出力先に作って見せる。文を変えていなければ、`frames.cjs` に `--timeline <workdir>/voice/timeline.json` を付ける（時刻が再生ページと同じになる）。動きを見せたいときは、粗い再生ページ（`preview.html`）を作る。
+**5. 変えた場面のコマを作る。** 全体とは別の出力先に書く。文を変えていなければ、`--timeline <workdir>/voice/timeline.json` を付ける（時刻が再生ページと同じになる）。全体のコマ（`<workdir>/frames`）と絵コンテ（`sheet.html`）は、作り直さなくてよい。
 
 ```sh
-node ${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/frames.cjs <workdir>/storyboard.json --theme <テーマ> -o <workdir>/frames-part --scenes <変えた場面の id をカンマ区切り>
+node ${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/frames.cjs <workdir>/storyboard.json --theme <テーマ> -o <workdir>/frames-part --scenes <変えた場面の id をカンマ区切り> [--timeline <workdir>/voice/timeline.json]
+```
+
+**6. 評価役。** SKILL.md の表の評価役を呼ぶ。渡すのは、`target`、出力先（新しい連番）、見る範囲（変えた行と場面の id）、前の指摘を直したのなら再確認するキー。出力を `ingest` し、指摘が出たら、いつものとおり `list` で利用者に見せて選んでもらう（先に直すのは初稿だけなので、ここでは先に直さない）。
+
+- 図や動作を変えたときの director は、`script` と `screen` の 2 回呼ぶ。`screen` には、コマの場所として `<workdir>/frames-part` を渡す（`<workdir>/frames` は直す前のコマなので、見せない）
+- 字幕を変えたときの writing-reviewer は、`script` で変えた行の文章を見る。読みは、7 で読みの一覧を書いてから `voice` で見る
+
+```text
+（図や動作を直した後、director に画面を見てもらう）
+作業フォルダ: /home/u/.claude/plugins/data/ugoku-zukai/runs/20261110-1530-ux
+target: screen
+出力先: /home/u/.claude/plugins/data/ugoku-zukai/runs/20261110-1530-ux/review/09-screen/director.json
+コマの場所: /home/u/.claude/plugins/data/ugoku-zukai/runs/20261110-1530-ux/frames-part
+見る範囲: 場面 s3 の行 l6・l7
+```
+
+**7. 変えた場面を見せる。** 5 のコマから絵コンテを作って見せる。再生ページとは別の Artifact でよい（`title` は「<台本の題> 絵コンテ（直した場面）」、`icon` は `storyboard`）。
+
+```sh
 python3 ${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/build_sheet.py <workdir>/storyboard.json --frames <workdir>/frames-part --outline <workdir>/outline.json -o <workdir>/sheet-part.html --artifact
 ```
 
-**6. 声。** 利用者が変えた場面を見てから合成する。文を変えた行があれば、先に `--readings` で読みを確かめる（変えた行の読みだけを見ればよい）。合成のコマンドは初回と同じで、変えていない行は作り直されない。出力の「新しく合成 N 行」を報告に書く。声だけを変える（話者・話速）ときは、台本の `voice` を直して同じコマンドを回す（全行が作り直される）。
+動きを見せたいときは、粗い再生ページを作る（`title` は「<台本の題> 下見」、`icon` は `video`）。文を変えていなければ、`--voice <workdir>/voice` を付けて、今の声と時刻で動きを見せられる。文を変えたときは、声なしで作る（時刻は見積もり）。
 
 ```sh
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/build_player.py <workdir>/storyboard.json --theme <テーマ> [--voice <workdir>/voice] -o <workdir>/preview.html --artifact
+```
+
+**8. 声。** 利用者が変えた場面を見てから合成する。文を変えた行があれば、先に `--readings` で読みの一覧を書き直し、writing-reviewer に `target: voice` で、変えた行だけを見てもらう。合成のコマンドは初回と同じで、変えていない行は作り直されない。出力の「新しく合成 N 行」を報告に書く。声だけを変える（話者・話速）ときは、台本の `voice` を直して同じコマンドを回す（全行が作り直される）。
+
+```sh
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/tts.py <workdir>/storyboard.json -o <workdir>/voice --readings
 python3 ${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/tts.py <workdir>/storyboard.json -o <workdir>/voice
 node ${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/check_storyboard.cjs <workdir>/storyboard.json --theme <テーマ> --outline <workdir>/outline.json --complete --timeline <workdir>/voice/timeline.json
 ```
 
 図や動作だけの直しでは、`tts.py` は「新しく合成 0 行」で終わる（時刻表を作り直すだけ）。別のセッションでも、VOICEVOX は `${CLAUDE_PLUGIN_DATA}/voicevox` に入っていれば入れ直さない（`tts.py` が「voicevox_core が入っていない」と止まったら、`setup_voice.py --agree` を実行する。利用規約への同意は、作ったときに取ってある）。
 
-**7. 組み立てて、同じ Artifact に公開し直す。** 組み立ては「組み立てと公開」と同じコマンド。同じセッションなら、同じ `file_path` で公開し直す（同じページが更新される）。別のセッションなら、Artifact ツールの `url` に `published.json` の `url` を渡す。更新の前に今のページを読むよう求められたら、読んでから公開する（公開するのは、組み立て直した `<workdir>/player.html`）。新しいページを作らない。公開し直したら、記録を更新する（テーマを変えたら `--theme` も渡す）。
+**9. 組み立てて、同じ Artifact に公開し直す。** 組み立ては「組み立てと公開」と同じコマンド。同じセッションなら、同じ `file_path` で公開し直す（同じページが更新される）。別のセッションなら、Artifact ツールの `url` に `published.json` の `url` を渡す（`title` と `icon` は渡さない。前のままになる）。更新の前に今のページを読むよう求められたら、読んでから公開する（公開するのは、組み立て直した `<workdir>/player.html`）。再生ページは、新しいページを作らない。公開し直したら、記録を更新する（テーマを変えたら `--theme` も渡す）。
 
 ```sh
 python3 ${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/workdir.py publish <workdir> --url <同じ URL>

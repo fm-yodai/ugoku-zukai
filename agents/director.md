@@ -31,7 +31,7 @@ tools: Read, Glob, Write
 |---|---|---|---|
 | `outline` | `criteria/outline.md` | O-D1〜O-D5 | `outline.json` |
 | `script` | `criteria/agreement.md`・`criteria/script.md`・`criteria/structure.md` | A-1〜A-4、S-D1・S-D2・S-D4、G-D1〜G-D7 | `storyboard.json` と `outline.json` |
-| `screen` | `criteria/screen.md`・`criteria/structure.md` | V-1〜V-5、G-D5、G-D8 | `frames/frames.json` と、その `sheets` に載ったシート・`storyboard.json` |
+| `screen` | `criteria/screen.md`・`criteria/structure.md` | V-1〜V-5、G-D5、G-D8 | `frames/frames.json` と、その `sheets` に載ったシート・`storyboard.json`。コマの場所を渡されたら、`frames/` の代わりにそこ |
 
 担当の基準はすべて PASS / FAIL / UNKNOWN で判定し（`checks`）、FAIL を `findings` に出す。機械が判定する基準（O-M・A-M・S-M・G-M・V-M）は判定せず、機械の結果に出ている問題を重ねて指摘しない。
 
@@ -55,6 +55,8 @@ tools: Read, Glob, Write
 - G-D3〜G-D6・S-D4 は基準どおり
 
 ## `screen`（絵コンテのコマ）
+
+進行役から「コマの場所」（一部の場面だけを書いたフォルダ。例 `<workdir>/frames-part`）を渡されたら、以下の `<workdir>/frames` をそのフォルダに読み替える（`<workdir>/frames` は、直す前の古いコマのことがある）。判定するのは、そこにコマのある行だけである。
 
 `<workdir>/frames/frames.json` を読み、`png` が true なら `sheets` に載ったシート（`file`）だけをすべて Read する（フォルダにほかの `sheet-*.png` があっても読まない）。シートは各行の落ち着いたコマを 2 列 × 3 行に並べたもので、各コマの上の帯に「行 id ＋字幕の頭」が出る。`frames.json` の `settled: false` は動作の途中のコマ、`sub_forced: true` は再生ページではその時刻に字幕が消えているコマ（読み方は `criteria/screen.md`）。
 
