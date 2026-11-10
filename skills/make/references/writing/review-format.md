@@ -1,112 +1,75 @@
-# レビュー指摘の共通形式
+# 評価役の出力の形
 
-文章・事実・演出のレビュアー（`agents/` の `writing-reviewer` / `fact-checker` / `director`）が共通で使う。呼び出し元はこの形式だけを読めばよいので、レビュアーごとに解釈を変えない。
+事実・文章・演出の評価役（`agents/` の `fact-checker`・`writing-reviewer`・`director`）が共通で使う。進行役はこの形の JSON を `scripts/ledger.py ingest` で指摘の一覧に取り込む。評価役の約束と指摘の扱いは `../review-protocol.md`、基準は `../criteria/` が正。
 
-## 目次
+## 出力
 
-指摘ファイル → severity の基準 → 応答ファイル（書き手が書く）→ maker-checker 形式（ugoku-zukai。checker の出力 / maker の応答）。単独のレビューは前の 3 つ、ugoku-zukai の周回（2 取材と契約・4 台本・5 画面）は最後の節だけを使う（`finding`・`rebutted` の形は使わない）。
-
-## 指摘ファイル（単独レビュー用。maker-checker のループでは使わない）
+出力先は進行役が渡す（`<workdir>/review/<連番>-<target>/<評価役の名前>.json`）。
 
 ```json
 {
-  "reviewer": "writing-reviewer",
-  "target": "<レビューしたファイルのパス>",
-  "round": 1,
+  "reviewer": "fact-checker",
+  "target": "script",
+  "checks": [
+    {"criterion": "S-F1", "verdict": "FAIL", "evidence": "全 30 行の source を読んだ。l7 だけ言えない"},
+    {"criterion": "S-F2", "verdict": "PASS", "evidence": "図 flow の辺 9 本の source を読み、向きが合っている"}
+  ],
   "findings": [
-    {
-      "id": "W1",
-      "line_id": "l7",
-      "rule": "TW-2",
-      "severity": "must",
-      "problem": "client_id が何と一致するのかが書かれていない",
-      "suggestion": "client_id が、この API に設定したアプリクライアント ID と一致するか",
-      "evidence": "src/apps/api/src/middleware/auth.ts:82"
-    }
+    {"key": "l7:S-F1", "where": "l7", "criterion": "S-F1", "level": "must", "rule": "FC-overclaim",
+     "problem": "client_id が何と一致するのかが書かれておらず、どのアプリのトークンでも通るように読める",
+     "suggestion": "「client_id が、この API に設定したアプリクライアント ID と一致するかを確かめます。」",
+     "evidence": "src/apps/api/src/middleware/auth.ts:82"}
+  ],
+  "rechecks": [
+    {"key": "l9:S-F1", "verdict": "PASS", "evidence": "直した字幕は post-confirmation.ts:30 から言える"}
   ],
   "summary": "1〜3 文の総評"
 }
 ```
 
-| キー | 内容 |
-|------|------|
-| `id` | レビュアー内で一意。文章 `W`、事実 `F`、演出 `D` で始める |
-| `line_id` | 対象の行（台本なら `l7`、文書なら見出しや段落を特定できる文字列）。全体への指摘は `"*"` |
-| `rule` | 規則の番号。文章 `TW-n`（references/writing/rules.md）、演出 `VG-n`（references/visual-grammar.md の約束番号）、事実は `FC-wrong`（誤り）/ `FC-overclaim`（言い過ぎ）/ `FC-nosource`（根拠が見つからない） |
-| `severity` | `must` か `should`（下の基準） |
-| `problem` | 何が起きているか。読んだ人がどう誤解するかまで書く |
-| `suggestion` | 具体的な直し方。文なら書き換え後の文そのもの |
-| `evidence` | 判断の根拠（`path:line`、規則の例、画面ならシートのファイル名と行 id（`sheet-02.png` の行 `l7`）） |
-
-## severity の基準
-
-- **must**: 放置すると、読んだ人が仕組みを誤解する・事実と違う・意味が取れない。または画面で文字が切れる・重なって読めない
-- **should**: 正しく読めるが、より正確・明快にできる
-
-迷ったら should にする。must は呼び出し元が必ず対応する前提なので、数を絞る。
-
-## 応答ファイル（書き手が書く。単独レビュー用。maker-checker のループでは使わない）
-
-```json
-{
-  "round": 1,
-  "responses": [
-    {"finding": "writing-reviewer/r1/W1", "action": "fixed", "note": ""},
-    {"finding": "fact-checker/r1/F2", "action": "rebutted", "note": "auth.ts:129 で sub だけを載せているので、指摘の email は該当しない"}
-  ]
-}
-```
-
-- `finding` は `<reviewer>/r<round>/<id>` で指す（`id` はラウンドごとに W1 から振り直されるので、ラウンドを省くと別の指摘と取り違える）
-- `action` は `fixed`（直した）か `rebutted`（理由を付けて直さない）。黙って無視しない
-- must を rebutted にしたまま閉じなかった指摘は残論点になり、最後の報告に出す
-
-## maker-checker 形式（ugoku-zukai）
-
-ugoku-zukai の 2 取材と契約・4 台本・5 画面（フェーズ名 `contract`・`script`・`screen`・`voice`）では、上の形式に「基準ごとの判定」と「前の周の再確認」を足した次の形式を使う。台帳 `review/ledger.json` に取り込むのは `${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/ledger.py` で、ループの約束は `${CLAUDE_PLUGIN_ROOT}/skills/make/references/loop-protocol.md` が正。
-
-### checker の出力（`<workdir>/review/<phase>/r<N>/<reviewer>.json`）
-
-チャットで評価役を 1 回にまとめるときは、全基準の判定を `<workdir>/review/<phase>/r<N>/combined.json` に同じ形で書き、`reviewer` を `combined` にする（`../loop-protocol.md` の「チャットでの回し方」）。
-
-```json
-{
-  "reviewer": "fact-checker",
-  "phase": "script",
-  "round": 2,
-  "checks": [
-    {"criterion": "S-F1", "verdict": "FAIL", "evidence": "全 30 行の source を読んだ。l7 だけ言えない"},
-    {"criterion": "S-F2", "verdict": "PASS", "evidence": "図 flow の辺 9 本の source をすべて読み、向きが合っている"}
-  ],
-  "findings": [
-    {"key": "l7:S-F1", "line_id": "l7", "criterion": "S-F1", "rule": "FC-overclaim", "severity": "must",
-     "problem": "…", "suggestion": "…", "evidence": "src/apps/api/src/middleware/auth.ts:82"}
-  ],
-  "rechecks": [
-    {"key": "l9:S-F1", "verdict": "PASS", "evidence": "直した字幕は post-confirmation.ts:30 から言える"},
-    {"key": "l12:S-F3", "verdict": "FAIL", "accept_dispute": false, "evidence": "反論は契約 K2 と矛盾する"}
-  ],
-  "summary": "1〜3 文"
-}
-```
-
-| キー | 内容 |
+| キー | 中身 |
 |---|---|
-| `checks` | 担当の基準すべてについて `PASS` / `FAIL` / `UNKNOWN`。`evidence` には確かめた範囲（PASS）か、FAIL の要約を書く。**evidence の無い判定は無効** |
-| `findings[].key` | `<line_id>:<criterion>`。同じ問題は周や checker が変わっても同じキーにする。全体への指摘は `*:<criterion>`、契約への指摘は `contract:<criterion>` |
-| `findings[].criterion` | `criteria/` の基準 ID（`C-F1` など）。`rule` には従来どおり細かい規則（`TW-2`・`FC-wrong`・`VG-7`）を書いてよい |
-| `findings[].severity` | 基準の重さに従う（基準が must / should を分けている場合はその定義どおり） |
-| `rechecks` | 前の周の台帳で、自分の担当の fixed / disputed の項目すべて。`verdict` は PASS / FAIL。disputed には `accept_dispute`（true = 反論を認める → accepted）。disputed でも、見直して基準を満たしていれば `verdict: PASS` で closed になる。`accept_dispute` が無く FAIL なら open に戻り、反論が認められなかった回数（`rejected`）が 1 増える |
+| `reviewer` | 評価役の名前。チャットで評価役を 1 回にまとめるときは `combined` |
+| `target` | 何を見たか。`outline`（構成メモ）・`script`（台本）・`screen`（絵コンテのコマ）・`voice`（読みの一覧） |
+| `checks` | 担当の基準すべてについて `PASS`・`FAIL`・`UNKNOWN`。`evidence` には、PASS なら確かめた範囲、FAIL なら要約、UNKNOWN なら判定に要る情報を書く。`evidence` のない PASS は UNKNOWN として扱われる |
+| `findings` | 基準を満たしていない箇所。1 つの問題を 1 件にする |
+| `rechecks` | 進行役から渡されたキーだけを見直した結果。`verdict` は `PASS` か `FAIL`。渡されていなければ空の配列 |
 
-UNKNOWN の基準は `findings` にも `<line_id or *>:<criterion>` で載せ、`problem` に「判定に要る情報」を書く。
+## 指摘（`findings` の 1 件）
 
-### maker の応答（`<workdir>/review/<phase>/r<N>/responses.json`）
+| キー | 中身 |
+|---|---|
+| `where` | 指摘の場所（下の表）。全体への指摘は `*` |
+| `criterion` | `../criteria/` の基準 ID（`S-F1`・`A-2`・`O-D3` など） |
+| `key` | `<where>:<基準 ID>`。同じ問題は、評価役や回が変わっても同じキーにする |
+| `level` | `must`・`should`・`nits`（下の「レベル」） |
+| `rule` | 任意。細かい規則の番号。文章 `TW-n`・`SP-n`、演出 `VG-n`、事実は `FC-wrong`（誤り）・`FC-overclaim`（言い過ぎ）・`FC-nosource`（根拠が見つからない） |
+| `problem` | 何が起きているか。視聴者がどう誤解するかまで書く |
+| `suggestion` | 具体的な直し方。文なら書き換え後の文そのもの。禁止語に足す候補があれば、ここに書く |
+| `evidence` | 判断の根拠（`path:line`、URL と引用、字幕の文言、規則の例、画面ならシートのファイル名と行 id）。**`evidence` のない指摘は捨てられる** |
 
-```json
-{"phase": "script", "round": 2, "responses": [
-  {"key": "l7:S-F1", "action": "fixed", "note": "字幕を auth.ts:82 の条件に合わせた"},
-  {"key": "l12:S-D4", "action": "disputed", "note": "S-F1 が優先（事実 > 演出）。値を書き換えると根拠の無い値になる"}
-]}
-```
+`where` の書き方:
 
-`action` は `fixed` か `disputed`。open の項目すべてに応答する。
+| 対象 | 書き方 | 例 |
+|---|---|---|
+| 台本の行 | 行の id | `l7` |
+| 台本の場面・図 | 場面の id、図の id | `s2`、`flow` |
+| 構成メモの章 | 章の id | `c3` |
+| 構成メモの言うこと | 言うことの id | `c3.1` |
+| 構成メモの見せるもの | `<章の id>.shows` | `c3.shows` |
+| 構成メモの `basics` | `basics.<キー>` | `basics.knows` |
+| 全体 | `*` | `*` |
+
+UNKNOWN と判定した基準は、`findings` にも `*:<基準 ID>`（場所が決まるならその場所）で載せ、`problem` に判定に要る情報を書く。
+
+## レベル
+
+- **must**: 放置すると視聴者が誤解する。事実の誤り、利用者と合意した内容からの逸脱、意味が取れない文、画面で読めない・字幕と違うものが映る
+- **should**: 正しく伝わるが、直すともっと伝わりやすくなる
+- **nits**: 直さなくても伝わり方が変わらない、好みの範囲
+
+基準の表（`../criteria/`）の重さに従う。重さが must だけの基準の指摘は must にする（ほかのレベルを付けても、取り込むときに must に直される）。must と should を分けている基準では、その定義どおりに付ける。迷ったら低いほうにする。must は利用者に全文を見せるので、数を絞る。
+
+## チャットで評価役を 1 回にまとめるとき
+
+サブエージェントのない環境では、その場面の評価役の担当をすべて 1 回で判定し、全基準の判定を 1 つのファイル `combined.json` に同じ形で書く。`reviewer` は `combined` にする（`../review-protocol.md` の「チャットでの回し方」）。

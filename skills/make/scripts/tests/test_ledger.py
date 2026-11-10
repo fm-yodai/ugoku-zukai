@@ -1,139 +1,255 @@
 #!/usr/bin/env python3
-"""ledger.py の検査（標準ライブラリだけ）。python3 test_ledger.py で回す。"""
+"""指摘の一覧（ledger.py）の検査（標準ライブラリだけ）。python3 test_ledger.py で回す。"""
 import json
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
 import unittest
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-LEDGER = os.path.join(HERE, "..", "ledger.py")
-FIX = os.path.join(HERE, "ledger")
+SCRIPTS = os.path.join(HERE, "..")
+LEDGER = os.path.join(SCRIPTS, "ledger.py")
+PAIR_SB = os.path.join(HERE, "outlines", "pair", "storyboard.json")
+PAIR_OUTLINE = os.path.join(HERE, "outlines", "pair", "outline.json")
+
+sys.path.insert(0, SCRIPTS)
+import ledger  # noqa: E402
 
 
-def run(*args):
-    return subprocess.run([sys.executable, LEDGER, *args], capture_output=True, text=True)
+def F(key, level="must", **kw):
+    """evidence の付いた指摘"""
+    where, criterion = key.rsplit(":", 1)
+    return {"key": key, "where": where, "criterion": criterion, "level": level,
+            "problem": "問題がある", "suggestion": "こう直す", "evidence": "根拠", **kw}
 
 
 class LedgerTest(unittest.TestCase):
     def setUp(self):
-        self._tmp = tempfile.TemporaryDirectory()
-        self.wd = self._tmp.name
+        self.tmp = tempfile.TemporaryDirectory()
+        self.wd = os.path.join(self.tmp.name, "wd")
+        os.makedirs(self.wd)
+        self.n = 0
 
     def tearDown(self):
-        self._tmp.cleanup()
+        self.tmp.cleanup()
 
-    def ingest_r1(self):
-        r = run("ingest", self.wd, "script", os.path.join(FIX, "r1.json"))
-        self.assertEqual(r.returncode, 0, r.stderr)
+    def run(self, *args):   # unittest の run を上書きしないよう、引数が文字列のときだけ ledger.py を回す
+        if args and not isinstance(args[0], str):
+            return super().run(*args)
+        r = subprocess.run([sys.executable, LEDGER, *args], capture_output=True, text=True)
+        return r.returncode, r.stdout, r.stderr
 
-    def test_line_ids_scenes(self):
-        sb = {"format": "ugoku-zukai/2", "scenes": [{"lines": [{"id": "l1"}, {"id": "l2"}]}]}
-        json.dump(sb, open(os.path.join(self.wd, "storyboard.json"), "w", encoding="utf-8"))
+    def out(self, reviewer, findings=(), rechecks=(), checks=()):
+        """評価役の出力を一時ファイルに書き、パスを返す"""
+        self.n += 1
+        path = os.path.join(self.tmp.name, f"out{self.n}.json")
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump({"reviewer": reviewer, "target": "script", "checks": list(checks),
+                       "findings": list(findings), "rechecks": list(rechecks)}, f, ensure_ascii=False)
+        return path
+
+    def items(self):
+        p = os.path.join(self.wd, "review", "ledger.json")
+        if not os.path.exists(p):
+            return {}
+        with open(p, encoding="utf-8") as f:
+            return json.load(f)["items"]
+
+    def test_ingest_opens(self):
+        code, so, _ = self.run("ingest", self.wd, self.out("director", [F("l1:S-D2"), F("l2:G-D3", "should"), F("l3:G-D3", "nits")]))
+        self.assertEqual(code, 0)
+        self.assertEqual({k: v["state"] for k, v in self.items().items()}, {"l1:S-D2": "open", "l2:G-D3": "open", "l3:G-D3": "open"})
+        self.assertIn("must 1 / should 1 / nits 1", so)
+
+    def test_no_evidence_dropped(self):
+        f = F("l1:S-D2")
+        del f["evidence"]
+        _, so, _ = self.run("ingest", self.wd, self.out("director", [f]))
+        self.assertEqual(self.items(), {})
+        self.assertIn("警告", so)
+
+    def test_level_forced(self):          # S-F1 は must だけの基準。G-D3 は should の基準
+        _, so, _ = self.run("ingest", self.wd, self.out("x", [F("l1:S-F1", "nits"), F("l2:G-D3", "minor")]))
+        self.assertEqual(self.items()["l1:S-F1"]["level"], "must")
+        self.assertEqual(self.items()["l2:G-D3"]["level"], "should")
+        self.assertEqual(so.count("警告"), 2)
+
+    def test_unknown_check_becomes_item(self):
+        self.run("ingest", self.wd, self.out("director", checks=[{"criterion": "V-1", "verdict": "UNKNOWN", "evidence": "PNG がない"},
+                                                                 {"criterion": "V-2", "verdict": "PASS"}]))   # evidence のない PASS
+        self.assertEqual(sorted(self.items()), ["*:V-1", "*:V-2"])
+        self.assertEqual(self.items()["*:V-1"]["level"], "must")
+
+    def test_fix_by_lead_then_recheck(self):
+        self.run("ingest", self.wd, self.out("director", [F("l1:S-D2"), F("l2:S-D2")]))
+        self.assertEqual(self.run("decide", self.wd, "--by", "lead", "--fix", "l1:S-D2", "l2:S-D2")[0], 0)
+        self.assertEqual(self.items()["l1:S-D2"]["state"], "fixing")
+        self.run("ingest", self.wd, self.out("director", rechecks=[{"key": "l1:S-D2", "verdict": "PASS", "evidence": "直った"},
+                                                                   {"key": "l2:S-D2", "verdict": "FAIL", "evidence": "まだ"}]))
+        it = self.items()
+        self.assertEqual((it["l1:S-D2"]["state"], it["l2:S-D2"]["state"]), ("closed", "open"))
+        self.assertEqual(it["l2:S-D2"]["by"], "lead")               # 先に直したことは残る
+        _, so, _ = self.run("list", self.wd, "--by", "lead")
+        self.assertIn("l1:S-D2", so)
+        self.assertIn("l2:S-D2", so)
+        self.assertIn("閉じた・進行役", so)
+
+    def test_recheck_without_evidence_is_ignored(self):
+        self.run("ingest", self.wd, self.out("director", [F("l1:S-D2")]))
+        self.run("decide", self.wd, "--by", "user", "--fix", "l1:S-D2")
+        _, so, _ = self.run("ingest", self.wd, self.out("director", rechecks=[{"key": "l1:S-D2", "verdict": "PASS"}]))
+        self.assertEqual(self.items()["l1:S-D2"]["state"], "fixing")
+        self.assertIn("警告", so)
+
+    def test_keep_only_by_user(self):
+        self.run("ingest", self.wd, self.out("director", [F("l1:S-D2")]))
+        self.assertEqual(self.run("decide", self.wd, "--by", "lead", "--keep", "l1:S-D2")[0], 2)
+        self.assertEqual(self.items()["l1:S-D2"]["state"], "open")
+        self.assertEqual(self.run("decide", self.wd, "--by", "user", "--keep", "l1:S-D2")[0], 0)
+        self.assertEqual(self.items()["l1:S-D2"]["state"], "kept")
+        self.assertEqual(self.items()["l1:S-D2"]["by"], "user")
+
+    def test_kept_can_be_fixed_later(self):   # 利用者が考えを変えた
+        self.run("ingest", self.wd, self.out("director", [F("l1:S-D2")]))
+        self.run("decide", self.wd, "--by", "user", "--keep", "l1:S-D2")
+        self.assertEqual(self.run("decide", self.wd, "--by", "user", "--fix", "l1:S-D2")[0], 0)
+        self.assertEqual(self.items()["l1:S-D2"]["state"], "fixing")
+
+    def test_refound_while_fixing_reopens(self):
+        self.run("ingest", self.wd, self.out("director", [F("l1:S-D2")]))
+        self.run("decide", self.wd, "--by", "user", "--fix", "l1:S-D2")
+        self.run("ingest", self.wd, self.out("director", [F("l1:S-D2", problem="まだ合っていない")]))
+        self.assertEqual(self.items()["l1:S-D2"]["state"], "open")
+        self.assertEqual(self.items()["l1:S-D2"]["problem"], "まだ合っていない")
+
+    def test_kept_stays_kept(self):
+        self.run("ingest", self.wd, self.out("director", [F("l1:S-D2")]))
+        self.run("decide", self.wd, "--by", "user", "--keep", "l1:S-D2")
+        self.run("ingest", self.wd, self.out("director", [F("l1:S-D2")], rechecks=[{"key": "l1:S-D2", "verdict": "FAIL", "evidence": "同じ"}]))
+        self.assertEqual(self.items()["l1:S-D2"]["state"], "kept")
+
+    def test_closed_refound_reopens(self):
+        self.run("ingest", self.wd, self.out("director", [F("l1:S-D2")]))
+        self.run("ingest", self.wd, self.out("director", rechecks=[{"key": "l1:S-D2", "verdict": "PASS", "evidence": "ok"}]))
+        self.assertEqual(self.items()["l1:S-D2"]["state"], "closed")
+        self.run("ingest", self.wd, self.out("director", [F("l1:S-D2")]))
+        self.assertEqual(self.items()["l1:S-D2"]["state"], "open")
+
+    def test_decide_unknown_key(self):
+        self.run("ingest", self.wd, self.out("director", [F("l1:S-D2")]))
+        code, _, se = self.run("decide", self.wd, "--by", "user", "--fix", "l1:S-D2", "l9:S-D2")
+        self.assertEqual(code, 2)
+        self.assertIn("l9:S-D2", se)
+        self.assertEqual(self.items()["l1:S-D2"]["state"], "open")   # 何も変えない
+
+    def test_old_ledger_rejected(self):
         os.makedirs(os.path.join(self.wd, "review"))
-        def it(lid):
-            return {"status": "open", "severity": "must", "criterion": "S-W1", "line_id": lid,
-                    "checker": "writing-reviewer", "reopen": 0, "rejected": 0, "history": []}
-        led = {"phases": {"script": {"round": 1, "checks": {}, "items": {"l9:S-W1": it("l9"), "l1:S-W1": it("l1")}}}}
-        json.dump(led, open(os.path.join(self.wd, "review", "ledger.json"), "w", encoding="utf-8"))
-        r = run("status", self.wd, "script")
-        self.assertIn("台本に無い行 ID", r.stdout)
-        self.assertIn("l9:S-W1", r.stdout)
-        self.assertIn("1 件", r.stdout)  # l1 は台本にあるので数えない
+        p = os.path.join(self.wd, "review", "ledger.json")
+        old = {"phases": {"script": {"round": 1, "items": {}, "checks": {}}}}
+        with open(p, "w", encoding="utf-8") as f:
+            json.dump(old, f)
+        self.assertEqual(self.run("status", self.wd)[0], 2)
+        self.assertEqual(self.run("ingest", self.wd, self.out("director", [F("l1:S-D2")]))[0], 2)
+        with open(p, encoding="utf-8") as f:
+            self.assertEqual(json.load(f), old)
 
-    def test_reset(self):
-        # 人の確認で契約に戻ったら、周を 1 から数え直す。前の項目は archived に移し、判定の材料にしない
-        self.ingest_r1()
-        os.makedirs(os.path.join(self.wd, "review", "script", "r1"))
-        r = run("reset", self.wd, "script")
-        self.assertEqual(r.returncode, 0, r.stderr)
-        led = json.load(open(os.path.join(self.wd, "review", "ledger.json"), encoding="utf-8"))
-        self.assertNotIn("script", led["phases"])
-        self.assertEqual(led["archived"][0]["phase"], "script")
-        self.assertTrue(led["archived"][0]["items"])
-        self.assertFalse(os.path.exists(os.path.join(self.wd, "review", "script")))
-        self.assertTrue(os.path.isdir(os.path.join(self.wd, "review", "script-old1", "r1")))
-        r = run("status", self.wd, "script")
-        self.assertIn("周 0/3", r.stdout)
-        run("residual", self.wd)
-        self.assertEqual(json.load(open(os.path.join(self.wd, "review", "residual.json"), encoding="utf-8"))["items"], [])
+    def test_usage_errors(self):
+        self.assertEqual(self.run()[0], 2)
+        self.assertEqual(self.run("respond", self.wd, "x")[0], 2)        # なくしたコマンド
+        self.assertEqual(self.run("decide", self.wd, "--fix", "l1:S-D2")[0], 2)   # --by がない
+        self.assertEqual(self.run("ingest", self.wd, os.path.join(self.tmp.name, "none.json"))[0], 2)
 
-    def test_max_rounds_2(self):
-        self.ingest_r1()  # c1-2:S-F1 が open のまま
-        self.assertEqual(run("status", self.wd, "script", "--round", "2").returncode, 10)
-        self.assertEqual(run("status", self.wd, "script", "--round", "2", "--max-rounds", "2").returncode, 20)
-        r = run("status", self.wd, "script", "--max-rounds", "2")
-        self.assertEqual(r.returncode, 10)
-        self.assertIn("周 1/2", r.stdout)
+    def test_list_levels(self):           # must は全文、should は 1 行、nits は件数だけ
+        self.run("ingest", self.wd, self.out("director", [
+            F("l1:S-D2", problem="字幕と画面の主題が違う", suggestion="focus を l1 に付ける"),
+            F("l2:G-D3", "should", problem="ラベルが 1 語", suggestion="動詞句にする"),
+            F("l3:G-D3", "nits", problem="言い回しの好み")]))
+        _, so, _ = self.run("list", self.wd)
+        self.assertIn("focus を l1 に付ける", so)
+        self.assertIn("ラベルが 1 語", so)
+        self.assertNotIn("動詞句にする", so)
+        self.assertNotIn("言い回しの好み", so)
+        self.assertIn("nits（1 件）", so)
+        full = self.run("list", self.wd, "--full")[1]
+        self.assertIn("言い回しの好み", full)
+        self.assertIn("動詞句にする", full)
 
-    def test_residual_json(self):
-        self.ingest_r1()
-        r = run("residual", self.wd)
-        self.assertEqual(r.returncode, 0, r.stderr)
-        items = json.load(open(os.path.join(self.wd, "review", "residual.json"), encoding="utf-8"))["items"]
-        md = open(os.path.join(self.wd, "review", "residual.md"), encoding="utf-8").read()
-        rows = [l for l in md.splitlines() if l.startswith("| ") and "`" in l]
-        self.assertEqual(len(items), len(rows))
-        self.assertGreaterEqual(len(items), 1)
-        for it in items:
-            for k in ("phase", "key", "severity", "status", "problem", "response"):
-                self.assertIn(k, it)
+    def test_list_one_line(self):
+        self.run("ingest", self.wd, self.out("director", [F("l2:G-D3", "should", problem="1 行目\n2 行目 | 縦棒")]))
+        _, so, _ = self.run("list", self.wd)
+        row = [ln for ln in so.splitlines() if "l2:G-D3" in ln][0]
+        self.assertIn("1 行目 2 行目", row)
+        self.assertNotIn("|", row)
 
-    def test_residual_json_empty(self):
-        r = run("residual", self.wd)
-        self.assertEqual(r.returncode, 0, r.stderr)
-        d = json.load(open(os.path.join(self.wd, "review", "residual.json"), encoding="utf-8"))
-        self.assertEqual(d["items"], [])
+    def test_list_default_is_open_only(self):
+        self.run("ingest", self.wd, self.out("director", [F("l1:S-D2"), F("l2:S-D2")]))
+        self.run("decide", self.wd, "--by", "user", "--keep", "l2:S-D2")
+        _, so, _ = self.run("list", self.wd)
+        self.assertIn("l1:S-D2", so)
+        self.assertNotIn("l2:S-D2", so)
+        self.assertIn("l2:S-D2", self.run("list", self.wd, "--state", "kept")[1])
+        self.assertIn("直さない 1", so)
 
+    def test_list_reviewer(self):
+        self.run("ingest", self.wd, self.out("director", [F("l1:S-D2")]), self.out("fact-checker", [F("l2:S-F1")]))
+        _, so, _ = self.run("list", self.wd, "--reviewer", "fact-checker")
+        self.assertIn("l2:S-F1", so)
+        self.assertNotIn("l1:S-D2", so)
 
-    def _dispute_screen(self):
-        # 画面の指摘を maker が disputed にした状態を作る
-        r1 = {"reviewer": "director", "phase": "screen", "round": 1,
-              "checks": [{"criterion": "V-D1", "verdict": "FAIL", "evidence": "sheet-01.png の行 l3"}],
-              "findings": [{"key": "l3:V-D1", "line_id": "l3", "criterion": "V-D1", "severity": "must",
-                            "problem": "…", "evidence": "sheet-01.png の行 l3"}], "rechecks": []}
-        resp = {"phase": "screen", "round": 1, "responses": [
-            {"key": "l3:V-D1", "action": "disputed", "note": "字幕を変える必要がある"}]}
-        f1, f2 = os.path.join(self.wd, "r1.json"), os.path.join(self.wd, "resp.json")
-        json.dump(r1, open(f1, "w", encoding="utf-8"))
-        json.dump(resp, open(f2, "w", encoding="utf-8"))
-        self.assertEqual(run("ingest", self.wd, "screen", f1).returncode, 0)
-        self.assertEqual(run("respond", self.wd, "screen", f2).returncode, 0)
+    def test_list_json(self):
+        self.run("ingest", self.wd, self.out("director", [F("l2:G-D3", "should"), F("l1:S-D2")]))
+        d = json.loads(self.run("list", self.wd, "--json")[1])
+        self.assertEqual([i["key"] for i in d["items"]], ["l1:S-D2", "l2:G-D3"])      # レベル順
+        self.assertEqual(d["counts"]["open"], {"must": 1, "should": 1, "nits": 0})
+        self.assertEqual({"key", "where", "criterion", "level", "state", "by", "reviewer", "problem", "suggestion", "evidence"},
+                         set(d["items"][0]))
 
-    def _recheck(self, rc):
-        r2 = {"reviewer": "director", "phase": "screen", "round": 2,
-              "checks": [{"criterion": "V-D1", "verdict": "PASS", "evidence": "sheet-01.png を見た"}],
-              "findings": [], "rechecks": [rc]}
-        f = os.path.join(self.wd, "r2.json")
-        json.dump(r2, open(f, "w", encoding="utf-8"))
-        self.assertEqual(run("ingest", self.wd, "screen", f).returncode, 0)
-        led = json.load(open(os.path.join(self.wd, "review", "ledger.json"), encoding="utf-8"))
-        return led["phases"]["screen"]["items"]["l3:V-D1"]
+    def test_residual(self):              # must で閉じていないものだけ
+        self.run("ingest", self.wd, self.out("director", [F("l1:S-D2"), F("l2:S-D2"), F("l3:S-D2", problem="a | b\nc"), F("l4:G-D3", "should")]))
+        self.run("decide", self.wd, "--by", "user", "--keep", "l1:S-D2")
+        self.run("decide", self.wd, "--by", "user", "--fix", "l2:S-D2")
+        self.run("ingest", self.wd, self.out("director", rechecks=[{"key": "l2:S-D2", "verdict": "PASS", "evidence": "ok"}]))
+        code, so, _ = self.run("residual", self.wd)
+        self.assertEqual(code, 0)
+        self.assertIn("2 件", so)
+        with open(os.path.join(self.wd, "review", "residual.json"), encoding="utf-8") as f:
+            d = json.load(f)
+        self.assertEqual(sorted(i["key"] for i in d["items"]), ["l1:S-D2", "l3:S-D2"])
+        with open(os.path.join(self.wd, "review", "residual.md"), encoding="utf-8") as f:
+            md = f.read()
+        row = [ln for ln in md.splitlines() if "l3:S-D2" in ln][0]
+        self.assertEqual(row.count("|"), 5)   # 4 列の表が崩れない
 
-    def test_disputed_recheck_pass_closes(self):
-        # disputed でも、checker が見直して PASS と判定したら閉じる（反論を認めたかどうかは問わない）
-        self._dispute_screen()
-        it = self._recheck({"key": "l3:V-D1", "verdict": "PASS", "evidence": "台本に戻って直り、l3 は読める"})
-        self.assertEqual(it["status"], "closed")
-        self.assertEqual(it["rejected"], 0)
-        self.assertEqual(run("status", self.wd, "screen").returncode, 0)
+    def test_residual_empty(self):
+        self.assertIn("0 件", self.run("residual", self.wd)[1])
+        with open(os.path.join(self.wd, "review", "residual.md"), encoding="utf-8") as f:
+            self.assertIn("なし", f.read())
 
-    def test_disputed_recheck_fail_reopens(self):
-        self._dispute_screen()
-        it = self._recheck({"key": "l3:V-D1", "verdict": "FAIL", "evidence": "反論は基準と合わない"})
-        self.assertEqual(it["status"], "open")
-        self.assertEqual(it["rejected"], 1)
+    def test_status_warns_missing_id(self):   # 台本にも構成メモにもない where
+        shutil.copy(PAIR_SB, os.path.join(self.wd, "storyboard.json"))
+        shutil.copy(PAIR_OUTLINE, os.path.join(self.wd, "outline.json"))
+        self.run("ingest", self.wd, self.out("director", [F("l1:S-D2"), F("c2.1:A-1"), F("basics.knows:O-D3"), F("c2.shows:O-D2"),
+                                                           F("s2:G-D7"), F("plans:G-D3", "should"), F("*:S-D4", "should"), F("l99:S-D2")]))
+        code, so, _ = self.run("status", self.wd)
+        self.assertEqual(code, 0)
+        warn = "\n".join(ln for ln in so.splitlines() if "警告" in ln)
+        self.assertIn("l99:S-D2", warn)
+        for ok in ("l1:S-D2", "c2.1:A-1", "basics.knows:O-D3", "c2.shows:O-D2", "s2:G-D7", "plans:G-D3", "*:S-D4"):
+            self.assertNotIn(ok, warn)
 
-    def test_respond_missing_file(self):
-        # 応答ファイルが無いときは、わかる文で知らせて何も変えない（トレースバックを出さない）
-        self.ingest_r1()
-        before = open(os.path.join(self.wd, "review", "ledger.json"), encoding="utf-8").read()
-        r = run("respond", self.wd, "script", os.path.join(self.wd, "nai.json"))
-        self.assertEqual(r.returncode, 0, r.stderr)
-        self.assertNotIn("Traceback", r.stderr)
-        self.assertIn("応答ファイルが無い", r.stdout)
-        self.assertEqual(open(os.path.join(self.wd, "review", "ledger.json"), encoding="utf-8").read(), before)
+    def test_status_without_files(self):      # 台本も構成メモもまだない
+        self.run("ingest", self.wd, self.out("director", [F("c1:O-D2")]))
+        code, so, _ = self.run("status", self.wd)
+        self.assertEqual(code, 0)
+        self.assertNotIn("警告", so)
+        self.assertEqual(self.run("status", os.path.join(self.tmp.name, "empty"))[0], 0)   # 台帳がまだない
+
+    def test_must_only_reads_new_criteria(self):
+        ids = ledger.must_only()
+        self.assertIn("S-F1", ids)
+        self.assertNotIn("S-W1", ids)         # must / should を分ける基準
 
 
 if __name__ == "__main__":

@@ -4,7 +4,6 @@ set -u
 cd "$(dirname "$0")/../.."
 fail=0
 bash scripts/tests/run_m1.sh || fail=1
-python3 scripts/tests/test_ledger.py >/dev/null 2>&1 || { echo "NG: test_ledger.py"; python3 scripts/tests/test_ledger.py; fail=1; }
 python3 scripts/tests/test_tts_text.py >/dev/null 2>&1 || { echo "NG: test_tts_text.py"; python3 scripts/tests/test_tts_text.py; fail=1; }
 # 読みの一覧（tts.py --readings。VOICEVOX が手元にあるときだけ。合成はしない）
 vh=$(python3 -c "import sys; sys.path.insert(0,'scripts'); import setup_voice; print(setup_voice.default_home())")
