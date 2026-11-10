@@ -204,6 +204,22 @@ class BuildSheetTest(unittest.TestCase):
     def test_long_word_in_says_wraps(self):        # says に長い英字の並びがあっても横スクロールを出さない
         self.assertRegex(build_sheet.STYLE, r"\.us-says \{[^}]*overflow-wrap: anywhere")
 
+    def test_makes_output_folder(self):
+        out = os.path.join(self.newdir(), "deep", "sheet.html")
+        r = subprocess.run([sys.executable, BUILD, SEQ, "--frames", self.frames_seq, "-o", out], capture_output=True, text=True)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertTrue(os.path.exists(out))
+
+    def test_broken_outline_is_rejected(self):
+        for broken in ([], {"format": "ugoku-zukai-outline/1", "title": "t", "basics": {}, "chapters": [{"id": "c1", "title": 3}]}):
+            path = self.newdir() + ".json"
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(broken, f)
+            r, html = self.build(PAIR_SB, self.frames_pair, "--outline", path)
+            self.assertEqual(r.returncode, 2)
+            self.assertEqual(html, "")
+            self.assertIn("構成メモ", r.stderr)
+
     def test_no_frames(self):
         r, _ = self.build(SEQ, os.path.join(self.dir, "none"))
         self.assertEqual(r.returncode, 2)

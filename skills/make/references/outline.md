@@ -36,7 +36,7 @@ python3 scripts/check_outline.py <workdir> --json       # 結果と、まだ確�
 }
 ```
 
-通る見本と通らない見本は `scripts/tests/outlines/` にある。
+通る見本は `examples/outlines/` にある（`ux.json` は題目と利用者の考えから作る動画、`keihi.json` は見本台本 `examples/table-compare.json` に合わせたもの）。
 
 ## 項目
 
@@ -100,7 +100,7 @@ python3 scripts/check_outline.py <workdir> --json       # 結果と、まだ確�
 終了コードは変えない。
 
 - すべての章に `seconds` があり `basics.length.seconds` もあるとき、章の合計が長さから 15% を超えてずれている
-- 項目の `text` に禁止語（`assets/banned_terms.json`）がある
+- 項目の `text` に禁止語（`assets/banned_terms.json`）がある。`by` が `user` の項目は見ない（利用者の言葉はそのまま書くため。字幕に出たときは `check_text.py` が誤りにする）
 
 ## 守ること
 
@@ -116,4 +116,4 @@ python3 scripts/check_outline.py <workdir> --json       # 結果と、まだ確�
 { "where": "c3.shows", "label": "c3 ユーザビリティとの違い / 見せるもの", "text": "UX の円の内側にユーザビリティの円" }
 ```
 
-`where` は項目の場所（`basics.look`、`c3.shows`、言うことは項目の id の `c3.1`）、`label` は人が読む名前である。
+`where` は項目の場所（`basics.look`、`c3.shows`、言うことは項目の id の `c3.1`）、`label` は人が読む名前である。言うことの `label` は、`c3 ユーザビリティとの違い / 言うこと c3.1` のように末尾に id が付く。

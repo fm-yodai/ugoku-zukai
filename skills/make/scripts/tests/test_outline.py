@@ -71,6 +71,32 @@ class CheckOutlineTest(unittest.TestCase):
             errors, _ = check_outline.check(d)
             self.assertTrue(any("figure" in e for e in errors), bad)
 
+    def test_banned_skips_user_words(self):   # 利用者の言葉（by: user）には禁止語の警告を出さない
+        d = load(os.path.join(DIR, "ok_ux.json"))
+        d["basics"]["audience"]["text"] = "地図を作る部署"          # by: user
+        d["basics"]["look"]["text"] = "地図のような図解"            # by: claude
+        _, warnings = check_outline.check(d)
+        self.assertFalse(any("basics.audience" in w for w in warnings))
+        self.assertTrue(any("basics.look" in w and "地図" in w for w in warnings))
+
+    def test_says_label_has_id(self):
+        items = check_outline.proposed_items(load(os.path.join(DIR, "ok_ux.json")))
+        says = [i for i in items if i["where"] == "c4.2"][0]
+        self.assertTrue(says["label"].endswith("言うこと c4.2"), says["label"])
+
+    def test_no_check_contract_import(self):
+        for name in ("check_outline.py", "check_text.py"):
+            with open(os.path.join(SCRIPTS, name), encoding="utf-8") as f:
+                self.assertNotIn("check_contract", f.read(), name)
+
+    def test_examples_are_ready(self):         # 通る見本は examples/outlines/（claude.ai 用 zip にも入る）
+        ex = os.path.join(EXAMPLES, "outlines")
+        names = sorted(os.listdir(ex))
+        self.assertEqual(names, ["keihi.json", "ux.json"])
+        for n in names:
+            self.assertEqual(subprocess.run([sys.executable, CHECK, os.path.join(ex, n), "--ready"],
+                                            capture_output=True).returncode, 0, n)
+
     def test_proposed_items(self):
         d = load(os.path.join(DIR, "ok_ux.json"))
         items = check_outline.proposed_items(d)
@@ -176,6 +202,18 @@ class ChapterTest(unittest.TestCase):
         r = subprocess.run(["node", CHECK_SB, PAIR_SB, "--outline", PAIR_OUTLINE], capture_output=True, text=True)
         self.assertEqual(r.returncode, 0, r.stdout)
         self.assertRegex(r.stdout, r"章 c2: 見積もり [0-9.]+ 秒（目安 30 秒）")
+
+    def test_split_chapter_warns(self):     # s1(c1) s2(c2) s3(c1)
+        code, out = self.check(self.variant(lambda sb: sb["scenes"][2].update(chapter="c1")), "--outline", PAIR_OUTLINE)
+        self.assertEqual(code, 0)
+        self.assertTrue(any("c1" in w and "離れて" in w for w in out["warnings"]))
+        code, out = self.check(PAIR_SB, "--outline", PAIR_OUTLINE)
+        self.assertFalse(any("離れて" in w for w in out["warnings"]))
+
+    def test_complete_needs_outline(self):
+        r = subprocess.run(["node", CHECK_SB, PAIR_SB, "--complete"], capture_output=True, text=True)
+        self.assertEqual(r.returncode, 2)
+        self.assertIn("--outline", r.stderr)
 
     def test_examples_still_pass(self):    # chapter のない今の見本は、警告も増えない
         code, out = self.check(os.path.join(EXAMPLES, "sequence.json"))

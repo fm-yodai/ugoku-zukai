@@ -12,6 +12,7 @@ const VAL = ["--theme", "--timeline", "--outline"];   // 値を取る引数
 const opt = k => { const i = args.indexOf(k); return i >= 0 ? args[i + 1] : null; };
 const file = args.find((a, i) => !a.startsWith("--") && !VAL.includes(args[i - 1]));
 if (!file) { console.error("使い方: node check_storyboard.cjs storyboard.json [--theme 3b1b] [--timeline timeline.json] [--outline outline.json] [--complete] [--json]"); process.exit(2); }
+if (args.includes("--complete") && !args.includes("--outline")) { console.error("--complete は --outline と一緒に使う"); process.exit(2); }
 let outline = null;
 if (args.includes("--outline")) {
   try { outline = JSON.parse(fs.readFileSync(opt("--outline") || "", "utf8")); }

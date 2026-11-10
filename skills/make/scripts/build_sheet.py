@@ -13,7 +13,7 @@
 
 - コマが今の台本のものでない（台本を直した後に frames.cjs を回し直していない、別の台本のコマ）ときは、書かずに止まる
 
-終了コード: 0 = 書けた、2 = 使い方の誤りか、frames.json・コマの SVG がないか、コマが今の台本のものでない。
+終了コード: 0 = 書けた、2 = 使い方の誤りか、frames.json・コマの SVG がないか、コマが今の台本のものでないか、構成メモの形に誤りがある。
 """
 import argparse
 import base64
@@ -189,10 +189,17 @@ def main():
         if a.outline:
             with open(a.outline, encoding="utf-8") as f:
                 outline = json.load(f)
+            errors, _ = check_outline.check(outline)
+            if errors:
+                print("構成メモに誤りがある:", file=sys.stderr)
+                for e in errors:
+                    print("  " + e, file=sys.stderr)
+                return 2
         page = build(sb, a.frames, outline, a.artifact)
     except (OSError, ValueError) as e:
         print(f"絵コンテを作れない: {e}", file=sys.stderr)
         return 2
+    os.makedirs(os.path.dirname(os.path.abspath(a.out)), exist_ok=True)
     with open(a.out, "w", encoding="utf-8") as f:
         f.write(page)
     print(f"{page.count('<img ')} コマ → {a.out}")

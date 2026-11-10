@@ -31,7 +31,7 @@
 項目: {"text": "…", "by": "user" | "claude" | "source", "state": "proposed" | "agreed", "source": ["場所か引用", …]}
   by: source なら source が 1 つ以上要る。by: user で state: proposed は誤り（利用者が言ったことは合意済み）。
 
-警告: 章の seconds の合計が basics.length.seconds から 15% を超えてずれている / 項目の text に禁止語がある。
+警告: 章の seconds の合計が basics.length.seconds から 15% を超えてずれている / 項目の text に禁止語がある（by: user の項目は見ない）。
 """
 import json
 import os
@@ -40,7 +40,7 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
-import check_contract  # noqa: E402  図の種類の読み方と禁止語の探し方を借りる（契約をやめるときに、こちらへ移す）
+from check_text import banned, find_banned  # noqa: E402  禁止語は字幕の検査と同じ辞書・同じ探し方で見る
 
 FORMAT = "ugoku-zukai-outline/1"
 BY = ("user", "claude", "source")
@@ -55,8 +55,12 @@ BASICS_LABEL = {
 
 
 def figure_types():
-    """図の種類（canvas も含める）"""
-    return check_contract.load_types() | {"canvas"}
+    """図の種類。player/src/validate.js の TYPES のキーから読む（一覧を二重に持たない。canvas も含む）"""
+    with open(os.path.join(HERE, "..", "player", "src", "validate.js"), encoding="utf-8") as f:
+        m = re.search(r"const TYPES = \{(.*?)\n\s*\};", f.read(), re.S)
+    if not m:
+        sys.exit("validate.js から TYPES を読めない")
+    return set(re.findall(r"(\w+)\s*:\s*\[", m.group(1)))
 
 
 def _text(v):
@@ -109,7 +113,7 @@ def _items(outline):
         for i, s in enumerate(says if isinstance(says, list) else []):
             if isinstance(s, dict):
                 where = s["id"] if _text(s.get("id")) else f"{cid}.says[{i}]"
-                out.append((where, f"{name} / 言うこと", s))
+                out.append((where, f"{name} / 言うこと {where}", s))
         if isinstance(ch.get("shows"), dict):
             out.append((f"{cid}.shows", f"{name} / 見せるもの", ch["shows"]))
     return out
@@ -214,10 +218,12 @@ def check(outline, ready=False):
         if abs(sum(secs) - total) > total * LENGTH_TOLERANCE:
             warnings.append(f"章の seconds の合計 {sum(secs):g} 秒が、長さ（basics.length.seconds）{total:g} 秒から 15% を超えてずれている")
 
-    terms = check_contract.banned()
+    terms = banned()
     for where, _label, item in _items(outline):
+        if item.get("by") == "user":   # 利用者の言葉はそのまま書く約束。字幕に出たら check_text.py が誤りにする
+            continue
         if isinstance(item.get("text"), str):
-            for w in check_contract.find_banned(item["text"], terms):
+            for w in find_banned(item["text"], terms):
                 warnings.append(f"{where}: text に禁止語「{w}」")
     return errors, warnings
 

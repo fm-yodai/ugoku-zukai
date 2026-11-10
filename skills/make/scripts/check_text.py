@@ -16,8 +16,25 @@ import re
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, HERE)
-from check_contract import banned, find_banned  # noqa: E402
+
+
+def banned():
+    """禁止語の一覧（assets/banned_terms.json の terms）"""
+    with open(os.path.join(HERE, "..", "assets", "banned_terms.json"), encoding="utf-8") as f:
+        return json.load(f)["terms"]
+
+
+def find_banned(text, terms):
+    """text に入っている禁止語を返す。allow に挙げた熟語（「名札」など）の中の語は数えない"""
+    hits = []
+    for t in terms:
+        s = text
+        for a in t.get("allow", []):
+            s = s.replace(a, "")
+        if t["word"] in s:
+            hits.append(t["word"])
+    return hits
+
 
 ZUNDA = {1, 3, 5, 7, 22, 38, 75, 76}
 DEFAULT_SPEAKER = 8

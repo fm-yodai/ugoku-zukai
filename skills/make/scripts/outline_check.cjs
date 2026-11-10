@@ -34,6 +34,12 @@ function checkAgainstOutline(sb, M, outline, opts) {
     if (seen.includes(c.id)) continue;
     (complete ? errors : warnings).push(`章「${c.id}」の場面がまだない`);
   }
+  // 同じ章の場面は続けて置く（離れていると、絵コンテとチャプター一覧で同じ章が 2 回出る）
+  for (const id of seen) {
+    const idx = sb.scenes.map((sc, i) => (chapterOf.get(sc.id) === id ? i : -1)).filter(i => i >= 0);
+    if (idx[idx.length - 1] - idx[0] + 1 !== idx.length)
+      warnings.push(`章「${id}」の場面が離れている（${idx.map(i => sb.scenes[i].id).join("・")}）`);
+  }
   const planned = chapters.map(c => c.id).filter(id => seen.includes(id));
   if (planned.join("\n") !== seen.join("\n"))
     warnings.push(`章の順が構成メモと違う（台本: ${seen.join(" → ")}、構成メモ: ${planned.join(" → ")}）`);
