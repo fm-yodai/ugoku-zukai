@@ -177,6 +177,33 @@ class BuildSheetTest(unittest.TestCase):
         self.assertIn("<!doctype html>", full)
         self.assertIn("<body", full)
 
+    def test_stale_frames(self):
+        # 台本を直した後に frames.cjs を回し直していないと、古い字幕のまま書かずに止まる
+        def stale(change):
+            sb = load(PAIR_SB)
+            change(sb)
+            path = self.newdir() + ".json"
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(sb, f, ensure_ascii=False)
+            return self.build(path, self.frames_pair)
+        for change in (
+            lambda sb: sb["scenes"][0]["lines"][0].update(text="書き直した{a}字幕です。"),              # 字幕を直した
+            lambda sb: sb["scenes"][0]["lines"].append({"id": "l99", "text": "足した行です。"}),        # 行を足した
+            lambda sb: sb["scenes"][1]["lines"].pop(),                                                  # 行を消した
+        ):
+            r, html = stale(change)
+            self.assertEqual(r.returncode, 2)
+            self.assertEqual(html, "")
+            self.assertIn("frames.cjs", r.stderr)
+
+    def test_frames_of_another_storyboard(self):   # 別の台本のコマ（0 コマになる）では書かずに止まる
+        r, html = self.build(SEQ, self.frames(os.path.join(SCRIPTS, "..", "examples", "mixed.json"), "--scenes", "s2"))
+        self.assertEqual(r.returncode, 2)
+        self.assertEqual(html, "")
+
+    def test_long_word_in_says_wraps(self):        # says に長い英字の並びがあっても横スクロールを出さない
+        self.assertRegex(build_sheet.STYLE, r"\.us-says \{[^}]*overflow-wrap: anywhere")
+
     def test_no_frames(self):
         r, _ = self.build(SEQ, os.path.join(self.dir, "none"))
         self.assertEqual(r.returncode, 2)

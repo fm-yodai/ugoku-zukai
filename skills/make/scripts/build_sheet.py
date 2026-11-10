@@ -11,13 +11,16 @@
 - --artifact: Artifact で公開する形（<html>・<head>・<body> を外した断片）で書く
 - コマは SVG を data: の画像として埋め込む。外部のファイルは読まず、JS も使わない。PNG（resvg）は要らない
 
-終了コード: 0 = 書けた、2 = 使い方の誤りか、frames.json・コマの SVG がない。
+- コマが今の台本のものでない（台本を直した後に frames.cjs を回し直していない、別の台本のコマ）ときは、書かずに止まる
+
+終了コード: 0 = 書けた、2 = 使い方の誤りか、frames.json・コマの SVG がないか、コマが今の台本のものでない。
 """
 import argparse
 import base64
 import html
 import json
 import os
+import re
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -35,7 +38,7 @@ STYLE = """
   .us-note { color: var(--muted); font-size: 13px; margin: 0 0 8px; }
   .us-chapter { margin-top: 32px; }
   .us-chapter h2, .us-decided h2 { font-size: 17px; line-height: 1.5; margin: 0 0 8px; padding-bottom: 6px; border-bottom: 2px solid var(--line); overflow-wrap: anywhere; }
-  .us-says { margin: 0 0 12px; padding-left: 1.4em; color: var(--muted); font-size: 14px; }
+  .us-says { margin: 0 0 12px; padding-left: 1.4em; color: var(--muted); font-size: 14px; overflow-wrap: anywhere; }
   .us-row { display: grid; grid-template-columns: minmax(0, 58%) minmax(0, 1fr); gap: 16px; align-items: start; padding: 12px 0; border-bottom: 1px solid var(--line); }
   .us-row img { display: block; width: 100%; height: auto; aspect-ratio: 16 / 9; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); }
   .us-ref { margin: 0 0 4px; font: 13px/1.5 ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace; color: var(--accent); font-variant-numeric: tabular-nums; }
@@ -92,6 +95,31 @@ def chapters(storyboard, outline=None):
     return out
 
 
+MARK_RE = re.compile(r"\{[A-Za-z0-9_]+\}")  # 字幕の文中の印（player/src/engine.js の MARK_RE と同じ）
+
+
+def _stale(storyboard, lines):
+    """コマが今の台本のものでなければ、その理由を返す（合っていれば None）。
+
+    frames.json に載っている場面ごとに、行の id の並びと字幕の文を台本と比べる。
+    frames.cjs --scenes で書かなかった場面は見ない。"""
+    want = {sc["id"]: [(ln.get("id"), MARK_RE.sub("", ln.get("text") or "")) for ln in sc.get("lines") or []]
+            for sc in storyboard["scenes"]}
+    got = {}
+    for ln in lines:
+        got.setdefault(ln.get("scene"), []).append((ln.get("id"), ln.get("text")))
+    for sid, rows in got.items():
+        if sid not in want:
+            return f"場面「{sid}」が台本にない"
+        if rows != want[sid]:
+            ids = [i for i, _ in rows], [i for i, _ in want[sid]]
+            if ids[0] != ids[1]:
+                return f"場面「{sid}」の行が台本と違う（コマ: {'・'.join(map(str, ids[0]))} / 台本: {'・'.join(map(str, ids[1]))}）"
+            changed = [a[0] for a, b in zip(rows, want[sid]) if a != b]
+            return f"場面「{sid}」の行「{changed[0]}」の字幕が台本と違う"
+    return None
+
+
 def _clock(seconds):
     s = int(seconds)
     return f"{s // 60}:{s % 60:02d}"
@@ -115,6 +143,11 @@ def build(storyboard, frames_dir, outline=None, artifact=False):
     for ln in lines:
         if not isinstance(ln.get("start"), (int, float)):
             raise ValueError(f"frames.json の行「{ln.get('id')}」に start がない。frames.cjs を回し直す")
+    if not lines:
+        raise ValueError("frames.json にコマが 1 つもない。frames.cjs を回し直す")
+    stale = _stale(storyboard, lines)
+    if stale:
+        raise ValueError(f"コマが今の台本のものでない（{stale}）。台本を直したら frames.cjs を回し直す")
     title = storyboard.get("title") or "動く図解"
     body = [f'<h1>{esc(title)}</h1>', '<p class="us-note">絵コンテ（声なし。時刻は見積もり）</p>']
     for ch in chapters(storyboard, outline):

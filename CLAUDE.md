@@ -44,9 +44,9 @@ python3 skills/make/scripts/workdir.py new this-repo
 # 各行の落ち着いたコマ（SVG と PNG のシート）。PNG には初回だけ resvg を入れる。終了コード 4 = PNG なし（SVG と frames.json だけ）
 python3 skills/make/scripts/setup_render.py
 node skills/make/scripts/frames.cjs skills/make/examples/sequence.json --theme flat -o work/frames
-node skills/make/scripts/frames.cjs skills/make/examples/mixed.json --theme flat -o work/frames --scenes s2   # 一部の場面のコマだけ書く（カンマ区切り）
+node skills/make/scripts/frames.cjs skills/make/examples/mixed.json --theme flat -o work/frames-s2 --scenes s2   # 一部の場面のコマだけ書く（カンマ区切り。出力先の前の回のコマは消えるので、全体とは分ける）
 
-# 利用者向けの絵コンテのページ（コマの横に「s2 / l2 @0:14」と字幕の全文。PNG は要らない。--outline で章の見出しと「Claude が決めたこと」が付く）
+# 利用者向けの絵コンテのページ（コマの横に「s2 / l2 @0:14」と字幕の全文。PNG は要らない。--outline で章の見出しと「Claude が決めたこと」が付く。台本を直したら frames.cjs を回し直す。コマが古いと終了コード 2 で止まる）
 python3 skills/make/scripts/build_sheet.py skills/make/examples/sequence.json --frames work/frames -o work/sheet.html [--outline outline.json] [--artifact]
 
 # 声: 初回だけ VOICEVOX を入れ（約 94MB）、1 行ずつ合成して timeline.json と narration.mp3 を作る

@@ -64,6 +64,13 @@ class CheckOutlineTest(unittest.TestCase):
         self.assertEqual(errors, [])
         self.assertTrue(any("長さ" in w for w in warnings))
 
+    def test_figure_must_be_string(self):   # 図の種類を配列で書いても、例外でなく誤りの文で知らせる
+        for bad in (["venn", "matrix"], {"type": "venn"}, 3):
+            d = load(os.path.join(DIR, "ok_ux.json"))
+            d["chapters"][2]["shows"]["figure"] = bad
+            errors, _ = check_outline.check(d)
+            self.assertTrue(any("figure" in e for e in errors), bad)
+
     def test_proposed_items(self):
         d = load(os.path.join(DIR, "ok_ux.json"))
         items = check_outline.proposed_items(d)

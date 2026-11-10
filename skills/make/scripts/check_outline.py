@@ -189,7 +189,7 @@ def check(outline, ready=False):
         shows = ch.get("shows")
         if shows is not None and _check_item(shows, f"{where}の shows", errors):
             fig = shows.get("figure")
-            if fig is not None and fig not in types:
+            if fig is not None and (not isinstance(fig, str) or fig not in types):
                 errors.append(f"{where}の shows: figure は {' / '.join(sorted(types))} のどれか（今は {json.dumps(fig, ensure_ascii=False)}）")
         if "seconds" in ch and not _positive(ch["seconds"]):
             errors.append(f"{where}: seconds は正の数で書く")
