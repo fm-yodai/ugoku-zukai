@@ -6,5 +6,7 @@ fail=0
 bash scripts/tests/run_m3.sh || fail=1
 # 構成メモ（outline.json）の形と、台本との突き合わせ
 python3 scripts/tests/test_outline.py >/dev/null 2>&1 || { echo "NG: test_outline.py"; python3 scripts/tests/test_outline.py; fail=1; }
+# 利用者向けの絵コンテのページ
+python3 scripts/tests/test_build_sheet.py >/dev/null 2>&1 || { echo "NG: test_build_sheet.py"; python3 scripts/tests/test_build_sheet.py; fail=1; }
 [ $fail = 0 ] && echo "R1 の検査: すべて OK" || echo "R1 の検査: NG あり"
 exit $fail
