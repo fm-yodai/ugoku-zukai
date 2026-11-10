@@ -1,21 +1,23 @@
 #!/usr/bin/env node
 // 台本の各行の「落ち着いたコマ」を SVG に書き、6 コマずつ並べたシートを PNG にする（評価役が画面を見るため）
-// 使い方: node frames.cjs <storyboard.json> --theme <名前|パス> -o <出力先> [--timeline timeline.json]
+// 使い方: node frames.cjs <storyboard.json> --theme <名前|パス> -o <出力先> [--timeline timeline.json] [--scenes s2,s3]
+//   --scenes  カンマで区切った場面の id。その場面の行だけを書く（配置と時刻は台本全体で計算するので、コマの中身は全体のときと同じ）
 // 書くもの: <出力先>/svg/<行 id>.svg、<出力先>/sheet-NN.png、<出力先>/frames.json（始めに、前の回のこの 3 つだけを消す）
 // シート: 1280×1170。1 コマは 640×390（上に 30 の帯「行 id ＋字幕の頭 20 字」、その下に 640×360 のコマ）を 2 列 × 3 行
-// frames.json の lines[].sub_forced = 再生ではその時刻に字幕が出ていない（または薄い）ので補った、settled = その行の動作がすべて終わっている
-// 終了コード: 0 = PNG まで書けた、1 = 台本の誤りか想定外の誤り、2 = 使い方の誤り、4 = resvg を読めず SVG と frames.json だけ書いた
+// frames.json の lines[].start = その行の始まりの時刻、t = コマを取った時刻、sub_forced = 再生ではその時刻に字幕が出ていない（または薄い）ので補った、settled = その行の動作がすべて終わっている
+// 終了コード: 0 = PNG まで書けた、1 = 台本の誤りか想定外の誤り、2 = 使い方の誤り（--scenes の場面が台本にないときも。何も書かない）、4 = resvg を読めず SVG と frames.json だけ書いた
 "use strict";
 const fs = require("fs"), path = require("path"), vm = require("vm"), os = require("os"), cp = require("child_process");
 const { load, theme, PLAYER } = require("./uz_node.cjs");
 const { makeDocument, serialize } = require("./svg_dom.cjs");
 
 const args = process.argv.slice(2);
-const VAL = ["--theme", "--timeline", "-o"];
+const VAL = ["--theme", "--timeline", "-o", "--scenes"];
 const opt = k => { const i = args.indexOf(k); return i >= 0 ? args[i + 1] : null; };
 const file = args.find((a, i) => !a.startsWith("-") && !VAL.includes(args[i - 1]));
 const outDir = opt("-o");
-if (!file || !outDir) { console.error("使い方: node frames.cjs <storyboard.json> --theme <名前|パス> -o <出力先> [--timeline timeline.json]"); process.exit(2); }
+const only = args.includes("--scenes") ? String(opt("--scenes") || "").split(",").map(s => s.trim()).filter(Boolean) : null;
+if (!file || !outDir || (only && !only.length)) { console.error("使い方: node frames.cjs <storyboard.json> --theme <名前|パス> -o <出力先> [--timeline timeline.json] [--scenes s2,s3]"); process.exit(2); }
 
 const W = 1280, H = 720, CW = 640, CH = 360, COLS = 2, ROWS = 3, PER = COLS * ROWS;
 const BAND = 30;   // シートのコマの上に置く帯の高さ（シートの座標）。コマには重ねない（章の題を隠さない）
@@ -50,6 +52,15 @@ const esc = s => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(
   const sb = JSON.parse(fs.readFileSync(file, "utf8"));
   const th = theme(opt("--theme") || "3b1b");
   const tl = opt("--timeline") ? JSON.parse(fs.readFileSync(opt("--timeline"), "utf8")) : null;
+  // --scenes の場面が台本にあるかは、出力先に触る前に確かめる
+  if (only && Array.isArray(sb.scenes)) {
+    const known = new Set(sb.scenes.map(sc => sc.id));
+    const unknown = only.filter(id => !known.has(id));
+    if (unknown.length) {
+      for (const id of unknown) console.error(`場面「${id}」が台本にない`);
+      process.exit(2);
+    }
+  }
   const M = await UZ.build(sb, th, tl);
   if (M.errors && M.errors.length) {
     for (const e of M.errors) console.error("誤り: " + e);
@@ -73,6 +84,7 @@ const esc = s => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(
   fs.mkdirSync(path.join(outDir, "svg"), { recursive: true });
   const frames = [], inner = [];
   L.forEach((ln, i) => {
+    if (only && !only.includes(ln.scene)) return;   // 時刻は全行から求めるので、書かない行もここまでは回す
     const actsEnd = Math.max(-Infinity, ...M.acts.filter(a => a.line === ln.id).map(a => a.end));
     let t = Math.max(ln.start + ln.dur, actsEnd) + 0.05;
     const next = L[i + 1];
@@ -92,7 +104,7 @@ const esc = s => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(
     const rel = `svg/${ln.id}.svg`;
     fs.writeFileSync(path.join(outDir, rel), serialize(svg, { xmlns: "http://www.w3.org/2000/svg", width: W, height: H }));
     inner.push(svg.childNodes.map(c => serialize(c)).join(""));
-    frames.push({ id: ln.id, scene: ln.scene, t: +t.toFixed(3), text: textOf[ln.id], svg: rel, sub_forced: subForced, settled });
+    frames.push({ id: ln.id, scene: ln.scene, start: +ln.start.toFixed(3), t: +t.toFixed(3), text: textOf[ln.id], svg: rel, sub_forced: subForced, settled });
   });
 
   // シート: 6 コマずつ、帯の下に入れ子の <svg>（はみ出しを切る）を置き、<g transform> で並べる

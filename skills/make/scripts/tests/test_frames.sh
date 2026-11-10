@@ -99,5 +99,35 @@ else
   ng "resvg がないときに frames.json ができない"
 fi
 
+# frames.json の行に start がある
+node -e '
+const fr = JSON.parse(require("fs").readFileSync(process.argv[1] + "/frames.json", "utf8"));
+process.exit(fr.lines.every(l => typeof l.start === "number" && l.start <= l.t) ? 0 : 1);
+' "$out/a" || ng "frames.json の行に start がない（か t より後）"
+
+# --scenes: その場面の行だけを書き、コマの中身は全体のときと同じ
+node scripts/frames.cjs examples/mixed.json --theme flat -o "$out/all" >/dev/null 2>&1
+sc=$(node -e 'const sb = JSON.parse(require("fs").readFileSync("examples/mixed.json", "utf8")); console.log(sb.scenes[1].id)')
+node scripts/frames.cjs examples/mixed.json --theme flat -o "$out/part" --scenes "$sc" >/dev/null 2>&1
+code=$?
+[ $code = 0 ] || [ $code = 4 ] || ng "--scenes の終了コードが $code"
+node -e '
+const fs = require("fs"), [all, part, sc] = process.argv.slice(1);
+const a = JSON.parse(fs.readFileSync(all + "/frames.json", "utf8")), p = JSON.parse(fs.readFileSync(part + "/frames.json", "utf8"));
+const want = a.lines.filter(l => l.scene === sc).map(l => l.id);
+let ok = want.length > 0 && JSON.stringify(p.lines.map(l => l.id)) === JSON.stringify(want);
+for (const id of want) ok = ok && fs.readFileSync(all + "/svg/" + id + ".svg", "utf8") === fs.readFileSync(part + "/svg/" + id + ".svg", "utf8");
+ok = ok && fs.readdirSync(part + "/svg").length === want.length;
+ok = ok && JSON.stringify(p.sheets.flatMap(s => s.lines)) === JSON.stringify(want);
+process.exit(ok ? 0 : 1);
+' "$out/all" "$out/part" "$sc" 2>/dev/null || ng "--scenes の出力が、その場面の行だけになっていない（か中身が全体と違う）"
+
+# 台本にない場面: 何も書かずに終了コード 2
+mkdir -p "$out/none"; echo x >"$out/none/frames.json"
+node scripts/frames.cjs examples/mixed.json --theme flat -o "$out/none" --scenes "$sc,s999" >"$out/none.log" 2>&1
+[ $? = 2 ] || ng "台本にない場面で終了コード 2 にならない"
+grep -q "s999" "$out/none.log" || ng "台本にない場面の id が表示されない"
+[ "$(cat "$out/none/frames.json")" = x ] || ng "台本にない場面なのに出力先を書き換えた"
+
 [ $fail = 0 ] && echo "frames の検査: すべて OK" || echo "frames の検査: NG あり"
 exit $fail
