@@ -5,6 +5,7 @@
 //             出力先にある前の回のコマは消えるので、全体のコマを残したいときは出力先を分ける
 // 書くもの: <出力先>/svg/<行 id>.svg、<出力先>/sheet-NN.png、<出力先>/frames.json（始めに、前の回のこの 3 つだけを消す）
 // シート: 1280×1170。1 コマは 640×390（上に 30 の帯「行 id ＋字幕の頭 20 字」、その下に 640×360 のコマ）を 2 列 × 3 行
+// frames.json の timed = 時刻の出どころ（voice = --timeline で渡した合成した声の時刻表、estimate = 文字数からの見積もり）
 // frames.json の lines[].start = その行の始まりの時刻、t = コマを取った時刻、sub_forced = 再生ではその時刻に字幕が出ていない（または薄い）ので補った、settled = その行の動作がすべて終わっている
 // 終了コード: 0 = PNG まで書けた、1 = 台本の誤りか想定外の誤り、2 = 使い方の誤り（--scenes の場面が台本にないときも。何も書かない）、4 = resvg を読めず SVG と frames.json だけ書いた
 "use strict";
@@ -131,7 +132,7 @@ const esc = s => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(
 
   const Resvg = loadResvg();
   const writeJson = png => fs.writeFileSync(path.join(outDir, "frames.json"),
-    JSON.stringify({ png, sheets: sheets.map(({ file: f, lines }) => ({ file: f, lines })), lines: frames }, null, 2) + "\n");
+    JSON.stringify({ png, timed: tl ? "voice" : "estimate", sheets: sheets.map(({ file: f, lines }) => ({ file: f, lines })), lines: frames }, null, 2) + "\n");
   if (!Resvg) {
     writeJson(false);
     console.error(`resvg を読めない（置き場 ${renderHome()}）。PNG は作らず SVG と frames.json だけ書いた。python3 setup_render.py を実行する`);

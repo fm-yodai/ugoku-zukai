@@ -3,6 +3,7 @@
 import glob
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -224,6 +225,67 @@ class BuildSheetTest(unittest.TestCase):
         r, _ = self.build(SEQ, os.path.join(self.dir, "none"))
         self.assertEqual(r.returncode, 2)
         self.assertIn("frames.json", r.stderr)
+
+    # ---- まだ決めていないこと（構成メモの open）と、時刻の出どころ ----
+    def outline_with_open(self, items):
+        ol = load(PAIR_OUTLINE)
+        if items is None:
+            ol.pop("open", None)
+        else:
+            ol["open"] = items
+        path = self.newdir() + ".json"
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(ol, f, ensure_ascii=False)
+        return path
+
+    def voice_timeline(self):
+        """PAIR_SB の時刻表を作る（3 秒おき。印はすべて行の頭から 0.5 秒）"""
+        lines, t = [], 1.0
+        for sc in self.sb_pair["scenes"]:
+            for ln in sc["lines"]:
+                marks = {m: 0.5 for m in re.findall(r"\{([A-Za-z0-9_]+)\}", ln.get("read") or ln["text"])}
+                lines.append({"id": ln["id"], "scene": sc["id"], "start": t, "dur": 2.5, "marks": marks})
+                t += 3.0
+        path = self.newdir() + ".json"
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump({"source": "voicevox", "speaker": 8, "speed": 1.1, "credit": "VOICEVOX:春日部つむぎ", "lines": lines}, f, ensure_ascii=False)
+        return path
+
+    def test_open_listed(self):
+        r, html = self.build(PAIR_SB, self.frames_pair, "--outline", self.outline_with_open(["呼び名を <社内> に合わせるか"]))
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("まだ決めていないこと", html)
+        self.assertIn("呼び名を &lt;社内&gt; に合わせるか", html)
+
+    def test_open_absent(self):
+        for items in ([], None):
+            r, html = self.build(PAIR_SB, self.frames_pair, "--outline", self.outline_with_open(items))
+            self.assertEqual(r.returncode, 0, r.stderr)
+            self.assertNotIn("まだ決めていないこと", html)
+
+    def test_note_estimate(self):
+        self.assertEqual(load(os.path.join(self.frames_pair, "frames.json")).get("timed"), "estimate")
+        r, html = self.build(PAIR_SB, self.frames_pair)
+        self.assertIn("時刻は見積もり", html)
+
+    def test_note_voice(self):
+        d = self.frames(PAIR_SB, "--timeline", self.voice_timeline())
+        self.assertEqual(load(os.path.join(d, "frames.json")).get("timed"), "voice")
+        r, html = self.build(PAIR_SB, d)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("時刻は合成した声に合わせたもの", html)
+        self.assertNotIn("時刻は見積もり", html)
+
+    def test_note_old_frames(self):
+        # timed のない古い frames.json でも止まらず、見積もりとして出す
+        d = self.copy_frames(self.frames_pair)
+        fr = load(os.path.join(d, "frames.json"))
+        fr.pop("timed", None)
+        with open(os.path.join(d, "frames.json"), "w", encoding="utf-8") as f:
+            json.dump(fr, f, ensure_ascii=False)
+        r, html = self.build(PAIR_SB, d)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("時刻は見積もり", html)
 
 
 if __name__ == "__main__":

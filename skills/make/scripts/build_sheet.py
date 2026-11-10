@@ -7,7 +7,8 @@
 - 章の見出し: --outline があり場面に chapter があれば構成メモの章の題（下に、その章の「言うこと」）。
   なければ再生ページのチャプター一覧と同じ（場面の title、図が 1 つならその図の title、title 型の図は「はじめに」）
 - frames.json にない行（frames.cjs --scenes で一部だけ書いたとき）は出さない。行が 1 つもない章は見出しごと出さない
-- --outline があれば、終わりに「Claude が決めたこと」（構成メモの state: proposed の項目）を一覧にする
+- --outline があれば、終わりに「Claude が決めたこと」（構成メモの state: proposed の項目）と「まだ決めていないこと」（構成メモの open）を一覧にする
+- 頭の表記は、コマの時刻の出どころ（frames.json の timed）で変わる。frames.cjs に --timeline を渡したコマなら「時刻は合成した声に合わせたもの」
 - --artifact: Artifact で公開する形（<html>・<head>・<body> を外した断片）で書く
 - コマは SVG を data: の画像として埋め込む。外部のファイルは読まず、JS も使わない。PNG（resvg）は要らない
 
@@ -37,13 +38,15 @@ STYLE = """
   .us-wrap h1 { font-size: 22px; line-height: 1.4; margin: 0 0 4px; overflow-wrap: anywhere; }
   .us-note { color: var(--muted); font-size: 13px; margin: 0 0 8px; }
   .us-chapter { margin-top: 32px; }
-  .us-chapter h2, .us-decided h2 { font-size: 17px; line-height: 1.5; margin: 0 0 8px; padding-bottom: 6px; border-bottom: 2px solid var(--line); overflow-wrap: anywhere; }
+  .us-chapter h2, .us-decided h2, .us-open h2 { font-size: 17px; line-height: 1.5; margin: 0 0 8px; padding-bottom: 6px; border-bottom: 2px solid var(--line); overflow-wrap: anywhere; }
   .us-says { margin: 0 0 12px; padding-left: 1.4em; color: var(--muted); font-size: 14px; overflow-wrap: anywhere; }
   .us-row { display: grid; grid-template-columns: minmax(0, 58%) minmax(0, 1fr); gap: 16px; align-items: start; padding: 12px 0; border-bottom: 1px solid var(--line); }
   .us-row img { display: block; width: 100%; height: auto; aspect-ratio: 16 / 9; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); }
   .us-ref { margin: 0 0 4px; font: 13px/1.5 ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace; color: var(--accent); font-variant-numeric: tabular-nums; }
   .us-sub { margin: 0; overflow-wrap: anywhere; }
   .us-decided { margin-top: 40px; }
+  .us-open { margin-top: 28px; }
+  .us-open ul { margin: 0; padding-left: 20px; overflow-wrap: anywhere; }
   .us-decided dl { margin: 0; }
   .us-decided dt { font-weight: 700; font-size: 14px; margin-top: 10px; overflow-wrap: anywhere; }
   .us-decided dd { margin: 0; overflow-wrap: anywhere; }
@@ -149,7 +152,9 @@ def build(storyboard, frames_dir, outline=None, artifact=False):
     if stale:
         raise ValueError(f"コマが今の台本のものでない（{stale}）。台本を直したら frames.cjs を回し直す")
     title = storyboard.get("title") or "動く図解"
-    body = [f'<h1>{esc(title)}</h1>', '<p class="us-note">絵コンテ（声なし。時刻は見積もり）</p>']
+    # 時刻の出どころ（frames.cjs に --timeline を渡したコマなら、合成した声の時刻。timed のない古いコマは見積もりとして扱う）
+    note = "絵コンテ（時刻は合成した声に合わせたもの）" if frames.get("timed") == "voice" else "絵コンテ（声なし。時刻は見積もり）"
+    body = [f'<h1>{esc(title)}</h1>', f'<p class="us-note">{note}</p>']
     for ch in chapters(storyboard, outline):
         rows = [_row(ln, frames_dir) for ln in lines if ln.get("scene") in ch["scenes"]]
         if not rows:
@@ -165,6 +170,10 @@ def build(storyboard, frames_dir, outline=None, artifact=False):
                     '<p class="us-note">まだ確認していただいていない項目です。直したいものがあれば、項目の名前で教えてください。</p><dl>')
         body.extend(f'<dt>{esc(p["label"])}</dt><dd>{esc(p["text"])}</dd>' for p in proposed)
         body.append("</dl></section>")
+    undecided = [x for x in (outline or {}).get("open") or [] if isinstance(x, str) and x.strip()]
+    if undecided:
+        body.append('<section class="us-open"><h2>まだ決めていないこと</h2><ul>'
+                    + "".join(f"<li>{esc(x)}</li>" for x in undecided) + "</ul></section>")
     head = f"<title>{esc(title)} 絵コンテ</title>\n<style>{STYLE}</style>"
     main = '<div class="us-wrap">\n' + "\n".join(body) + "\n</div>"
     if artifact:
