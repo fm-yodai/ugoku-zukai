@@ -41,7 +41,7 @@
 - 重さが `must` だけの基準の指摘は must。評価役がほかのレベルを付けても、`ledger.py` が must に直して取り込む（過去に、事実の言い過ぎが should で付き、直されないまま残った）
 - 重さが `should` の基準と、must と should を分けている基準では、定義に従って付ける。直さなくても伝わり方が変わらないものは nits にする
 
-既存の規則は転記せず ID で参照する: 文章 `TW-n`（`${CLAUDE_PLUGIN_ROOT}/skills/make/references/writing/rules.md`）、聞いて分かる文 `SP-n`（`../writing/spoken.md`）、演出 `VG-n`（`../visual-grammar.md`）。
+既存の規則は転記せず ID で参照する: 文章 `TW-n`（`../writing/rules.md`）、聞いて分かる文 `SP-n`（`../writing/spoken.md`）、演出 `VG-n`（`../visual-grammar.md`）。
 
 ## 衝突したとき
 

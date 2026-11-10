@@ -85,5 +85,21 @@ grep -qE "interview\.md|contract\.json" scripts/workdir.py && ng "workdir.py の
 for w in "outline.json" "check_outline.py" "ledger.py" "review-protocol.md" "run_r2.sh"; do grep -q "$w" ../../CLAUDE.md || ng "CLAUDE.md に $w がない"; done
 grep -q "インタビュー → " ../../CLAUDE.md && ng "CLAUDE.md の流れが古いまま"
 grep -q "R2" ../../docs/design.md || ng "docs/design.md に R2 の記述がない"
+# 絵コンテまでの通し（2026-11-10）で、初めて読んだ人が迷った箇所
+grep -q "まだ決めていないこと" SKILL.md || ng "SKILL.md に、まだ決めていないこと（open）を見せる記述がない"
+for f in SKILL.md references/review-protocol.md references/run-chat.md references/run-code.md; do
+  grep -q "任されているときは" $f || ng "$f に、任されているときの構成メモの指摘の扱いがない"
+done
+grep -q "開き直" references/run-chat.md || ng "run-chat.md に、評価役が資料を開き直す記述がない"
+grep -q "利用者が渡した" references/criteria/outline.md || ng "criteria/outline.md の O-F2 に「資料のある題材」の意味がない"
+grep -q "調べて決めた" references/outline.md || ng "outline.md に by: source と state: proposed の組み合わせの説明がない"
+grep -q "再確認だけ" references/writing/review-format.md || ng "review-format.md に、再確認だけの回の checks の書き方がない"
+grep -q "落ち着いたコマには残らない" references/criteria/screen.md || ng "screen.md に pulse がコマに残らない注意がない"
+grep -q "preview.html" scripts/workdir.py || ng "workdir.py の一覧に preview.html がない"
+old=$(grep -rnE "計画モード|画面モード|構造モード|契約モード|台本モード|docs/design\.md" references SKILL.md)
+[ -z "$old" ] || { ng "references に古いモードの名前か、スキルの外の文書への参照がある"; echo "$old"; }
+grep -rn 'CLAUDE_PLUGIN_ROOT' references | grep -v "references/run-code.md:" && ng "run-code.md のほかに \${CLAUDE_PLUGIN_ROOT} がある（チャットにはこの変数がない）"
+c=$(awk '/^## 絵コンテと粗い再生ページ/{on=1} on && /setup_render.py/ && !a{a=NR} on && /frames.cjs .*-o/ && !b{b=NR} END{print (a && b && a < b) ? "ok" : "ng"}' references/run-chat.md)
+[ "$c" = ok ] || ng "run-chat.md の絵コンテの節で、setup_render.py が frames.cjs より後にある"
 [ $fail = 0 ] && echo "R2 の検査: すべて OK" || echo "R2 の検査: NG あり"
 exit $fail

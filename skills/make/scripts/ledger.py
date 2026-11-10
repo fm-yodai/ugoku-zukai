@@ -7,7 +7,7 @@ references/writing/review-format.md が正。
                                                                 直す（--fix）・直さない（--keep）を記録する。
                                                                 lead = 進行役が先に直した、user = 利用者が選んだ。--keep は user だけ
   python3 ledger.py list     <workdir> [--state open,fixing,kept,closed] [--by lead|user] [--reviewer <名前>] [--full] [--json]
-                                                                利用者に見せる形で出す。must は全文、should は 1 件 1 行、nits は件数だけ
+                                                                利用者に見せる形で出す。must は全文（直し方と根拠も）、should は指摘の文を 1 件 1 行、nits は件数だけ
                                                                 （--full で全部開く）。既定は open だけ。--by を付けたら既定は全状態
   python3 ledger.py status   <workdir>                          件数の要約と、今の台本・構成メモにない id を指す指摘の警告
   python3 ledger.py residual <workdir>                          must で閉じていない指摘（残論点）を review/residual.md・residual.json に書く
@@ -265,7 +265,7 @@ def show(workdir, states, by, reviewer, full, as_json):
                     print(f"  直し方: {one_line(it['suggestion'])}")
                 print(f"  根拠: {one_line(it.get('evidence'))}")
             else:
-                print(f"- `{k}`{tag(it)} {one_line(it.get('problem'))[:60]}")
+                print(f"- `{k}`{tag(it)} {one_line(it.get('problem'))}")
 
 
 def known_ids(workdir):

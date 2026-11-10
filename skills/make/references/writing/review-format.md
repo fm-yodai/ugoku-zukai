@@ -33,7 +33,7 @@
 | `target` | 何を見たか。`outline`（構成メモ）・`script`（台本）・`screen`（絵コンテのコマ）・`voice`（読みの一覧） |
 | `checks` | 担当の基準すべてについて `PASS`・`FAIL`・`UNKNOWN`。`evidence` には、PASS なら確かめた範囲、FAIL なら要約、UNKNOWN なら判定に要る情報を書く。`evidence` のない PASS は UNKNOWN として扱われる |
 | `findings` | 基準を満たしていない箇所。1 つの問題を 1 件にする |
-| `rechecks` | 進行役から渡されたキーだけを見直した結果。`verdict` は `PASS` か `FAIL`。渡されていなければ空の配列 |
+| `rechecks` | 進行役から渡されたキーだけを見直した結果。`verdict` は `PASS` か `FAIL`。渡されていなければ空の配列。再確認だけを頼まれた回は、`checks` と `findings` は空でよい（見る範囲も渡されたら、その範囲で判定した基準だけを `checks` に書く） |
 
 ## 指摘（`findings` の 1 件）
 

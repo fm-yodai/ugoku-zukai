@@ -55,6 +55,8 @@ python3 scripts/check_outline.py <workdir> --json       # 結果と、まだ確�
   - `proposed`: Claude が決めたが、利用者はまだ見ていないか、答えていない
   - `agreed`: 利用者が言ったか、見て通した
 - `by` が `user` の項目は、必ず `agreed` にする
+- `by` と `state` は別のことを表すので、ほかの組み合わせはどれも書ける。Claude が調べて決めた項目で、利用者がまだ見ていないものは、`by: source`・`state: proposed` になる
+- 出どころのある項目をまとめ直した文（まとめの章など）も、`by: source` にして、元の出どころを `source` に写す
 
 ## 形
 

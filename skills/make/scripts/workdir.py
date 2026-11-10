@@ -16,7 +16,10 @@
   review/          評価役の出力（<連番>-<target>/）と、指摘の一覧 ledger.json、残論点 residual.md
   frames/          各行の落ち着いたコマ（SVG・PNG のシートと frames.json）
   sheet.html       利用者向けの絵コンテのページ（build_sheet.py）
-  voice/           tts.py の出力（timeline.json・narration.mp3）
+  frames-part/・sheet-part.html  一部の場面だけのコマと絵コンテ（frames.cjs --scenes）
+  preview.html     声なしの粗い再生ページ
+  voice/           tts.py の出力（timeline.json・narration.mp3・readings.md）
+  voice_dict.json  この動画だけの読みの辞書（読みの指摘を直すときに足す）
   player.html      組み立てた再生ページ
 """
 import argparse

@@ -106,6 +106,8 @@ class CheckOutlineTest(unittest.TestCase):
         self.assertNotIn("basics.audience", [i["where"] for i in items])   # agreed は出ない
         out = json.loads(self.run_check("ok_ux.json", "--json").stdout)
         self.assertEqual(out["proposed"], items)
+        self.assertEqual(out["open"], d["open"])     # まだ決めていないことも、利用者に見せるために出す
+        self.assertEqual(json.loads(self.run_check("ok_draft.json", "--json").stdout)["open"], [])
 
 
 class ChapterTest(unittest.TestCase):

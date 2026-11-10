@@ -170,6 +170,8 @@ python3 ${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/ledger.py decide <workdir> --b
 3. 機械検査を通し、指摘を出した評価役に、直したキーの再確認を 1 回だけ頼んで `ingest` する。通らなかったものは `open` に戻るので、そのまま利用者に見せる
 4. 利用者に見せるのは、残った指摘と、先に直した件数と中身
 
+任されているときは、構成メモの評価（章立てが固まったとき）で出た指摘も同じに扱う。自分で決めた項目（`proposed`）の言い回しや出どころを直す指摘は先に直して再確認を 1 回頼み、言うことを足す・削る、章を変える指摘は直さずに、絵コンテと一緒に見せる。
+
 ```sh
 python3 ${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/ledger.py list <workdir>
 python3 ${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/ledger.py list <workdir> --by lead

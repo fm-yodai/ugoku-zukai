@@ -176,6 +176,13 @@ class LedgerTest(unittest.TestCase):
         self.assertIn("言い回しの好み", full)
         self.assertIn("動詞句にする", full)
 
+    def test_list_should_shows_whole_problem(self):   # should は 1 行だが、文の途中で切らない（そのまま利用者に見せるため）
+        long = "三つの目的を言葉で並べるだけで、具体的な 1 件が出てこない。新しく入った人には、自分が変更を出したときに何が起きるのかが浮かばない"
+        self.run("ingest", self.wd, self.out("director", [F("c2:S-D4", "should", problem=long)]))
+        _, so, _ = self.run("list", self.wd)
+        row = [ln for ln in so.splitlines() if "c2:S-D4" in ln][0]
+        self.assertIn(long, row)
+
     def test_list_one_line(self):
         self.run("ingest", self.wd, self.out("director", [F("l2:G-D3", "should", problem="1 行目\n2 行目 | 縦棒")]))
         _, so, _ = self.run("list", self.wd)

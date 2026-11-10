@@ -8,7 +8,7 @@
 |---|---|---|---|---|
 | O-M1 | `check_outline.py --ready` の誤りが 0 | 機械（`python3 scripts/check_outline.py <workdir> --ready`） | must | C-M1 |
 | O-F1 | `by` が `source` の言うことが、その `source` から言える。未実装や設計だけのものを実装済みのように言っていない。Web の資料では、出典が言っていないことや、見解の分かれる点を言い切っていない（TW-7） | fact-checker | must | C-F1 |
-| O-F2 | 資料のある題材で、資料から独立に組み立てた要点のうち、視聴者（`basics.audience`）にとって重要なものが構成メモから漏れていない。利用者が外すと決めた範囲のものは漏れに数えない。資料のない題材では対象外 | fact-checker | must | C-F2 |
+| O-F2 | 資料のある題材（利用者が渡した資料を説明する動画。コード・リポジトリ・PR・Web ページ・文書）で、資料から独立に組み立てた要点のうち、視聴者（`basics.audience`）にとって重要なものが構成メモから漏れていない。利用者が外すと決めた範囲のものは漏れに数えない。資料のない題材（題目だけを受け取った動画。進行役が調べて集めた資料は、ここでいう資料に数えない）では対象外 | fact-checker | must | C-F2 |
 | O-F3 | 出どころのない事実の記述がない。`by` が `claude` で `source` がなく、事実を述べている言うこと（Claude の知識で書いたもの）を挙げる。`by` が `user` の項目は見ない（利用者の考えには、突き合わせる相手がない） | fact-checker | should | 新設 |
 | O-D1 | 視聴者（`basics.audience`）と持ち帰ってほしいこと（`basics.takeaway`）が 1 文で書かれ、どれかの章の言うことと結びついている | director | must | C-D1 |
 | O-D2 | 見せるもの（`shows`）の図の種類が、その章で見せたいことに合っている（たとえば `graph`＝部品がどこにあり何が何に渡るか / `sequence`＝誰が誰に何をどの順で渡すか / `swimlane`＝担当ごとの手順と受け渡し / `table`・`compare`＝軸ごとの違い / `venn`＝含む・重なる） | director | must | C-D2 |

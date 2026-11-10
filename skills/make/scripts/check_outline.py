@@ -4,7 +4,7 @@
   python3 check_outline.py <outline.json か作業フォルダ> [--ready] [--json]
 
   --ready  台本に進める状態かも見る（basics に audience・knows・takeaway がある、章が 1 つ以上ある、どの章にも says がある）
-  --json   結果を JSON で出す: {"file", "errors", "warnings", "proposed"}
+  --json   結果を JSON で出す: {"file", "errors", "warnings", "proposed", "open"}（proposed = Claude が決めて利用者がまだ見ていない項目、open = まだ決めていないこと）
 
 終了コード: 0 = 誤りなし（警告は出る）、1 = 誤りあり、2 = 使い方の誤りかファイルがない。
 結果は標準出力に 1 件 1 行で書く（「誤り: …」「警告: …」。誤りがなければ最後に「OK」）。
@@ -123,6 +123,12 @@ def proposed_items(outline):
     """Claude が決めて、利用者がまだ見ていないか答えていない項目（state: proposed）の一覧"""
     return [{"where": where, "label": label, "text": item.get("text") if isinstance(item.get("text"), str) else ""}
             for where, label, item in _items(outline) if item.get("state") == "proposed"]
+
+
+def _open(outline):
+    """まだ決めていないこと（open）。形が違えば空"""
+    op = outline.get("open") if isinstance(outline, dict) else None
+    return [x for x in op if isinstance(x, str)] if isinstance(op, list) else []
 
 
 def check(outline, ready=False):
@@ -247,7 +253,7 @@ def main(argv):
         errors, warnings = check(outline, ready="--ready" in flags)
     if "--json" in flags:
         print(json.dumps({"file": path, "errors": errors, "warnings": warnings,
-                          "proposed": proposed_items(outline)}, ensure_ascii=False, indent=2))
+                          "proposed": proposed_items(outline), "open": _open(outline)}, ensure_ascii=False, indent=2))
     else:
         for e in errors:
             print("誤り:", e)

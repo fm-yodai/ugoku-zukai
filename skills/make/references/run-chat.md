@@ -21,7 +21,13 @@
 
 > ここからは評価役として、作り手の推論と利用者との会話を使わず、基準のファイル・資料・構成メモ・台本だけで判定する。
 
-取材メモ（`brief.md`）と、作り手として考えた理由は判定の根拠にしない。評価役の定義（スキルの zip には入っていない）の代わりに、`references/criteria/README.md` と、その場面の基準のファイル、`references/review-protocol.md`、`references/writing/review-format.md`（文章を見るときは `references/writing/rules.md`・`spoken.md` も）を読み直してから判定する。
+取材メモ（`brief.md`）と、作り手として考えた理由は判定の根拠にしない。評価役の定義（スキルの zip には入っていない）の代わりに、`references/criteria/README.md` と、その場面の基準のファイル、`references/review-protocol.md`、`references/writing/review-format.md`（文章を見るときは `references/writing/rules.md`・`spoken.md` も）を読んでから判定する。同じ会話ですでに読んでいれば、読み直さなくてよい。
+
+判定のしかたで、基準の表に書いていないこと:
+
+- **事実（O-F1・S-F1・S-F2）は、出どころを開き直して確かめる。** `source` に書かれたファイルや URL を、評価役の番でもう一度開く（Web ページは取り直す）。作り手の番で `sources/` や `brief.md` に写した引用だけで PASS にしない。開き直せないときは UNKNOWN にする
+- **漏れ（O-F2）は、構成メモの章を読み直す前に要点を書き出す。** 利用者が渡した資料から、視聴者が持ち帰るべき要点を 3〜7 項書き出して `evidence` に残し、それから構成メモと比べる
+- **図（G-D1）は、字幕を読む前に復元する。** 図の宣言と動作だけから流れ（か関係）を書き出して `evidence` に残し、それから構成メモの言うことと比べる
 
 ## 作業フォルダ
 
@@ -95,14 +101,15 @@ python3 <skill>/scripts/check_text.py <workdir>/storyboard.json
 
 ## 絵コンテと粗い再生ページ
 
-各行の落ち着いたコマを書き、絵コンテのページにまとめる。
+各行の落ち着いたコマを書き、絵コンテのページにまとめる。先に、コマを PNG にする道具を入れる（npm から数 MB。評価役の番で、コマを目で見るために使う。会話ごとに 1 回）。
 
 ```sh
+python3 <skill>/scripts/setup_render.py
 node <skill>/scripts/frames.cjs <workdir>/storyboard.json --theme <テーマ> -o <workdir>/frames
 python3 <skill>/scripts/build_sheet.py <workdir>/storyboard.json --frames <workdir>/frames --outline <workdir>/outline.json -o <workdir>/sheet.html --artifact
 ```
 
-- `frames.cjs` の終了コード 4 は、PNG のシートを作れなかったという意味（SVG と `frames.json` は書けている）。絵コンテのページは SVG から作るので、そのまま `build_sheet.py` に進める
+- `setup_render.py` か `frames.cjs` の終了コード 4 は、PNG のシートを作れなかったという意味（SVG と `frames.json` は書けている）。絵コンテのページは SVG から作るので、そのまま `build_sheet.py` に進める
 - **台本を直したら `frames.cjs` を回し直す。** コマが古いと、`build_sheet.py` は書かずに終了コード 2 で止まる
 - 直した場面だけを見せるときは、`--scenes` で場面を選び、**別の出力先**に書く（同じ出力先に書くと、全体のコマが消える）
 
@@ -113,12 +120,6 @@ python3 <skill>/scripts/build_sheet.py <workdir>/storyboard.json --frames <workd
 
 - `<workdir>/sheet.html` は、サンドボックスのファイルをそのまま Artifact として公開して見せる（中身を書き写さない）。`/mnt/user-data/outputs/` があれば、そこへ写してから公開する
 - 絵コンテのページの終わりに「Claude が決めたこと」（`proposed` の項目）が出る。会話でも同じ一覧を添える
-- 評価役がコマを目で見るための PNG のシートは、道具を入れると `frames.cjs` が一緒に書く（npm から数 MB）。入れた後に `frames.cjs` を回し直す
-
-```sh
-python3 <skill>/scripts/setup_render.py
-```
-
 動きと間を見たいときは、声なしの粗い再生ページを作って Artifact として見せる（時刻は見積もり）。
 
 ```sh
@@ -162,6 +163,8 @@ python3 <skill>/scripts/ledger.py decide <workdir> --by lead --fix l7:S-W1 l9:G-
 
 3. 機械検査を通し、評価役の番を宣言して、直したキーの再確認を 1 回だけ行う（`rechecks` だけを書いた `combined.json` を新しい連番のフォルダに書いて `ingest`）。通らなかったものは `open` に戻るので、そのまま利用者に見せる
 4. 利用者に見せるのは、残った指摘と、先に直した件数と中身
+
+任されているときは、構成メモの評価（章立てが固まったとき）で出た指摘も同じに扱う。自分で決めた項目（`proposed`）の言い回しや出どころを直す指摘は先に直して再確認を 1 回頼み、言うことを足す・削る、章を変える指摘は直さずに、絵コンテと一緒に見せる。
 
 ```sh
 python3 <skill>/scripts/ledger.py list <workdir>
