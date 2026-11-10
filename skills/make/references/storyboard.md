@@ -230,7 +230,7 @@ python3 scripts/build_player.py storyboard.json -o preview.html     # 音声な�
 ## 3. 場面と行（scenes / lines）
 
 ```json
-{ "id": "s1", "figure": "flow", "title": "（任意）章の題", "chapter": "（任意）c2", "role": "（任意）detail", "lines": [
+{ "id": "s1", "figure": "flow", "title": "（任意）章の題", "chapter": "（任意）c2", "lines": [
   { "id": "l2", "text": "{a}申請者が送った申請は、{b}最初に入力チェックを通ります。",
     "read": "（任意）読み。印も同じ位置に置く",
     "source": ["src/expense/check.ts:42"],
@@ -241,7 +241,7 @@ python3 scripts/build_player.py storyboard.json -o preview.html     # 音声な�
 - 場面が変わると、次の場面で使わない図は消え、使い続ける図は新しい区画へ動く
 - `text` は字幕。2 行（1 行およそ全角 38 字）に収まらなければ文を分ける
 - `chapter` は構成メモ（`outline.md`）の章の id。合意した章と台本の場面を結び、章ごとの検査と直しの単位になる。1 つの章に場面をいくつ書いてもよい。書くなら全場面に書く（`--outline` を付けて検査するときは全場面に要る）
-- `role` は構成の型の部（`question` `overview` `detail` `recap` など。`structures.md`）。プレーヤーは使わず、評価役が部の並びを照合する
+- `role` は使わなくなった（前に作った台本に残っていても、検査もプレーヤーも読み飛ばす）。新しく書く台本には書かない
 - `source` は根拠（契約と同じ書き方）。文字列の配列で書く（1 つだけなら文字列でもよい。それ以外の形は `check_storyboard.cjs` が警告し、一覧に出ない）。評価役が照合し、再生ページのチャプター一覧で、行の根拠として吹き出しにも出る。読んだ人がたどれるように、`"src/expense/check.ts:42"`・`"PR #12"`・`"https://example.com/guide 「承認は 2 段まで」"` のように場所か引用まで書く
 
 ## 4. 文中の印と時刻

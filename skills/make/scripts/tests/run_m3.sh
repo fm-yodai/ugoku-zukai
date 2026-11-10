@@ -91,7 +91,6 @@ grep -q "function seekTo(t) { if (playing) startAt(t)" player/template.html || {
 for f in $docs; do
   grep -q -- "--readings" "$f" || { echo "NG: $f に tts.py --readings がない"; fail=1; }
   grep -q -- "--review" "$f" && { echo "NG: $f に build_player.py --review が残っている"; fail=1; }
-  grep -q "見終わったらできること" "$f" || { echo "NG: $f のインタビューに「見終わったらできること」がない"; fail=1; }
 done
 grep -q "未解決の指摘" SKILL.md references/run-code.md references/run-chat.md references/review-protocol.md references/writing/review-format.md && { echo "NG: 再生ページの「未解決の指摘」の記述が残っている"; fail=1; }
 for f in $docs; do
@@ -105,10 +104,6 @@ for f in $docs; do
   [ -z "$bad" ] || { echo "NG: $f のコードに bash 専用の書き方がある"; echo "$bad"; fail=1; }
 done
 [ -f SKILL.md ] && [ "$(wc -l < SKILL.md)" -le 200 ] || { echo "NG: SKILL.md が 200 行を超える"; fail=1; }
-# フェーズの番号と名前（SKILL.md。書き直すときに外す）
-for ph in "0 準備" "1 インタビュー" "2 取材と契約" "3 人の確認" "4 台本" "5 画面" "6 音声" "7 組み立てと公開" "8 報告"; do
-  grep -q "^### $ph" SKILL.md || { echo "NG: SKILL.md に「### $ph」がない"; fail=1; }
-done
 [ -f references/run-chat.md ] && { grep -q -- "--max-rounds 2" references/run-chat.md || { echo "NG: run-chat.md に --max-rounds 2 がない"; fail=1; }; }
 # 機械検査の差し戻しは writer の別の呼び方（応答を書かない）。進行役の文書と review-protocol.md から指す
 grep -q "^## 機械検査の差し戻し" ../../agents/writer.md || { echo "NG: writer.md に「機械検査の差し戻し」の節がない"; fail=1; }

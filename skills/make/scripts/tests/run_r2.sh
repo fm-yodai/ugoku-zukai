@@ -45,5 +45,19 @@ for id in O-F1 O-F2 O-F3 S-F1 S-F2 S-F4; do grep -q "$id" $A/fact-checker.md || 
 for id in O-D1 O-D5 A-1 A-4 S-D1 G-D1 V-1; do grep -q "$id" $A/director.md || ng "director.md に $id がない"; done
 for id in S-W1 S-W10 S-W8 S-W9; do grep -q "$id" $A/writing-reviewer.md || ng "writing-reviewer.md に $id がない"; done
 grep -q "読みモード" $A/writing-reviewer.md || ng "writing-reviewer.md に読みモードがない"
+# SKILL.md（原則・道具の一覧・必ず守る条件。番号の付いたフェーズは置かない）
+s=SKILL.md
+for h in "最初に環境を判定する" "会話の進め方" "任せると言われたとき" "必ず守る条件" "道具" "見せるもの" "検査" "指摘の扱い" "声" "組み立てと公開" "報告" "不変条件"; do
+  grep -q "^## $h" $s || ng "SKILL.md に「## $h」がない"
+done
+grep -qE "^### [0-9] " $s && ng "SKILL.md に番号の付いたフェーズが残っている"
+for w in "聞く" "案を出す" "調べる" "他の選択肢" "outline.json" "check_outline.py" "build_sheet.py" "--outline" "--complete" "frames.cjs" "ledger.py" "must" "should" "nits" "残論点" "proposed" "TERMS.txt" "review-protocol.md"; do
+  grep -q -- "$w" $s || ng "SKILL.md に $w がない"
+done
+for c in ingest list decide status residual; do grep -q "$c" $s || ng "SKILL.md に ledger.py $c がない"; done
+grep -nE "contract|interview\.md|check_contract|max-rounds|STOP_|人の確認|既定は 3 分|loop-protocol" $s && ng "SKILL.md に古い進め方の語が残っている"
+grep -q '^  version: "0.3.0"' $s || ng "SKILL.md の version が 0.3.0 でない"
+grep -nE "contract|契約|budget\.parts|interview" references/structures.md && ng "structures.md に契約の語が残っている"
+grep -q "引き出し" references/structures.md || ng "structures.md が型を引き出しとして位置づけていない"
 [ $fail = 0 ] && echo "R2 の検査: すべて OK" || echo "R2 の検査: NG あり"
 exit $fail
