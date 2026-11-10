@@ -270,6 +270,9 @@ def decide(workdir, by, fix, keep):
         raise Refuse("--fix か --keep にキーを渡す")
     if keep and by != "user":
         raise Refuse("--keep（直さない）を決められるのは利用者だけ（--by user）")
+    both = [k for k in fix if k in keep]
+    if both:
+        raise Refuse("--fix と --keep の両方に同じキーがある: " + "、".join(both))
     missing = [k for k in fix + keep if k not in led["items"]]
     if missing:
         raise Refuse("台帳にないキー: " + "、".join(missing))

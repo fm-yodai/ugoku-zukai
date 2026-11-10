@@ -345,6 +345,16 @@ class LedgerTest(unittest.TestCase):
             self.assertNotIn(other, ids)
         self.assertFalse([i for i in ids if i.startswith("C-")], "契約の基準が残っている")
 
+    def test_decide_same_key_in_fix_and_keep(self):
+        # 同じキーを --fix と --keep の両方に渡したら、何も書き換えずに終了コード 2
+        self.run("ingest", self.wd, self.out("director", [F("l1:S-D2"), F("l2:S-D2")]))
+        before = self.items()
+        code, so, se = self.run("decide", self.wd, "--by", "user", "--fix", "l1:S-D2", "l2:S-D2", "--keep", "l1:S-D2")
+        self.assertEqual(code, 2)
+        self.assertIn("--fix と --keep の両方", so + se)
+        self.assertIn("l1:S-D2", so + se)
+        self.assertEqual(self.items(), before)
+
 
 if __name__ == "__main__":
     unittest.main()

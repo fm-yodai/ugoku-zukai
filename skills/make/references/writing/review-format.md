@@ -1,6 +1,6 @@
 # 評価役の出力の形
 
-事実・文章・演出の評価役（`agents/` の `fact-checker`・`writing-reviewer`・`director`）が共通で使う。進行役はこの形の JSON を `scripts/ledger.py ingest` で指摘の一覧に取り込む。評価役の約束と指摘の扱いは `../review-protocol.md`、基準は `../criteria/` が正。
+事実・文章・演出の評価役（fact-checker・writing-reviewer・director。チャットでは進行役が順に演じる）が共通で使う。進行役はこの形の JSON を `scripts/ledger.py ingest` で指摘の一覧に取り込む。評価役の約束と指摘の扱いは `../review-protocol.md`、基準は `../criteria/` が正。
 
 ## 出力
 

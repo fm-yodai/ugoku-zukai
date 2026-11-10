@@ -25,8 +25,8 @@ bash skills/make/scripts/tests/run_r2.sh
 # 台本 1 本の検査（形・id の解決・配置）。--timeline で実際の声の長さでも検査する
 node skills/make/scripts/check_storyboard.cjs skills/make/examples/sequence.json --theme flat [--timeline work/voice/timeline.json] [--json]
 
-# 構成メモの検査（<workdir>/outline.json か、ファイルを直接渡す。形式は references/outline.md、見本は scripts/tests/outlines/）。--ready は台本に進める状態かも見る
-python3 skills/make/scripts/check_outline.py skills/make/scripts/tests/outlines/ok_ux.json [--ready] [--json]
+# 構成メモの検査（<workdir>/outline.json か、ファイルを直接渡す。形式は references/outline.md、見本は examples/outlines/）。--ready は台本に進める状態かも見る
+python3 skills/make/scripts/check_outline.py skills/make/examples/outlines/ux.json [--ready] [--json]
 
 # 台本と構成メモの突き合わせ（場面の chapter と構成メモの章、章ごとの見積もりの長さ）。--complete は台本を書き終えたものとして見る
 node skills/make/scripts/check_storyboard.cjs skills/make/scripts/tests/outlines/pair/storyboard.json --outline skills/make/scripts/tests/outlines/pair/outline.json [--complete]

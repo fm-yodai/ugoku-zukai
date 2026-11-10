@@ -8,6 +8,9 @@ bash scripts/tests/run_r2.sh || fail=1
 for t in test_player_pos test_workdir test_tts_audition; do
   python3 scripts/tests/$t.py >/dev/null 2>&1 || { ng "$t.py"; python3 scripts/tests/$t.py; }
 done
+# 見送っていた軽い指摘（指摘の一覧の検査は run_r2.sh の test_ledger.py が回す）
+grep -q "agents/" references/writing/review-format.md && ng "review-format.md が agents/ を指している（チャットの zip には入っていない）"
+grep -q "scripts/tests/outlines/ok_ux.json" ../../CLAUDE.md && ng "CLAUDE.md の構成メモの見本が、検査用のファイルを指している"
 # 声の試聴（tts.py --audition。VOICEVOX が手元にあるときだけ）
 vh=$(python3 -c "import sys; sys.path.insert(0,'scripts'); import setup_voice; print(setup_voice.default_home())")
 if python3 -c "import voicevox_core" >/dev/null 2>&1 && [ -d "$vh" ]; then
