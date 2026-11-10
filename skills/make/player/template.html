@@ -22,6 +22,17 @@ __FONT_LINK__
   .uz-bar output { font-variant-numeric: tabular-nums; color: var(--muted); min-width: 92px; text-align: right; }
   .uz-bar label { color: var(--muted); display: flex; align-items: center; gap: 6px; cursor: pointer; }
   .uz-note { color: var(--muted); font-size: 12px; }
+  /* 直したい箇所を指す（ふだんは畳んでおく。視聴者には要らない表示のため） */
+  .uz-point { color: var(--muted); font-size: 12px; }
+  .uz-point summary { cursor: pointer; width: fit-content; border-radius: 4px; }
+  .uz-point summary:hover, .uz-point summary:focus-visible { color: var(--accent); outline: none; }
+  .uz-point-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 6px 0 4px; }
+  #uz-pos { font-size: 14px; font-variant-numeric: tabular-nums; color: var(--ink); padding: 2px 8px; border: 1px solid var(--line); border-radius: 6px;
+            user-select: all; -webkit-user-select: all; overflow-wrap: anywhere; min-width: 0; }
+  .uz-point button { font: inherit; color: var(--ink); background: transparent; border: 1px solid var(--line); border-radius: 999px; padding: 3px 12px; cursor: pointer; }
+  .uz-point button:hover, .uz-point button:focus-visible, .uz-point button[aria-pressed="true"] { border-color: var(--accent); outline: none; }
+  .uz-point button[aria-pressed="true"] { color: var(--accent); }
+  .uz-point p { margin: 0; }
   /* 再生バーの刻み（チャプターの始まり）。つまみの半径ぶん内側に寄せる */
   .uz-seek { position: relative; flex: 1; min-width: 160px; display: flex; align-items: center; }
   .uz-seek input[type=range] { flex: 1; min-width: 0; margin: 0; }
@@ -52,8 +63,8 @@ __FONT_LINK__
   @media (min-width: 960px) {
     .uz-wrap:has(> #uz-chapters:not([hidden])) { grid-template-columns: minmax(0, 1fr) 300px; align-items: start; }
     .uz-wrap:has(> #uz-chapters:not([hidden])) > * { grid-column: 1; }
-    /* 一覧の高さは図・再生バー・注記の列に合わせる（contain: size で行の高さを押し広げない） */
-    .uz-wrap:has(> #uz-chapters:not([hidden])) > #uz-chapters { grid-column: 2; grid-row: 1 / span 3; align-self: stretch; contain: size; max-height: none; border-top: 0; border-left: 1px solid var(--line); padding: 0 0 0 10px; }
+    /* 一覧の高さは図・再生バー・注記・「直したい箇所を指す」の列に合わせる（contain: size で行の高さを押し広げない） */
+    .uz-wrap:has(> #uz-chapters:not([hidden])) > #uz-chapters { grid-column: 2; grid-row: 1 / span 4; align-self: stretch; contain: size; max-height: none; border-top: 0; border-left: 1px solid var(--line); padding: 0 0 0 10px; }
   }
   .uz-err { color: var(--err); white-space: pre-wrap; }
 </style>
@@ -70,6 +81,13 @@ __FONT_LINK__
     <label><input id="uz-subs" type="checkbox" checked> 字幕</label>
   </div>
   <div class="uz-note" id="uz-note"></div>
+  <details class="uz-point" id="uz-point">
+    <summary>直したい箇所を指す</summary>
+    <div class="uz-point-row"><output id="uz-pos"></output>
+      <button id="uz-pos-copy" type="button">コピー</button>
+      <button id="uz-pos-from" type="button" aria-pressed="false">ここを範囲の始まりにする</button></div>
+    <p class="uz-note" id="uz-pos-note">止めた位置の、場面と行の番号と時刻です。コピーして Claude に伝えると、その箇所を直せます。2 か所で挟むときは、始まりで「ここを範囲の始まりにする」を押し、終わりまで進めてからコピーします。</p>
+  </details>
   <nav id="uz-chapters" aria-label="チャプター" hidden><h2>チャプター</h2><ol></ol></nav>
   <div class="uz-err" id="uz-err" hidden></div>
 </div>
@@ -117,6 +135,7 @@ const UZ_DATA = /*UZ:DATA*/null;
     $("uz-seek").value = Math.round(t / D * 1000);
     $("uz-clock").textContent = `${fmt(t)} / ${fmt(D)}`;
     markCurrent(t);
+    showPos(t);
     if (playing) requestAnimationFrame(tick);
   }
   $("uz-play").onclick = async () => {
@@ -249,6 +268,56 @@ const UZ_DATA = /*UZ:DATA*/null;
     marks = { chapters: chs, lines };
     markCurrent(pausedAt);
   }
+  // 直したい箇所を指す。今の位置を「場面 / 行 @時刻」で出す（絵コンテのページの行の表記と同じ）。
+  // 場面は始まっている最後の場面。行は、その場面で始まっている最後の行（まだ 1 行も始まっていなければ場面の最初の行）
+  function posAt(t) {
+    let sc = M.scenes[0];
+    for (const s of M.scenes) if (s.start <= t + 0.01) sc = s;
+    const ids = new Set((sc.lines || []).map(l => l.id));
+    const own = M.timeline.lines.filter(l => ids.has(l.id));
+    let ln = own[0];
+    for (const l of own) if (l.start <= t + 0.01) ln = l;
+    return { scene: sc.id, line: ln ? ln.id : "", t };
+  }
+  // 1 点は「s2 / l2 @0:14」。2 点は時刻の早い順に「〜」でつなぐ（同じ表記になる 2 点は 1 点として出す）
+  function posText(a, b) {
+    const one = p => `${p.scene} / ${p.line} @${fmt(p.t)}`;
+    if (!b || one(a) === one(b)) return one(a);
+    return a.t <= b.t ? `${one(a)} 〜 ${one(b)}` : `${one(b)} 〜 ${one(a)}`;
+  }
+  let posFrom = null, pointOk = false;
+  function showPos(t) {
+    if (!pointOk) return;
+    const s = posText(posAt(t), posFrom), el = $("uz-pos");
+    if (el.textContent !== s) el.textContent = s;
+  }
+  function buildPoint() {
+    const note = $("uz-pos-note"), help = note.textContent, from = $("uz-pos-from");
+    const cur = () => Math.min(now(), M.duration);
+    let timer = 0;
+    // 成功の知らせは 2 秒で元の説明に戻す。失敗の知らせは、次に押すまで残す
+    const say = (m, keep) => { clearTimeout(timer); note.textContent = m; if (!keep) timer = setTimeout(() => { note.textContent = help; }, 2000); };
+    const select = () => { const r = document.createRange(), s = window.getSelection(); r.selectNodeContents($("uz-pos")); s.removeAllRanges(); s.addRange(r); };
+    from.onclick = () => {
+      posFrom = posFrom ? null : posAt(cur());
+      from.textContent = posFrom ? "範囲をやめる" : "ここを範囲の始まりにする";
+      from.setAttribute("aria-pressed", posFrom ? "true" : "false");
+      clearTimeout(timer); note.textContent = help;
+      showPos(cur());
+    };
+    // コピーは 3 段: クリップボードの API → 文字を選択して execCommand → 選択だけ残して手でコピーしてもらう
+    // （Artifact は iframe の中で動くので、クリップボードが拒否されることがある）
+    $("uz-pos-copy").onclick = async () => {
+      const text = $("uz-pos").textContent;
+      try { await navigator.clipboard.writeText(text); say("コピーしました"); return; } catch (e) {}
+      select();
+      let ok = false;
+      try { ok = document.execCommand("copy"); } catch (e) {}
+      if (ok) say("コピーしました"); else say("コピーできませんでした。選択された文字をコピーしてください", true);
+    };
+    pointOk = true;
+    showPos(pausedAt);
+  }
   (async () => {
     try {
       if (document.fonts && document.fonts.load) await Promise.race([document.fonts.load(`500 24px ${UZ_DATA.theme.font.family}`), new Promise(r => setTimeout(r, 2500))]);
@@ -262,6 +331,8 @@ const UZ_DATA = /*UZ:DATA*/null;
       tick(); pausedAt = 0; $("uz-seek").value = 0; $("uz-clock").textContent = `0:00 / ${fmt(M.duration)}`;
       // 一覧が壊れても再生は止めない（一覧は出さずにコンソールへ）
       try { buildChapters(); } catch (e) { console.error("チャプター一覧を作れなかった:", e); marks = null; $("uz-chapters").hidden = true; $("uz-ticks").replaceChildren(); }
+      // 位置の表示が壊れても再生は止めない
+      try { buildPoint(); } catch (e) { console.error("位置の表示を用意できなかった:", e); pointOk = false; $("uz-point").hidden = true; }
       document.dispatchEvent(new CustomEvent("uz-ready"));
     } catch (e) { showErr("準備に失敗しました: " + e.message); console.error(e); }
   })();
