@@ -166,6 +166,7 @@
       if (!sc.id) E("場面に id がない");
       if (sceneIds.has(sc.id)) E(`${where}: id が重複している`);
       sceneIds.add(sc.id);
+      if (sc.chapter != null && (typeof sc.chapter !== "string" || !ID_RE.test(sc.chapter))) E(`${where}: chapter は構成メモの章の id を文字列で書く`);
       const figs = Array.isArray(sc.figure) ? sc.figure : [sc.figure];
       if (!figs.length || figs.length > 2) E(`${where}: figure は 1 つか 2 つ`);
       for (const f of figs) if (!sb.figures[f]) E(`${where}: 図「${f}」が figures にない`);
@@ -195,6 +196,9 @@
         for (const k of Object.keys(p.marks)) if (!used.has(k)) W(`${lw}: 印 {${k}} を使う動作がない`);
       }
     }
+    // chapter（構成メモの章の id）は、書くなら全場面に書く
+    const noChapter = sb.scenes.filter(sc => sc.chapter == null);
+    if (noChapter.length && noChapter.length < sb.scenes.length) W(`chapter のない場面がある: ${noChapter.map(sc => `「${sc.id}」`).join("")}`);
     // 題の無い場面が 2 つ以上続くと、チャプター一覧で 1 つの章にまとまって見出しにならない。
     // 題があるとみなすのは engine の header と同じ: 場面の title か、図が 1 つでその図の title（title 型の図は「はじめに」）
     const titled = sc => {

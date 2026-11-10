@@ -12,6 +12,10 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 SCRIPTS = os.path.join(HERE, "..")
 CHECK = os.path.join(SCRIPTS, "check_outline.py")
 DIR = os.path.join(HERE, "outlines")
+CHECK_SB = os.path.join(SCRIPTS, "check_storyboard.cjs")
+EXAMPLES = os.path.join(SCRIPTS, "..", "examples")
+PAIR_SB = os.path.join(DIR, "pair", "storyboard.json")
+PAIR_OUTLINE = os.path.join(DIR, "pair", "outline.json")
 
 sys.path.insert(0, SCRIPTS)
 try:
@@ -69,6 +73,108 @@ class CheckOutlineTest(unittest.TestCase):
         self.assertNotIn("basics.audience", [i["where"] for i in items])   # agreed は出ない
         out = json.loads(self.run_check("ok_ux.json", "--json").stdout)
         self.assertEqual(out["proposed"], items)
+
+
+class ChapterTest(unittest.TestCase):
+    """台本の場面の chapter と、構成メモとの突き合わせ（check_storyboard.cjs --outline）"""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def check(self, *args):
+        r = subprocess.run(["node", CHECK_SB, *args, "--json"], capture_output=True, text=True)
+        return r.returncode, json.loads(r.stdout)
+
+    def variant(self, change):
+        """pair/storyboard.json を書き換えたものを一時フォルダに書き、そのパスを返す"""
+        sb = load(PAIR_SB)
+        change(sb)
+        path = os.path.join(self.tmp.name, "storyboard.json")
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(sb, f, ensure_ascii=False)
+        return path
+
+    def test_pair_outline_is_ready(self):
+        r = subprocess.run([sys.executable, CHECK, PAIR_OUTLINE, "--ready"], capture_output=True, text=True)
+        self.assertEqual(r.returncode, 0, r.stdout)
+
+    def test_chapter_shape(self):          # chapter: 3 や "a/b" は誤り
+        for bad in (3, "a/b", ""):
+            code, out = self.check(self.variant(lambda sb: sb["scenes"][0].update(chapter=bad)))
+            self.assertEqual(code, 1, bad)
+            self.assertTrue(any("chapter" in e for e in out["errors"]), bad)
+
+    def test_mixed_chapter_warns(self):    # --outline なしで、1 場面だけ chapter を外すと警告
+        code, out = self.check(self.variant(lambda sb: sb["scenes"][2].pop("chapter")))
+        self.assertEqual(code, 0)
+        self.assertTrue(any("chapter のない場面" in w for w in out["warnings"]))
+
+    def test_missing_chapter_is_warning(self):
+        code, out = self.check(PAIR_SB, "--outline", PAIR_OUTLINE)
+        self.assertEqual(code, 0)
+        self.assertTrue(any("c3" in w and "まだない" in w for w in out["warnings"]))
+        self.assertEqual([c["id"] for c in out["chapters"]], ["c1", "c2", "c3"])
+        self.assertEqual(out["chapters"][2]["estimated"], 0)
+        self.assertGreater(out["chapters"][1]["estimated"], 0)
+        self.assertEqual([c["planned"] for c in out["chapters"]], [10, 30, 20])
+
+    def test_missing_chapter_is_error_when_complete(self):
+        code, out = self.check(PAIR_SB, "--outline", PAIR_OUTLINE, "--complete")
+        self.assertEqual(code, 1)
+        self.assertTrue(any("c3" in e for e in out["errors"]))
+
+    def test_unknown_chapter(self):        # 場面の chapter が構成メモにない
+        code, out = self.check(self.variant(lambda sb: sb["scenes"][1].update(chapter="c9")), "--outline", PAIR_OUTLINE)
+        self.assertEqual(code, 1)
+        self.assertTrue(any("c9" in e for e in out["errors"]))
+
+    def test_scene_without_chapter_with_outline(self):
+        code, out = self.check(self.variant(lambda sb: sb["scenes"][2].pop("chapter")), "--outline", PAIR_OUTLINE)
+        self.assertEqual(code, 1)
+        self.assertTrue(any("s3" in e and "chapter" in e for e in out["errors"]))
+
+    def test_order_warning(self):          # c2 の場面を c1 の前に置く
+        code, out = self.check(self.variant(lambda sb: sb["scenes"].insert(0, sb["scenes"].pop(1))), "--outline", PAIR_OUTLINE)
+        self.assertEqual(code, 0)
+        self.assertTrue(any("順" in w for w in out["warnings"]))
+        code, out = self.check(PAIR_SB, "--outline", PAIR_OUTLINE)
+        self.assertFalse(any("順" in w for w in out["warnings"]))
+
+    def test_estimated_sums_to_duration(self):
+        code, out = self.check(PAIR_SB, "--outline", PAIR_OUTLINE)
+        total = sum(c["estimated"] for c in out["chapters"])
+        gap = out["duration"] - total      # 頭の 0.8 秒＋終わりの札までの 0.8 秒＋札の 3.2 秒（＋動作のはみ出し）
+        self.assertGreater(gap, 4.0)
+        self.assertLess(gap, 8.0)
+
+    def test_chapter_length_warning(self):  # 章の見積もりが目安から 30% を超えてずれると警告
+        outline = load(PAIR_OUTLINE)
+        outline["chapters"][1]["seconds"] = 300
+        path = os.path.join(self.tmp.name, "outline.json")
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(outline, f, ensure_ascii=False)
+        code, out = self.check(PAIR_SB, "--outline", path)
+        self.assertEqual(code, 0)
+        self.assertTrue(any("c2" in w and "目安" in w for w in out["warnings"]))
+
+    def test_outline_file_missing(self):
+        r = subprocess.run(["node", CHECK_SB, PAIR_SB, "--outline", os.path.join(self.tmp.name, "none.json")],
+                           capture_output=True, text=True)
+        self.assertEqual(r.returncode, 2)
+
+    def test_text_output_lists_chapters(self):
+        r = subprocess.run(["node", CHECK_SB, PAIR_SB, "--outline", PAIR_OUTLINE], capture_output=True, text=True)
+        self.assertEqual(r.returncode, 0, r.stdout)
+        self.assertRegex(r.stdout, r"章 c2: 見積もり [0-9.]+ 秒（目安 30 秒）")
+
+    def test_examples_still_pass(self):    # chapter のない今の見本は、警告も増えない
+        code, out = self.check(os.path.join(EXAMPLES, "sequence.json"))
+        self.assertEqual(code, 0)
+        self.assertFalse(any("chapter" in w for w in out["warnings"]))
+        self.assertNotIn("chapters", out)
 
 
 if __name__ == "__main__":

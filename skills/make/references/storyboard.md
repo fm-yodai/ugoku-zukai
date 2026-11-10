@@ -6,6 +6,7 @@
 
 ```bash
 node scripts/check_storyboard.cjs storyboard.json --theme 3b1b     # 形・id・経路・配置
+node scripts/check_storyboard.cjs storyboard.json --theme 3b1b --outline outline.json   # 構成メモの章とも突き合わせる（書き終えたら --complete も付ける）
 python3 scripts/build_player.py storyboard.json -o preview.html     # 音声なしの下見
 ```
 
@@ -229,7 +230,7 @@ python3 scripts/build_player.py storyboard.json -o preview.html     # 音声な�
 ## 3. 場面と行（scenes / lines）
 
 ```json
-{ "id": "s1", "figure": "flow", "title": "（任意）章の題", "role": "（任意）detail", "lines": [
+{ "id": "s1", "figure": "flow", "title": "（任意）章の題", "chapter": "（任意）c2", "role": "（任意）detail", "lines": [
   { "id": "l2", "text": "{a}申請者が送った申請は、{b}最初に入力チェックを通ります。",
     "read": "（任意）読み。印も同じ位置に置く",
     "source": ["src/expense/check.ts:42"],
@@ -239,6 +240,7 @@ python3 scripts/build_player.py storyboard.json -o preview.html     # 音声な�
 - `figure` は図 1 つか、2 つの配列（左右に並べる。`split` で左の幅の割合、既定 0.56）
 - 場面が変わると、次の場面で使わない図は消え、使い続ける図は新しい区画へ動く
 - `text` は字幕。2 行（1 行およそ全角 38 字）に収まらなければ文を分ける
+- `chapter` は構成メモ（`outline.md`）の章の id。合意した章と台本の場面を結び、章ごとの検査と直しの単位になる。1 つの章に場面をいくつ書いてもよい。書くなら全場面に書く（`--outline` を付けて検査するときは全場面に要る）
 - `role` は構成の型の部（`question` `overview` `detail` `recap` など。`structures.md`）。プレーヤーは使わず、評価役が部の並びを照合する
 - `source` は根拠（契約と同じ書き方）。文字列の配列で書く（1 つだけなら文字列でもよい。それ以外の形は `check_storyboard.cjs` が警告し、一覧に出ない）。評価役が照合し、再生ページのチャプター一覧で、行の根拠として吹き出しにも出る。読んだ人がたどれるように、`"src/expense/check.ts:42"`・`"PR #12"`・`"https://example.com/guide 「承認は 2 段まで」"` のように場所か引用まで書く
 
@@ -301,4 +303,5 @@ python3 scripts/build_player.py storyboard.json -o preview.html     # 音声な�
 - 形: 必須の項目、id の重複・使えない文字、図の種類ごとの宣言（辺の両端がノードにあるか、セルの数など）
 - 解決: 動作の対象が場面の図にあるか、印が文にあるか、点の経路が宣言した辺か、点がいまいる所から書いているか
 - 配置: 区画からのはみ出し、文字が 15px 未満に縮んでいないか、文字どうしの重なり、ラベルや注記が別の箱や枠の縁に重なっていないか
+- 構成メモ（`--outline` を付けたとき）: 場面の `chapter` がない・構成メモの章にないものは誤り。まだ場面のない章、章の順の違い、章ごとの見積もりの長さが尺の目安から 30% を超えてずれているものは警告。`--complete` を付けると、場面のない章は誤りになり、台本全体の長さも構成メモの長さと比べる（15% を超えると警告）
 - 警告: 使っていない印、字幕が 2 行に収まらない、show していない図、行の終わりをはみ出す動き、`graph` の辺に label がない（警告では終了コードは 0 だが、辺の label がないものは成功基準 G-M2 で誤りと同じに直す）
