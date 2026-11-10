@@ -250,6 +250,11 @@ class LedgerTest(unittest.TestCase):
         ids = ledger.must_only()
         self.assertIn("S-F1", ids)
         self.assertNotIn("S-W1", ids)         # must / should を分ける基準
+        for must in ("O-F1", "O-D2", "A-1", "A-M1", "G-D1", "V-1"):
+            self.assertIn(must, ids)
+        for other in ("O-F3", "O-D5", "A-4", "S-W10", "S-F4", "G-D3"):
+            self.assertNotIn(other, ids)
+        self.assertFalse([i for i in ids if i.startswith("C-")], "契約の基準が残っている")
 
 
 if __name__ == "__main__":

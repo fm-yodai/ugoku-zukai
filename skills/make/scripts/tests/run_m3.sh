@@ -25,9 +25,7 @@ for d in scripts/tests/contracts/bad_*; do
   python3 scripts/check_contract.py "$d" >/dev/null 2>&1 && { echo "NG: 契約 $d が通ってしまう"; fail=1; }
 done
 # 視聴者の言葉と読みの基準（C-D5・C-D6・S-W5〜S-W9）と、契約の can_do・knows
-for id in C-D5 C-D6; do grep -q "^| $id " references/criteria/contract.md || { echo "NG: contract.md に $id がない"; fail=1; }; done
 for id in S-W5 S-W6 S-W7 S-W8 S-W9; do grep -q "^| $id " references/criteria/script.md || { echo "NG: script.md に $id がない"; fail=1; }; done
-grep -q '`voice`' references/criteria/README.md || { echo "NG: criteria/README.md に台帳のフェーズ voice がない"; fail=1; }
 grep -q "can_do" scripts/check_contract.py || { echo "NG: check_contract.py が can_do を見ない"; fail=1; }
 # 字幕と読み（S-M2〜S-M4）
 python3 scripts/check_text.py scripts/tests/text/ok.json >/dev/null 2>&1 || { echo "NG: text/ok.json が通らない"; fail=1; }
@@ -98,8 +96,7 @@ for f in $docs; do
   grep -q -- "--review" "$f" && { echo "NG: $f に build_player.py --review が残っている"; fail=1; }
   grep -q "見終わったらできること" "$f" || { echo "NG: $f のインタビューに「見終わったらできること」がない"; fail=1; }
 done
-grep -q '`voice`' references/loop-protocol.md || { echo "NG: loop-protocol.md にフェーズ voice がない"; fail=1; }
-grep -q "未解決の指摘" SKILL.md references/run-code.md references/run-chat.md references/loop-protocol.md references/writing/review-format.md && { echo "NG: 再生ページの「未解決の指摘」の記述が残っている"; fail=1; }
+grep -q "未解決の指摘" SKILL.md references/run-code.md references/run-chat.md references/review-protocol.md references/writing/review-format.md && { echo "NG: 再生ページの「未解決の指摘」の記述が残っている"; fail=1; }
 for f in $docs; do
   [ -f "$f" ] || { echo "NG: $f がない"; fail=1; continue; }
   # 出てくる scripts/ のファイルがすべて実在する
@@ -111,18 +108,16 @@ for f in $docs; do
   [ -z "$bad" ] || { echo "NG: $f のコードに bash 専用の書き方がある"; echo "$bad"; fail=1; }
 done
 [ -f SKILL.md ] && [ "$(wc -l < SKILL.md)" -le 200 ] || { echo "NG: SKILL.md が 200 行を超える"; fail=1; }
-# フェーズの番号と名前が criteria/README.md と同じ
+# フェーズの番号と名前（SKILL.md。書き直すときに外す）
 for ph in "0 準備" "1 インタビュー" "2 取材と契約" "3 人の確認" "4 台本" "5 画面" "6 音声" "7 組み立てと公開" "8 報告"; do
   grep -q "^### $ph" SKILL.md || { echo "NG: SKILL.md に「### $ph」がない"; fail=1; }
-  grep -q "$ph" references/criteria/README.md || { echo "NG: criteria/README.md に「$ph」がない"; fail=1; }
 done
 [ -f references/run-chat.md ] && { grep -q -- "--max-rounds 2" references/run-chat.md || { echo "NG: run-chat.md に --max-rounds 2 がない"; fail=1; }; }
-# 機械検査の差し戻しは writer の別の呼び方（応答を書かない）。進行役の文書と loop-protocol から指す
+# 機械検査の差し戻しは writer の別の呼び方（応答を書かない）。進行役の文書と review-protocol.md から指す
 grep -q "^## 機械検査の差し戻し" ../../agents/writer.md || { echo "NG: writer.md に「機械検査の差し戻し」の節がない"; fail=1; }
-for f in $docs references/loop-protocol.md; do
+for f in $docs references/review-protocol.md; do
   grep -q "機械検査の差し戻し" "$f" || { echo "NG: $f に「機械検査の差し戻し」がない"; fail=1; }
 done
-grep -q "ledger.py reset" references/loop-protocol.md || { echo "NG: loop-protocol.md に ledger.py reset がない"; fail=1; }
 # チャットのスキルの探し方は /mnt/skills を先に見る
 grep -q "/mnt/skills/\*/make" references/run-chat.md || { echo "NG: run-chat.md が /mnt/skills を先に見ていない"; fail=1; }
 # 声の番号: writer が interview.md から voice を書き、6 音声で進行役が一覧と照らして voice.speaker を直す

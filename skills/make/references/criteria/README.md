@@ -1,31 +1,66 @@
-# 成功基準（maker と checker が共有する物差し）
+# 成功基準（作り手と評価役が共有する物差し）
 
-フェーズごとの合格の条件。**maker（researcher / writer）は書く前と渡す前に、checker（fact-checker / writing-reviewer / director）は判定するときに、同じこのファイル群を読む**。基準の言い回しを変えると両方の振る舞いが変わるので、変えるときは較正の例も見直す。
+合格の条件を、対象ごとのファイルに分けて書く。**作り手（進行役・writer）は書く前と渡す前に、評価役（fact-checker・writing-reviewer・director）は判定するときに、同じこのファイル群を読む**。基準の言い回しを変えると両方の振る舞いが変わるので、変えるときは較正の例も見直す。
 
-| ファイル | フェーズ | 対象 |
+| ファイル | 対象 |
+|---|---|
+| `outline.md`（O-） | 構成メモ `outline.json`（利用者と合意したことの記録。形式は `../outline.md`） |
+| `agreement.md`（A-） | 台本 `storyboard.json` が構成メモと合っているか |
+| `script.md`（S-） | 台本の字幕 `text`・読み `read`・根拠 `source`・動作 `do` と、読みの一覧 `voice/readings.md`（S-W8・S-W9） |
+| `structure.md`（G-） | 図の宣言（`figures`）と、それを動かす動作（`do`） |
+| `screen.md`（V-） | `frames/` の各行の落ち着いたコマ（`sheet-NN.png`・`svg/<行 id>.svg`・`frames.json`）と `check_storyboard.cjs` の配置の結果 |
+
+## 評価役を呼ぶ場面
+
+評価役は、決まった順番の関門ではなく、次の場面で進行役が呼ぶ。`target` は評価役に渡す名前で、評価役の出力（`../writing/review-format.md`）にも書く。
+
+| 呼ぶ場面 | `target` | 評価役と担当の基準 |
 |---|---|---|
-| `contract.md`（C-） | 2 取材と契約 | `contract.json` と `brief.md` |
-| `script.md`（S-） | 4 台本・6 音声 | `storyboard.json` の字幕 `text`・読み `read`・根拠 `source`・動作 `do` と、`voice/readings.md`（S-W8・S-W9） |
-| `structure.md`（G-） | 4 台本・5 画面 | 図の宣言（`figures`）と、それを動かす動作（`do`） |
-| `screen.md`（V-） | 5 画面・6 音声 | `frames/` の各行の落ち着いたコマ（`sheet-NN.png`・`svg/<行 id>.svg`・`frames.json`）と `check_storyboard.cjs` の配置の結果 |
+| 章立てが固まったとき | `outline` | director: O-D1〜O-D5。fact-checker: O-F1〜O-F3（資料のある題材か、`by` が `source` か `claude` の言うことがあるとき） |
+| 台本の初稿ができたとき | `script` | fact-checker: S-F1・S-F2・S-F4。director: A-1〜A-4・S-D1・S-D2・S-D4・G-D1〜G-D7。writing-reviewer: S-W1〜S-W7・S-W10 |
+| 絵コンテを見せる前 | `screen` | director: V-1〜V-5・G-D5・G-D8 |
+| 合成の前 | `voice` | writing-reviewer（読みモード）: S-W8・S-W9 |
+| 直した後 | 元と同じ | 直した項目の再確認（`rechecks`）と、変えた章と行に限った判定 |
 
-フェーズの番号は SKILL.md の流れ（0 準備・1 インタビュー・2 取材と契約・3 人の確認・4 台本・5 画面・6 音声・7 組み立てと公開・8 報告）に合わせてある。台帳のフェーズ名は `contract`（2）・`script`（4）・`screen`（5）・`voice`（6）。
+利用者が続けて細かく直している間は機械検査だけを回し、絵コンテを見せ直す前か合成の前にまとめて評価役を呼ぶ。
 
 ## 項目の読み方
 
-各項目は「ID・合格の条件・検査（機械 / どの checker）・重さ（must / should）」を持つ。
+各項目は「ID・合格の条件・検査（機械 / どの評価役）・重さ」を持つ。
 
 - **合格の条件は合否で判定できる文**にしてある。点数は付けない
-- **検査が「機械」の項目は checker が判定しない**。本体が `check_contract.py`・`check_storyboard.cjs`・`check_text.py` を回し、誤りがあれば maker に戻す。checker は機械の結果を読んでよいが、重ねて指摘しない
-- 情報が足りなくて判定できなければ **UNKNOWN** を返す（推測で PASS / FAIL にしない）。UNKNOWN は台帳で open として扱い、maker に「判定に要る情報」を足させる
-- **根拠の無い判定は無効**。FAIL には場所と引用（`path:line`・URL と引用・字幕の文言・「`sheet-02.png` の行 `l7`」のようなシートのファイル名と行 id）、PASS には確かめた範囲を書く
+- **検査が「機械」の項目は評価役が判定しない**。進行役が `check_outline.py`・`check_storyboard.cjs`・`check_text.py` を回し、誤りは指摘の一覧に載せずに直す。評価役は機械の結果を読んでよいが、重ねて指摘しない
+- 情報が足りなくて判定できなければ **UNKNOWN** を返す（推測で PASS / FAIL にしない）。UNKNOWN は must の指摘として指摘の一覧に載る
+- **根拠のない判定は無効**。FAIL には場所と引用（`path:line`・URL と引用・字幕の文言・「`sheet-02.png` の行 `l7`」のようなシートのファイル名と行 id）、PASS には確かめた範囲を書く
+- 「対象外」と書いた条件に当たるとき（資料のない題材の O-F2 など）は PASS とし、`evidence` に対象外の理由を書く
 
-既存の規則は転記せず ID で参照する: 文章 `TW-n`（`${CLAUDE_PLUGIN_ROOT}/skills/make/references/writing/rules.md`）、演出 `VG-n`（`../visual-grammar.md`）。
+## 重さとレベル
+
+評価役は指摘にレベル（`must`・`should`・`nits`）を付ける。意味は `../writing/review-format.md` の「レベル」。
+
+- 重さが `must` だけの基準の指摘は must。評価役がほかのレベルを付けても、`ledger.py` が must に直して取り込む（過去に、事実の言い過ぎが should で付き、直されないまま残った）
+- 重さが `should` の基準と、must と should を分けている基準では、定義に従って付ける。直さなくても伝わり方が変わらないものは nits にする
+
+既存の規則は転記せず ID で参照する: 文章 `TW-n`（`${CLAUDE_PLUGIN_ROOT}/skills/make/references/writing/rules.md`）、聞いて分かる文 `SP-n`（`../writing/spoken.md`）、演出 `VG-n`（`../visual-grammar.md`）。
 
 ## 衝突したとき
 
-checker どうしの指摘が食い違ったら、**事実 > 構造 > 文章 > 演出** の順で上を採る（`../loop-protocol.md`）。
+評価役どうしの指摘が食い違ったら、**事実 > 合意 > 構造 > 文章 > 演出** の順で上を採る（`../review-protocol.md`）。
+
+## 欠番
+
+基準の番号は振り直さない。次の ID は使わなくなった。過去の記録に出てきたら、移り先で読む。
+
+| 使わなくなった ID | 移り先 |
+|---|---|
+| C-M1・C-M2 | O-M1（形と尺は `check_outline.py` が見る） |
+| C-F1・C-F2 | O-F1・O-F2 |
+| C-F3 | なし（見せる経路を先に固定しなくなった。図の経路は S-F2 が見る） |
+| C-D1・C-D2・C-D4・C-D5・C-D6 | O-D1・O-D2・O-D5・O-D3・O-D4 |
+| C-D3 | なし（構成の型を必須にしなくなった） |
+| S-F3 | A-1・A-2 |
+| S-D3 | なし（構成の型の部の並びを求めなくなった。具体的な 1 件を通すことは S-D4 の VG-5） |
 
 ## 較正の例
 
-各ファイルの末尾に、人の指摘や過去の画面レビューで実際に出た欠点を「較正の例」として置く。checker はこの例と同程度の欠点を見逃していないかで、自分の甘さを確かめる。新しい欠点を人が見つけたら、8 報告の「足すべき項目」に挙げ、人がここに足す（題材固有の名前は書かず、何が悪く、どの基準で止めるかを書く）。
+各ファイルの末尾に、人の指摘や過去の画面レビューで実際に出た欠点を「較正の例」として置く。評価役はこの例と同程度の欠点を見逃していないかで、自分の甘さを確かめる。新しい欠点を人が見つけたら、最後の報告の「足すべき項目」に挙げ、人がここに足す（題材固有の名前は書かず、何が悪く、どの基準で止めるかを書く）。

@@ -1,21 +1,21 @@
-# 図の基準（G-）— 4 台本・5 画面
+# 図の基準（G-）
 
-対象は図（`storyboard.json` の図の宣言 `figures` と、それを動かす動作 `do`）。図の種類は `../storyboard.md` の 2 章の 16 種（`graph` `sequence` `swimlane` `table` など）。配置はプレーヤー（ELK と図ごとの固定配置）が決めるので、座標の良し悪しは機械検査に任せ、checker は**意味の構造**を見る。記法の項目は C4 モデルの記法チェックリスト（https://c4model.com/diagrams/notation）に倣う。
+対象は図（`storyboard.json` の図の宣言 `figures` と、それを動かす動作 `do`）。台本の初稿ができたとき（`target` は `script`）に判定し、G-D5 と G-D8 は絵コンテを見せる前（`target` は `screen`）にコマでも見る。図の種類は `../storyboard.md` の 2 章の 16 種（`graph` `sequence` `swimlane` `table` など）。配置はプレーヤー（ELK と図ごとの固定配置）が決めるので、座標の良し悪しは機械検査に任せ、評価役は**意味の構造**を見る。記法の項目は C4 モデルの記法チェックリスト（https://c4model.com/diagrams/notation）に倣う。
 
 | ID | 合格の条件 | 検査 | 重さ |
 |---|---|---|---|
 | G-M1 | 図の宣言が形どおり。ノード・手順・段階・参加者に label があり、辺とメッセージの両端が宣言にあり、メッセージに label があり、グループの `members` が宣言にあり、1 つのノードが 2 つの枠に入っていない | 機械（`check_storyboard.cjs` の誤り。S-M1 と同じ実行） | must |
-| G-M2 | `graph` のすべての辺に label がある。`check_storyboard.cjs` の誤りと、この警告「辺 … に label がない」が 0 | 機械（`check_storyboard.cjs` の警告。終了コードは 0 のままなので、本体が警告を読んで maker に戻す） | must |
+| G-M2 | `graph` のすべての辺に label がある。`check_storyboard.cjs` の誤りと、この警告「辺 … に label がない」が 0 | 機械（`check_storyboard.cjs` の警告。終了コードは 0 のままなので、進行役が警告を読んで直す） | must |
 | G-M3 | 点（`trace`）は宣言した辺の上だけを動き、いまいる所から経路を書いている。戻りの矢印（`reply`）の各区間に逆向きの辺の宣言がある（VG-7） | 機械（`check_storyboard.cjs` の誤り） | must |
 | G-M4 | 画面で、文字が区画からはみ出さず、15px 未満に縮まず、文字どうし・ラベルや注記と別の箱や枠の縁が重ならない | 機械（`check_storyboard.cjs` の配置。種類は はみ出し / 小さい / 重なり） | must |
-| G-D1 | **復元テスト**: 図（`figures` と `do`）だけを見て「何がどこからどこへ、どの順で流れるか」を言葉で書き出すと、契約の `paths` と一致する。checker は字幕を読む前に復元を書き、`evidence` にその文を残す | director（計画モード） | must |
-| G-D2 | 主に使う図の種類が契約の `diagram.type`（ほかに使う図は `diagram.others`）と一致し、その場面で見せたいことに合っている（往復の順序を `graph` の点の移動だけで見せていない 等） | director（計画モード） | must |
-| G-D3 | 辺とメッセージの label が具体的な動詞句（「公開鍵を取得」「プロファイルを作成」）で、「使う」「呼ぶ」の 1 語ではない | director（計画モード） | should |
-| G-D4 | 線は一方向。応答は別の矢印（`reply` の動作、`sequence` のメッセージの `reply: true`）で描き、1 本の双方向矢印にしない（VG-7） | director（計画モード） | should |
-| G-D5 | 色の役割（`role`・`tint` の `as`）の意味が図をまたいで一貫し、凡例で説明できる（VG-2。正常な応答を「消えた・失敗」の `removed`・`bad` で描かない） | director（計画モード・画面モード） | should |
-| G-D6 | 区分の分け方が実際の配置・責務の境界に合っている。`graph` の `groups`（`band` の層・`frame` の囲み）、`swimlane` の担当、`sequence` の参加者が、クライアント / 入口 / アプリケーション / 認証基盤 / データ 等の境界（概念の図なら要素の分類の境界）で切られている。層を宣言した `graph` では、各ノードがちょうど 1 つの層に入っている | director（計画モード）＋ fact-checker（境界の根拠） | should |
-| G-D7 | 各場面に題（場面の `title` か図の `title`。`title` の図だけの場面は除く）があり、何の図かが分かる | director（計画モード） | must |
-| G-D8 | 画面で、辺が無関係の箱を貫かず、点が箱の名前の文字の上に止まって文字を隠していない（配置の検査は辺の線と点を見ない） | director（画面モード） | should |
+| G-D1 | **復元テスト**: 図（`figures` と `do`）だけを見て「何がどこからどこへ、どの順で流れるか」（流れのない図では「何と何がどういう関係か」）を言葉で書き出すと、その場面の章の言うこと（構成メモの `says`）と食い違わない。評価役は字幕を読む前に復元を書き、`evidence` にその文を残す | director | must |
+| G-D2 | 図の種類が、その場面で見せたいことに合っている（往復の順序を `graph` の点の移動だけで見せていない 等）。構成メモの見せるものとの照合は A-3 | director | must |
+| G-D3 | 辺とメッセージの label が具体的な動詞句（「公開鍵を取得」「プロファイルを作成」）で、「使う」「呼ぶ」の 1 語ではない | director | should |
+| G-D4 | 線は一方向。応答は別の矢印（`reply` の動作、`sequence` のメッセージの `reply: true`）で描き、1 本の双方向矢印にしない（VG-7） | director | should |
+| G-D5 | 色の役割（`role`・`tint` の `as`）の意味が図をまたいで一貫し、凡例で説明できる（VG-2。正常な応答を「消えた・失敗」の `removed`・`bad` で描かない） | director（台本とコマ） | should |
+| G-D6 | 区分の分け方が実際の配置・責務の境界に合っている。`graph` の `groups`（`band` の層・`frame` の囲み）、`swimlane` の担当、`sequence` の参加者が、クライアント / 入口 / アプリケーション / 認証基盤 / データ 等の境界（概念の図なら要素の分類の境界）で切られている。層を宣言した `graph` では、各ノードがちょうど 1 つの層に入っている | director | should |
+| G-D7 | 各場面に題（場面の `title` か図の `title`。`title` の図だけの場面は除く）があり、何の図かが分かる | director | must |
+| G-D8 | 画面で、辺が無関係の箱を貫かず、点が箱の名前の文字の上に止まって文字を隠していない（配置の検査は辺の線と点を見ない） | director（コマ） | should |
 
 ## 較正の例
 
