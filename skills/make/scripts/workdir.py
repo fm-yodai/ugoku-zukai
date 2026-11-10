@@ -8,14 +8,12 @@
 作ったら sources/ と review/ を作り、フォルダのパスを 1 行で出す。
 
 作業フォルダの中身（SKILL.md と各エージェントはこの名前で読み書きする）:
-  interview.md     インタビューの結果（題材・読者・長さ・構成の型）
-  brief.md         取材メモ（researcher）
+  brief.md         取材メモ（調べたことと、その出どころ。researcher か進行役が書く）
   sources/         取材で集めた一次資料の写し・要約
-  contract.json    契約（言い切ること・経路・図の型・尺の配分）
   outline.json     構成メモ（利用者と合意したことの記録。references/outline.md）
   storyboard.json  台本
   theme.json       デザインから作ったテーマ（デザインを渡されたときだけ）
-  review/          評価役の指摘（台帳 ledger と各役の判定）
+  review/          評価役の出力（<連番>-<target>/）と、指摘の一覧 ledger.json、残論点 residual.md
   frames/          各行の落ち着いたコマ（SVG・PNG のシートと frames.json）
   sheet.html       利用者向けの絵コンテのページ（build_sheet.py）
   voice/           tts.py の出力（timeline.json・narration.mp3）

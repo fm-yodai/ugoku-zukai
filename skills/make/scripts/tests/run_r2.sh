@@ -73,5 +73,17 @@ done
 grep -q "combined.json" references/run-chat.md || ng "run-chat.md に combined.json がない"
 grep -q "^## サンドボックスの約束" references/run-chat.md && grep -q "^## 評価役の番の宣言" references/run-chat.md || ng "run-chat.md にサンドボックスの約束か評価役の番の宣言がない"
 for a in researcher writer fact-checker director writing-reviewer; do grep -q "ugoku-zukai:$a" references/run-code.md || ng "run-code.md に ugoku-zukai:$a がない"; done
+# 契約と周回の名残りがない（docs/design.md は経緯の記録なので見ない。animator は保留中で触らない）
+[ -f scripts/check_contract.py ] && ng "check_contract.py が残っている"
+[ -d scripts/tests/contracts ] && ng "tests/contracts が残っている"
+old=$(grep -rnE "check_contract|contract\.json|interview\.md|loop-protocol|responses\.json|max-rounds|STOP_MAX|disputed" \
+  SKILL.md references scripts assets ../../agents ../../CLAUDE.md ../../README.md \
+  --include="*.md" --include="*.py" --include="*.cjs" --include="*.sh" --include="*.json" \
+  | grep -v "/animator\.md:" | grep -v "scripts/tests/")
+[ -z "$old" ] || { ng "契約と周回の名残りがある"; echo "$old"; }
+grep -qE "interview\.md|contract\.json" scripts/workdir.py && ng "workdir.py の一覧に interview.md・contract.json が残っている"
+for w in "outline.json" "check_outline.py" "ledger.py" "review-protocol.md" "run_r2.sh"; do grep -q "$w" ../../CLAUDE.md || ng "CLAUDE.md に $w がない"; done
+grep -q "インタビュー → " ../../CLAUDE.md && ng "CLAUDE.md の流れが古いまま"
+grep -q "R2" ../../docs/design.md || ng "docs/design.md に R2 の記述がない"
 [ $fail = 0 ] && echo "R2 の検査: すべて OK" || echo "R2 の検査: NG あり"
 exit $fail

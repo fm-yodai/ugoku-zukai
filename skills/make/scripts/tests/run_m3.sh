@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# M3 の検査をまとめて回す。M1 の検査に続けて、M3 で足した検査を 1 つずつ並べる
+# 核の検査をまとめて回す。M1 の検査に続けて、字幕と読み・コマ・再生ページ・作業フォルダと、文書とスクリプトの食い違いを見る
+# （進め方の文書と評価役の検査は run_r2.sh、構成メモと絵コンテの検査は run_r1.sh）
 set -u
 cd "$(dirname "$0")/../.."
 fail=0
@@ -18,15 +19,8 @@ if python3 -c "import voicevox_core" >/dev/null 2>&1 && [ -d "$vh" ]; then
 else
   echo "読みの一覧の検査: VOICEVOX がないので飛ばす"
 fi
-for d in scripts/tests/contracts/ok_*; do
-  python3 scripts/check_contract.py "$d" >/dev/null 2>&1 || { echo "NG: 契約 $d が通らない"; fail=1; }
-done
-for d in scripts/tests/contracts/bad_*; do
-  python3 scripts/check_contract.py "$d" >/dev/null 2>&1 && { echo "NG: 契約 $d が通ってしまう"; fail=1; }
-done
-# 視聴者の言葉と読みの基準（C-D5・C-D6・S-W5〜S-W9）と、契約の can_do・knows
+# 視聴者の言葉と読みの基準（S-W5〜S-W9）
 for id in S-W5 S-W6 S-W7 S-W8 S-W9; do grep -q "^| $id " references/criteria/script.md || { echo "NG: script.md に $id がない"; fail=1; }; done
-grep -q "can_do" scripts/check_contract.py || { echo "NG: check_contract.py が can_do を見ない"; fail=1; }
 # 字幕と読み（S-M2〜S-M4）
 python3 scripts/check_text.py scripts/tests/text/ok.json >/dev/null 2>&1 || { echo "NG: text/ok.json が通らない"; fail=1; }
 out=$(python3 scripts/check_text.py scripts/tests/text/bad.json 2>&1) && { echo "NG: text/bad.json が通ってしまう"; fail=1; }
@@ -111,7 +105,7 @@ for f in $docs references/review-protocol.md; do
 done
 # チャットのスキルの探し方は /mnt/skills を先に見る
 grep -q "/mnt/skills/\*/make" references/run-chat.md || { echo "NG: run-chat.md が /mnt/skills を先に見ていない"; fail=1; }
-# 声の番号: writer が interview.md から voice を書き、6 音声で進行役が一覧と照らして voice.speaker を直す
+# 声の番号: writer が構成メモの voice を台本に写し、合成の前に進行役が一覧と照らして voice.speaker を確かめる
 grep -q '\*\*声\*\*（`voice`）' ../../agents/writer.md || { echo "NG: writer.md の台本の書き方に voice がない"; fail=1; }
 for f in $docs; do
   grep -q "voice.speaker" "$f" || { echo "NG: $f に voice.speaker を直す手順がない"; fail=1; }

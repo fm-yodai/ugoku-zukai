@@ -6,19 +6,21 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 題材（コード・リポジトリ・PR・Web ページ・文書・題目）を、日本語ナレーション付きの「動く図解」（HTML 1 枚の再生ページ）にする Claude プラグイン `ugoku-zukai`。本体はスキル `skills/make/`。claude.ai / Claude Desktop のチャットと Claude Code の両方で動かすことが前提。
 
-- 設計の正は `docs/design.md`。マイルストーン（M1a / M1b / M2 済み、M3 進行役は手順を書き終え、両環境での通しが残る。M4 以降は未着手）、合意済みの要件、claude.ai のサンドボックスで確かめた事実（通信先・道具・制約）はここにある。仕様を変えたら、ここの「Mn の実装」節に追記する
-- 文書・コメント・コミットメッセージは日本語。コミットは `M2: 〜` のようにマイルストーンを頭に付ける
-- 前身は個人用スキル explain-video-anywhere（v1、Manim＋Docker の VOICEVOX）。`agents/` と `references/criteria/` などは v1 からの移植で、M3 で新しいプレーヤー向けに書き換えた（保留中の `agents/animator.md` だけ v1 の Manim 用のまま）
+- 設計の正は `docs/design.md`。マイルストーン（M1a / M1b / M2 / M3 済み。進め方の作り直しは R1・R2 済みで、R3 = 完成後の直し・声の試聴・両環境での通しが残る。M4 以降は未着手）、合意済みの要件、claude.ai のサンドボックスで確かめた事実（通信先・道具・制約）はここにある。仕様を変えたら、ここの「Mn の実装」節に追記する
+- 文書・コメント・コミットメッセージは日本語。コミットは `M2: 〜` のようにマイルストーンを頭に付ける（進め方の作り直しは `R2: 〜`）
+- 前身は個人用スキル explain-video-anywhere（v1、Manim＋Docker の VOICEVOX）。`agents/` と `references/criteria/` などは v1 からの移植で、M3 で新しいプレーヤー向けに、R2 で構成メモを物差しにする形に書き換えた（保留中の `agents/animator.md` だけ v1 の Manim 用のまま）
 
 ## コマンド
 
 依存のインストール手順はない（python3 と node をそのまま使う。elkjs は `player/vendor/` に同梱）。
 
 ```bash
-# まとめての検査（見本台本 × テーマ 3 種の配置検査・テーマの検査・デザイン抽出）。run_m3.sh は M1 に続けて台帳・字幕・コマ・進行役の文書を検査する。run_r1.sh は M3 に続けて構成メモ・台本の章・絵コンテのページを検査する
-bash skills/make/scripts/tests/run_m1.sh
-bash skills/make/scripts/tests/run_m3.sh
-bash skills/make/scripts/tests/run_r1.sh
+# まとめての検査。ふだんは run_r2.sh だけ回せば全部走る（r2 → r1 → m3 → m1 の順に呼ぶ）
+#   run_m1.sh: 見本台本 × テーマ 3 種の配置検査・テーマの検査・デザイン抽出
+#   run_m3.sh: 字幕と読み・コマ・再生ページ・作業フォルダと、文書とスクリプトの食い違い
+#   run_r1.sh: 構成メモ・台本の章・絵コンテのページ
+#   run_r2.sh: 指摘の一覧・成功基準・エージェントの定義・進行役の文書
+bash skills/make/scripts/tests/run_r2.sh
 
 # 台本 1 本の検査（形・id の解決・配置）。--timeline で実際の声の長さでも検査する
 node skills/make/scripts/check_storyboard.cjs skills/make/examples/sequence.json --theme flat [--timeline work/voice/timeline.json] [--json]
@@ -32,11 +34,15 @@ node skills/make/scripts/check_storyboard.cjs skills/make/scripts/tests/outlines
 # テーマの検査（コントラストなど）
 python3 skills/make/scripts/check_theme.py skills/make/player/themes/3b1b.json
 
-# 契約の検査（<workdir>/contract.json を読む。テスト用の例は scripts/tests/contracts/）
-python3 skills/make/scripts/check_contract.py skills/make/scripts/tests/contracts/ok_repo
-
 # 字幕と読みの検査（禁止語・ずんだもんの語尾・辞書にない英字の語）
 python3 skills/make/scripts/check_text.py skills/make/examples/sequence.json
+
+# 指摘の一覧（<workdir>/review/ledger.json）。評価役の出力を取り込み、利用者に見せる形で出し、直す・直さないの選択を記録する
+python3 skills/make/scripts/ledger.py ingest <workdir> <評価役の出力.json …>
+python3 skills/make/scripts/ledger.py list <workdir> [--full] [--by lead|user] [--state open,fixing,kept,closed] [--json]   # must は全文、should は 1 件 1 行、nits は件数だけ
+python3 skills/make/scripts/ledger.py decide <workdir> --by lead|user [--fix <key> …] [--keep <key> …]   # lead = 進行役が先に直した、user = 利用者が選んだ。--keep は user だけ
+python3 skills/make/scripts/ledger.py status <workdir>     # 件数の要約
+python3 skills/make/scripts/ledger.py residual <workdir>   # must で直っていない指摘（残論点）を review/residual.md に書く
 
 # 作業フォルダを題材の外に作る（${CLAUDE_PLUGIN_DATA}/runs/<日時>-<名前>。パスを 1 行で出す）
 python3 skills/make/scripts/workdir.py new this-repo
@@ -65,7 +71,7 @@ python3 tools/build_voice_check.py
 
 ## 全体の構造
 
-**流れ**: 0 準備 → 1 インタビュー → 2 取材と契約（`contract.json`）→ 3 人の確認（1 回だけ）→ 4 台本（`storyboard.json`）→ 5 画面（`frames.cjs`、見積もりの時刻）→ 6 音声（`tts.py --readings` で読みを確かめてから合成）→ 7 組み立て（`build_player.py`）と Artifact での公開 → 8 報告。手順は `skills/make/SKILL.md`、環境ごとのコマンドは `references/run-code.md`（Claude Code）と `references/run-chat.md`（チャット）。
+**進め方**: 番号の付いた決まった手順はない。進行役（`SKILL.md` を実行しているセッション）が利用者と話して構成を固め、決まったことを構成メモ（`outline.json`。`by` = 誰が言ったか、`state` = 利用者が見たか）に書く。話題ごとに「聞く・案を出す・調べる」を選び、案を出すときは他の選択肢を残す。任されたら、絵コンテまで自分で決めてから見せる。そこから台本（`storyboard.json`。場面の `chapter` で構成メモの章を指す）→ 絵コンテ（`frames.cjs`・`build_sheet.py`）→ 声（`tts.py --readings` で読みを確かめてから合成）→ 組み立て（`build_player.py`）と Artifact での公開、と進む。順番として守るのは 3 つだけ: 声を合成する前に利用者が絵コンテを見ている、公開する前に機械検査が通っている、must を直さずに公開するときは報告に残論点として書く。原則と道具の一覧は `skills/make/SKILL.md`、環境ごとのコマンドは `references/run-code.md`（Claude Code）と `references/run-chat.md`（チャット）。
 
 **プレーヤー（`skills/make/player/src/`）は、ブラウザと node で同じコードを動かす**のが要。
 - `util → figures → figures2 → validate → engine → check` は DOM に触らない。グローバルの `UZ` に生えていく（`UZ.build(storyboard, theme, timeline)` が配置と時刻を計算する）。DOM に触るのは `view_svg.js` だけ
@@ -78,7 +84,7 @@ python3 tools/build_voice_check.py
 
 **テーマ**（`player/themes/*.json`、`references/themes.md`）: 色・文字・線の定義。`extract_design.py` が手持ちのデザイン（トークン・CSS・HTML・Tailwind・Office・画像・PDF）からテーマを作り、`check_theme.py` で検査する。
 
-**maker-checker**: Claude Code では `agents/` のサブエージェント（作り手 researcher / writer、評価役 fact-checker / writing-reviewer / director。animator は保留中で呼ばない）で回し、チャットでは 1 会話で役を順に演じる。成功基準は `references/criteria/`、周回の約束は `references/loop-protocol.md`、台帳は `scripts/ledger.py`（フェーズは `contract`・`script`・`screen`・`voice`。判定は終了コード: PASS 0 / CONTINUE 10 / STOP_* 20〜22）。
+**作り手と評価役**: Claude Code では `agents/` のサブエージェントを使う（作り手は researcher = 調べる、writer = 台本の初稿と章単位の書き直し。評価役は fact-checker / writing-reviewer / director。animator は保留中で呼ばない）。チャットでは 1 会話で役を順に演じる。評価役は決まった関門ではなく、章立てが固まったとき・台本の初稿・絵コンテを見せる前・直した後・合成の前に呼ぶ。成功基準は `references/criteria/`（構成メモ O-、合意との照合 A-、台本 S-、図 G-、画面 V-）、評価役の約束と指摘の扱いは `references/review-protocol.md`、評価役の出力の形は `references/writing/review-format.md`。指摘にはレベル（must / should / nits）が付き、`scripts/ledger.py` の指摘の一覧に入る。どれを直すかは利用者が選ぶ（台本の初稿に限り、合意した内容を変えない指摘は進行役が 1 回だけ先に直す）。自動で合格まで回すことはしない。
 
 ## 守ること
 
