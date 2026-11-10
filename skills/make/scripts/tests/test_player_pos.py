@@ -75,6 +75,11 @@ class PlayerPosTest(unittest.TestCase):
             self.assertIn(w, html)
         self.assertNotIn("<audio", html)
 
+    def test_copy_failure_pauses(self):
+        # コピーできなかったら一時停止する（再生中は位置の文字が書き換わり、選択が消えるため）
+        html = open(TEMPLATE, encoding="utf-8").read()
+        self.assertTrue(re.search(r'if \(playing\) \{ pause\(\); tick\(\); \}\s*select\(\);\s*say\("コピーできませんでした', html))
+
     def test_pos_failure_does_not_stop_player(self):
         # 位置の表示の準備は、チャプター一覧と同じく別の try で包む
         html = open(TEMPLATE, encoding="utf-8").read()

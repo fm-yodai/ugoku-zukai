@@ -238,7 +238,7 @@ node ${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/check_storyboard.cjs <workdir>/st
 python3 ${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/build_player.py <workdir>/storyboard.json --theme <テーマ> --voice <workdir>/voice -o <workdir>/player.html --artifact
 ```
 
-音声を作らなかったときは `--voice` を外す。「音声が古い」で止まったら、`tts.py` をもう一度実行する。公開は Artifact ツールで、`file_path` に `<workdir>/player.html`、`title` に台本の題名、`icon` に `video` を渡す（書き写さない）。作業フォルダのファイルを受け付けないと言われたら、スクラッチパッドのフォルダに写してから公開する。
+音声を作らなかったときは `--voice` を外す。「音声が古い」で止まったら（合成した後に、文を変えた・行を足した・行を消した）、`tts.py` をもう一度実行する。公開は Artifact ツールで、`file_path` に `<workdir>/player.html`、`title` に台本の題名、`icon` に `video` を渡す（書き写さない）。作業フォルダのファイルを受け付けないと言われたら、スクラッチパッドのフォルダに写してから公開する。
 
 公開したら、公開先を作業フォルダに記録する（`<workdir>/published.json`。別のセッションから直すときに読む）。
 
@@ -265,14 +265,14 @@ python3 ${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/workdir.py list
 
 **3. 行を特定して直す。** 指された id を `<workdir>/storyboard.json` で確かめる。指された数行の言い回しや動作は、進行役が直す。章単位の書き直しは writer に、書く範囲（章の id）を渡して任せる。`read` のある行の字幕を変えるときは、`text` と `read` の両方を直す。直しが合意に関わるなら、先に `<workdir>/outline.json` を直して `check_outline.py --ready` を通す。
 
-**4. 機械検査。** 文（`text`・`read`）を変えたら、合成した声が古くなるので、`--timeline` を付けずに回す。図や動作だけを変えたら、`--timeline` を付けて回す。
+**4. 機械検査。** 文（`text`・`read`）を変えたか、行を足した・消したなら、合成した声が古くなるので、`--timeline` を付けずに回す（付けると「時刻表にない」「音声が古い」の誤りになる）。図や動作だけを変えたら、`--timeline` を付けて回す。
 
 ```sh
 node ${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/check_storyboard.cjs <workdir>/storyboard.json --theme <テーマ> --outline <workdir>/outline.json --complete [--timeline <workdir>/voice/timeline.json]
 python3 ${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/check_text.py <workdir>/storyboard.json
 ```
 
-**5. 変えた場面のコマを作る。** 全体とは別の出力先に書く。文を変えていなければ、`--timeline <workdir>/voice/timeline.json` を付ける（時刻が再生ページと同じになる）。全体のコマ（`<workdir>/frames`）と絵コンテ（`sheet.html`）は、作り直さなくてよい。
+**5. 変えた場面のコマを作る。** 全体とは別の出力先に書く。図や動作だけの直し（4 で `--timeline` を付けて回せたとき）なら、ここでも `--timeline <workdir>/voice/timeline.json` を付ける（時刻が再生ページと同じになる）。全体のコマ（`<workdir>/frames`）と絵コンテ（`sheet.html`）は、作り直さなくてよい。
 
 ```sh
 node ${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/frames.cjs <workdir>/storyboard.json --theme <テーマ> -o <workdir>/frames-part --scenes <変えた場面の id をカンマ区切り> [--timeline <workdir>/voice/timeline.json]
@@ -298,7 +298,7 @@ target: screen
 python3 ${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/build_sheet.py <workdir>/storyboard.json --frames <workdir>/frames-part --outline <workdir>/outline.json -o <workdir>/sheet-part.html --artifact
 ```
 
-動きを見せたいときは、粗い再生ページを作る（`title` は「<台本の題> 下見」、`icon` は `video`）。文を変えていなければ、`--voice <workdir>/voice` を付けて、今の声と時刻で動きを見せられる。文を変えたときは、声なしで作る（時刻は見積もり）。
+動きを見せたいときは、粗い再生ページを作る（`title` は「<台本の題> 下見」、`icon` は `video`）。図や動作だけの直しなら、`--voice <workdir>/voice` を付けて、今の声と時刻で動きを見せられる。文を変えたか、行を足した・消したときは、声なしで作る（時刻は見積もり）。
 
 ```sh
 python3 ${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/build_player.py <workdir>/storyboard.json --theme <テーマ> [--voice <workdir>/voice] -o <workdir>/preview.html --artifact

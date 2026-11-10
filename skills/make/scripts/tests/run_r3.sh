@@ -5,7 +5,7 @@ cd "$(dirname "$0")/../.."
 fail=0
 ng() { echo "NG: $1"; fail=1; }
 bash scripts/tests/run_r2.sh || fail=1
-for t in test_player_pos test_workdir test_tts_audition; do
+for t in test_player_pos test_workdir test_tts_audition test_stale_voice; do
   python3 scripts/tests/$t.py >/dev/null 2>&1 || { ng "$t.py"; python3 scripts/tests/$t.py; }
 done
 # 見送っていた軽い指摘（指摘の一覧の検査は run_r2.sh の test_ledger.py が回す）
@@ -53,6 +53,10 @@ grep -q "コマの場所" references/run-code.md && grep -q "コマの場所" ..
 grep -q "構成メモのない" references/run-code.md || ng "run-code.md に、構成メモのない作業フォルダ（前の進め方で作ったもの）の扱いがない"
 for f in references/run-code.md references/run-chat.md; do
   awk '/^## 公開した後の直し/{on=1} /^## 報告/{on=0} on' $f | grep -n "コマを作る\|評価役。" | head -2 | tr '\n' ' ' | grep -q "コマを作る.*評価役" || ng "$f の直しの節で、コマを作るのが評価役の後になっている"
+done
+# 最終レビューの指摘: 行を足した・消したときも、声を作り直してから時刻表を使う
+for f in references/run-code.md references/run-chat.md; do
+  awk '/^## 公開した後の直し/{on=1} /^## 報告/{on=0} on' $f | grep -q "行を足した・消した" || ng "$f の直しの節に、行を足した・消したときの時刻表の扱いがない"
 done
 [ $fail = 0 ] && echo "R3 の検査: すべて OK" || echo "R3 の検査: NG あり"
 exit $fail

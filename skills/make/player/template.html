@@ -313,7 +313,11 @@ const UZ_DATA = /*UZ:DATA*/null;
       select();
       let ok = false;
       try { ok = document.execCommand("copy"); } catch (e) {}
-      if (ok) say("コピーしました"); else say("コピーできませんでした。選択された文字をコピーしてください", true);
+      if (ok) { say("コピーしました"); return; }
+      // 再生中は位置の文字が書き換わって選択が消えるので、止めてから選択し直す
+      if (playing) { pause(); tick(); }
+      select();
+      say("コピーできませんでした。選択された文字をコピーしてください", true);
     };
     pointOk = true;
     showPos(pausedAt);

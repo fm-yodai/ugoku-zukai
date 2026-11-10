@@ -129,7 +129,7 @@ metadata:
 
 ## 組み立てと公開
 
-1. `scripts/build_player.py … --voice <workdir>/voice -o <workdir>/player.html --artifact` で組み立てる。「音声が古い」で止まったら、台本の文が合成の後に変わっている。`tts.py` をもう一度実行する
+1. `scripts/build_player.py … --voice <workdir>/voice -o <workdir>/player.html --artifact` で組み立てる。「音声が古い」で止まったら、合成の後に台本が変わっている（文を変えた・行を足した・行を消した）。`tts.py` をもう一度実行する
 2. `player.html` を Artifact として公開する（ファイルのまま。書き写さない。やり方は環境ごとの文書）
 3. Claude Code では、公開したら `scripts/workdir.py publish` で公開先を作業フォルダに記録する（別のセッションから直すときに読む）
 

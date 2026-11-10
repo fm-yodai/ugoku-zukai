@@ -232,7 +232,7 @@ node <skill>/scripts/check_storyboard.cjs <workdir>/storyboard.json --theme <テ
 python3 <skill>/scripts/build_player.py <workdir>/storyboard.json --theme <テーマ> --voice <workdir>/voice -o <workdir>/player.html --artifact
 ```
 
-音声を作らなかったときは `--voice` を外す。「音声が古い」で止まったら、`tts.py` をもう一度実行する。`<workdir>/player.html` は、サンドボックスのファイルをそのまま Artifact として公開する（中身を書き写さない。長いので写すと壊れる）。`/mnt/user-data/outputs/` があれば、そこへ写してから公開する。チャットのプレビューでは audio 要素が鳴らないが、プレーヤーは WebAudio で鳴らすので問題ない。
+音声を作らなかったときは `--voice` を外す。「音声が古い」で止まったら（合成した後に、文を変えた・行を足した・行を消した）、`tts.py` をもう一度実行する。`<workdir>/player.html` は、サンドボックスのファイルをそのまま Artifact として公開する（中身を書き写さない。長いので写すと壊れる）。`/mnt/user-data/outputs/` があれば、そこへ写してから公開する。チャットのプレビューでは audio 要素が鳴らないが、プレーヤーは WebAudio で鳴らすので問題ない。
 
 ## 公開した後の直し
 
@@ -244,14 +244,14 @@ python3 <skill>/scripts/build_player.py <workdir>/storyboard.json --theme <テ�
 
 **3. 行を特定して直す。** 指された id を `<workdir>/storyboard.json` で確かめて直す。`read` のある行の字幕を変えるときは、`text` と `read` の両方を直す。直しが合意に関わるなら、先に `<workdir>/outline.json` を直して `check_outline.py --ready` を通す。
 
-**4. 機械検査。** 文（`text`・`read`）を変えたら、合成した声が古くなるので、`--timeline` を付けずに回す。図や動作だけを変えたら、`--timeline` を付けて回す。
+**4. 機械検査。** 文（`text`・`read`）を変えたか、行を足した・消したなら、合成した声が古くなるので、`--timeline` を付けずに回す（付けると「時刻表にない」「音声が古い」の誤りになる）。図や動作だけを変えたら、`--timeline` を付けて回す。
 
 ```sh
 node <skill>/scripts/check_storyboard.cjs <workdir>/storyboard.json --theme <テーマ> --outline <workdir>/outline.json --complete [--timeline <workdir>/voice/timeline.json]
 python3 <skill>/scripts/check_text.py <workdir>/storyboard.json
 ```
 
-**5. 変えた場面のコマを作る。** 全体とは別の出力先に書く。文を変えていなければ、`--timeline <workdir>/voice/timeline.json` を付ける（時刻が再生ページと同じになる）。全体のコマ（`<workdir>/frames`）と絵コンテ（`sheet.html`）は、作り直さなくてよい。
+**5. 変えた場面のコマを作る。** 全体とは別の出力先に書く。図や動作だけの直し（4 で `--timeline` を付けて回せたとき）なら、ここでも `--timeline <workdir>/voice/timeline.json` を付ける（時刻が再生ページと同じになる）。全体のコマ（`<workdir>/frames`）と絵コンテ（`sheet.html`）は、作り直さなくてよい。
 
 ```sh
 node <skill>/scripts/frames.cjs <workdir>/storyboard.json --theme <テーマ> -o <workdir>/frames-part --scenes <変えた場面の id をカンマ区切り> [--timeline <workdir>/voice/timeline.json]
@@ -259,7 +259,7 @@ node <skill>/scripts/frames.cjs <workdir>/storyboard.json --theme <テーマ> -o
 
 **6. 評価役。** 評価役の番を宣言して、SKILL.md の表の評価役の基準で、変えた行と場面だけを判定する。画面を見るときは、`<workdir>/frames-part` のコマを見る（`<workdir>/frames` は直す前のコマ）。出力は新しい連番の `combined.json` に書いて `ingest` し、指摘が出たら `list` で利用者に見せて選んでもらう（先に直すのは初稿だけなので、ここでは先に直さない）。
 
-**7. 変えた場面を見せる。** 5 のコマから絵コンテを作り、Artifact として見せる（再生ページとは別のページでよい）。動きを見せたいときは、粗い再生ページ（`preview.html`）を作る。文を変えていなければ、`build_player.py` に `--voice <workdir>/voice` を付けて、今の声と時刻で見せられる。
+**7. 変えた場面を見せる。** 5 のコマから絵コンテを作り、Artifact として見せる（再生ページとは別のページでよい）。動きを見せたいときは、粗い再生ページ（`preview.html`）を作る。図や動作だけの直しなら、`build_player.py` に `--voice <workdir>/voice` を付けて、今の声と時刻で見せられる。
 
 ```sh
 python3 <skill>/scripts/build_sheet.py <workdir>/storyboard.json --frames <workdir>/frames-part --outline <workdir>/outline.json -o <workdir>/sheet-part.html --artifact

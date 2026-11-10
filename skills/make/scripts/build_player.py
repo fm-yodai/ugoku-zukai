@@ -6,6 +6,8 @@
                           [--timeline timeline.json] [--audio narration.mp3] [--voice WORKDIR] [--artifact]
 
 - 時刻表がなければ、プレーヤーが文字数から時刻を見積もる（音声なしの下見）
+- 時刻表が今の台本のものでなければ（合成した後に、文を変えた・行を足した・行を消した）、「音声が古い」と出して
+  ページを書かずに終了コード 1 で止まる。tts.py をもう一度実行する
 - 再生ページには図の下（広い画面では右）にチャプター一覧を出す。題は場面の title か図の title
 - --artifact: Artifact で公開する形（<html>・<head>・<body> を外した断片）で書く
 - elkjs とプレーヤーの JS は HTML に埋め込む（CDN を読めない環境でも動くように）
@@ -38,6 +40,25 @@ def elk_js():
 def safe_json(obj):
     # </script> を閉じないよう < をエスケープする
     return json.dumps(obj, ensure_ascii=False).replace("<", "\\u003c")
+
+
+def stale_voice(storyboard, timeline):
+    """合成した後に台本が変わっていれば、その説明の列を返す（文を変えた・行を足した・行を消した）。変わっていなければ空"""
+    sys.path.insert(0, HERE)
+    from tts import parse_marks   # 時刻表の text は、tts.py が印を外して書いた文。同じ関数で比べる
+    want = {}
+    for sc in storyboard.get("scenes") or []:
+        for ln in sc.get("lines") or []:
+            want[ln.get("id")] = parse_marks(ln.get("read") or ln.get("text") or "")[0]
+    have = {ln.get("id"): ln for ln in timeline.get("lines") or []}
+    out = []
+    for i, text in want.items():
+        if i not in have:
+            out.append(f"行 {i}: 時刻表にない（合成した後に足した行）")
+        elif have[i].get("text") is not None and have[i]["text"] != text:   # text のない時刻表（手で書いたもの）は id だけを比べる
+            out.append(f"行 {i}: 合成した後に文が変わった")
+    out += [f"行 {i}: 時刻表にあるが台本にない（合成した後に消した行）" for i in have if i not in want]
+    return out
 
 
 def build(storyboard, theme, timeline=None, audio_b64=None, artifact=False):
@@ -73,6 +94,10 @@ def main():
         a.timeline = a.timeline or os.path.join(a.voice, "timeline.json")
         a.audio = a.audio or next((p for p in (os.path.join(a.voice, "narration.mp3"), os.path.join(a.voice, "narration.wav")) if os.path.exists(p)), None)
     tl = json.load(open(a.timeline, encoding="utf-8")) if a.timeline else None
+    stale = stale_voice(sb, tl) if tl else []
+    if stale:
+        print("build_player: 音声が古い。tts.py をもう一度実行してから組み立てる\n  " + "\n  ".join(stale), file=sys.stderr)
+        sys.exit(1)
     au = base64.b64encode(open(a.audio, "rb").read()).decode() if a.audio else None
     html = build(sb, load_theme(a.theme), tl, au, a.artifact)
     os.makedirs(os.path.dirname(os.path.abspath(a.out)), exist_ok=True)

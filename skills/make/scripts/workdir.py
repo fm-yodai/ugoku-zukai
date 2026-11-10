@@ -18,7 +18,7 @@ publish: 公開先を <作業フォルダ>/published.json に記録する（別�
 
 list: 過去の作業フォルダ（名前が <8 桁>-<4 桁>-… のフォルダ）を新しい順に出す。1 件 2 行（名前・題・公開の状態、パス・テーマ・題材）。
   --home を省くと、UZ_RUNS_HOME、${CLAUDE_PLUGIN_DATA}/runs、${CLAUDE_PLUGIN_DATA} の隣にある ugoku-zukai* の runs、
-  ~/.cache/ugoku-zukai/runs を合わせて探す（プラグインの入れ方が変わると置き場が変わるため）。--json は配列で出す。
+  ~/.claude/plugins/data/ugoku-zukai*/runs、~/.cache/ugoku-zukai/runs を合わせて探す（プラグインの入れ方が変わると置き場が変わるため）。--json は配列で出す。
 
 終了コード: 0、2 = 使い方の誤り・作業フォルダや台本がない（何も書かない）、4 = 書けない
 
@@ -99,6 +99,10 @@ def homes(explicit=None):
         parent = os.path.dirname(os.path.abspath(data).rstrip(os.sep))
         if os.path.isdir(parent):
             cands += [os.path.join(parent, n, "runs") for n in sorted(os.listdir(parent)) if n.startswith("ugoku-zukai")]
+    # 環境変数のないセッション（プラグインを読み込んでいない）からも、プラグインの置き場で作ったものを探す
+    plugin_data = os.path.join(os.path.expanduser("~"), ".claude", "plugins", "data")
+    if os.path.isdir(plugin_data):
+        cands += [os.path.join(plugin_data, n, "runs") for n in sorted(os.listdir(plugin_data)) if n.startswith("ugoku-zukai")]
     cands.append(os.path.join(os.path.expanduser("~"), ".cache", "ugoku-zukai", "runs"))
     out, seen = [], set()
     for c in cands:

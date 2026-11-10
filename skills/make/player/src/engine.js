@@ -76,6 +76,12 @@
     if (errors.length) return { errors, warnings };
     timeline = timeline || UZ.estimateTimeline(sb);
     const TL = Object.fromEntries(timeline.lines.map(l => [l.id, l]));
+    // 時刻表と台本の行が食い違っていたら、先へ進まない（合成した後に行を足した・消した。そのまま描くと、ない行を引いて止まる）
+    const lineIds = new Set();
+    for (const sc of sb.scenes) for (const ln of sc.lines) lineIds.add(ln.id);
+    for (const id of lineIds) if (!TL[id]) err(`行 ${id}: 時刻表にない（台本を直したら tts.py をもう一度実行する）`);
+    for (const l of timeline.lines) if (!lineIds.has(l.id)) err(`行 ${l.id}: 時刻表にあるが台本にない（合成した後に行を消した）。tts.py をもう一度実行する`);
+    if (errors.length) return { errors, warnings };
 
     // ---- 場面ごとの配置区画 ----
     const scenes = sb.scenes.map(sc => {
@@ -150,7 +156,6 @@
       for (const fid of sc.figs) if (figs[fid].autoShow) acts.push({ verb: "show", keys: figs[fid].order.map(id => figs[fid].items[id].key), start: sc.start + 0.25, dur: 0.8, each: 0.8, stagger: 0.35, end: sc.start + 1.2 + 0.35 * figs[fid].order.length });
       for (const ln of sc.lines) {
         const tl = TL[ln.id];
-        if (!tl) { err(`行 ${ln.id}: 時刻表にない（台本を直したら tts.py をもう一度実行する）`); continue; }
         if (tl.text != null && tl.text !== UZ.parseText(ln.read || ln.text).text) { err(`行 ${ln.id}: 音声が古い（合成した後に文が変わった）。tts.py をもう一度実行する`); continue; }
         let cursor = tl.start + 0.05;
         (ln.do || []).forEach((a, ai) => {

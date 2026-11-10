@@ -179,6 +179,16 @@ class WorkdirTest(unittest.TestCase):
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertEqual(sorted(x["path"] for x in json.loads(r.stdout)), sorted(want))   # 4 つだけ。重複なし
 
+    def test_list_finds_plugin_data_without_env(self):
+        # CLAUDE_PLUGIN_DATA のないセッションでも、プラグインの置き場（~/.claude/plugins/data/ugoku-zukai*/runs）で作ったものが見つかる
+        data = os.path.join(self.env["HOME"], ".claude", "plugins", "data")
+        a = self.new("a", "20260101-0000", home=os.path.join(data, "ugoku-zukai-inline", "runs"))
+        b = self.new("b", "20260102-0000", home=os.path.join(data, "ugoku-zukai-market", "runs"))
+        self.new("other", "20260103-0000", home=os.path.join(data, "other", "runs"))
+        r = self.run_wd("list", "--json")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual([x["path"] for x in json.loads(r.stdout)], [b, a])
+
     def test_list_same_home_twice(self):
         # UZ_RUNS_HOME と ${CLAUDE_PLUGIN_DATA}/runs が同じ場所でも、1 回だけ出る
         data = os.path.join(self.tmp.name, "data", "ugoku-zukai-inline")
