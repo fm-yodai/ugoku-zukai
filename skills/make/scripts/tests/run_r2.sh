@@ -29,5 +29,21 @@ p=references/review-protocol.md
 for h in "評価役の独立" "評価役の約束" "指摘の扱い" "作り手の約束" "チャットでの回し方" "設計の根拠"; do grep -q "^## $h" $p || ng "review-protocol.md に「## $h」がない"; done
 grep -q "事実 > 合意 > 構造 > 文章 > 演出" $p || ng "review-protocol.md に衝突したときの順がない"
 grep -qE "max-rounds|STOP_|CONTINUE|disputed|ledger.py (respond|reset)" $p && ng "review-protocol.md に周回の記述が残っている"
+# 作り手と評価役の定義（animator は保留中で触らない）
+A=../../agents
+for f in researcher writer fact-checker writing-reviewer director; do
+  grep -nE "contract|契約|interview\.md|responses\.json|disputed|周目|周回|loop-protocol|フェーズ" $A/$f.md && ng "agents/$f.md に古い進め方の語が残っている"
+  grep -q "review-protocol.md" $A/$f.md || ng "agents/$f.md が review-protocol.md を読まない"
+done
+for f in fact-checker writing-reviewer director; do
+  for w in "level" "nits" "rechecks" "target"; do grep -q "$w" $A/$f.md || ng "agents/$f.md に $w がない"; done
+done
+grep -q "brief.md" $A/researcher.md || ng "researcher.md が brief.md を書かない"
+grep '^tools:' $A/researcher.md | grep -q "check_contract" && ng "researcher の tools: に check_contract.py が残っている"
+for w in "outline.json" "chapter" "tone" "knows" "機械検査の差し戻し"; do grep -q "$w" $A/writer.md || ng "writer.md に $w がない"; done
+for id in O-F1 O-F2 O-F3 S-F1 S-F2 S-F4; do grep -q "$id" $A/fact-checker.md || ng "fact-checker.md に $id がない"; done
+for id in O-D1 O-D5 A-1 A-4 S-D1 G-D1 V-1; do grep -q "$id" $A/director.md || ng "director.md に $id がない"; done
+for id in S-W1 S-W10 S-W8 S-W9; do grep -q "$id" $A/writing-reviewer.md || ng "writing-reviewer.md に $id がない"; done
+grep -q "読みモード" $A/writing-reviewer.md || ng "writing-reviewer.md に読みモードがない"
 [ $fail = 0 ] && echo "R2 の検査: すべて OK" || echo "R2 の検査: NG あり"
 exit $fail

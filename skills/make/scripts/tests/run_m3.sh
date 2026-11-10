@@ -81,14 +81,11 @@ done
 for s in check_storyboard.cjs check_text.py frames.cjs; do
   grep '^tools:' ../../agents/writer.md | grep -q "/scripts/$s " || { echo "NG: writer の tools: に $s がない"; fail=1; }
 done
-grep '^tools:' ../../agents/researcher.md | grep -q "/scripts/check_contract.py " || { echo "NG: researcher の tools: に check_contract.py がない"; fail=1; }
 # 進行役の手順（SKILL.md・run-chat.md・run-code.md）
 docs="SKILL.md references/run-chat.md references/run-code.md"
 # 視聴者の言葉と読みの確認が、エージェントと進行役の文書に入っている
 grep -q "spoken.md" ../../agents/writer.md && grep -q "spoken.md" ../../agents/writing-reviewer.md || { echo "NG: writer / writing-reviewer が spoken.md を読まない"; fail=1; }
-grep -q "knows" ../../agents/researcher.md || { echo "NG: researcher.md が knows を書かない"; fail=1; }
 grep -q "読みモード" ../../agents/writing-reviewer.md || { echo "NG: writing-reviewer.md に読みモードがない"; fail=1; }
-grep -q "C-D6" ../../agents/director.md || { echo "NG: director.md の担当に C-D6 がない"; fail=1; }
 grep -q "spoken.md" references/run-chat.md || { echo "NG: run-chat.md が spoken.md を読ませていない"; fail=1; }
 grep -q "function seekTo(t) { if (playing) startAt(t)" player/template.html || { echo "NG: template.html の seek が再生中に startAt を呼ばない"; fail=1; }
 for f in $docs; do
