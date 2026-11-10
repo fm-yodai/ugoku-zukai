@@ -59,5 +59,19 @@ grep -nE "contract|interview\.md|check_contract|max-rounds|STOP_|人の確認|�
 grep -q '^  version: "0.3.0"' $s || ng "SKILL.md の version が 0.3.0 でない"
 grep -nE "contract|契約|budget\.parts|interview" references/structures.md && ng "structures.md に契約の語が残っている"
 grep -q "引き出し" references/structures.md || ng "structures.md が型を引き出しとして位置づけていない"
+# 環境ごとの文書（道具ごとのコマンド。フェーズごとの手順は置かない）
+for f in references/run-code.md references/run-chat.md; do
+  for h in "パスの書き方" "作業フォルダ" "構成メモ" "調べる" "台本と機械検査" "絵コンテと粗い再生ページ" "評価役と指摘の一覧" "声" "組み立てと公開" "報告"; do
+    grep -q "^## $h" $f || ng "$f に「## $h」がない"
+  done
+  grep -qE "^## [0-9] " $f && ng "$f に番号の付いたフェーズが残っている"
+  for w in "check_outline.py" "--ready" "--outline" "--complete" "--scenes" "build_sheet.py" "ledger.py ingest" "ledger.py list" "ledger.py decide" "ledger.py residual" "--by lead" "回し直す" "frames-part"; do
+    grep -q -- "$w" $f || ng "$f に $w がない"
+  done
+  grep -nE "contract|interview\.md|check_contract|max-rounds|STOP_|ledger.py (respond|reset)|responses\.json|loop-protocol|人の確認" $f && ng "$f に古い進め方の語が残っている"
+done
+grep -q "combined.json" references/run-chat.md || ng "run-chat.md に combined.json がない"
+grep -q "^## サンドボックスの約束" references/run-chat.md && grep -q "^## 評価役の番の宣言" references/run-chat.md || ng "run-chat.md にサンドボックスの約束か評価役の番の宣言がない"
+for a in researcher writer fact-checker director writing-reviewer; do grep -q "ugoku-zukai:$a" references/run-code.md || ng "run-code.md に ugoku-zukai:$a がない"; done
 [ $fail = 0 ] && echo "R2 の検査: すべて OK" || echo "R2 の検査: NG あり"
 exit $fail
