@@ -173,7 +173,5 @@
     const h = Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y) + pad;
     return w > 0 && h > 0 ? w * h : 0;
   };
-  // 点の札の四角 r が、箱 b に重なるか（view_svg.js が札を出すかどうかに使う）
-  UZ.pillHits = (r, b) => r.x < b.x + b.w && r.x + r.w > b.x && r.y < b.y + b.h && r.y + r.h > b.y;
   UZ.inside = (p, r, m = 0) => p[0] >= r.x - m && p[0] <= r.x + r.w + m && p[1] >= r.y - m && p[1] <= r.y + r.h + m;
 })(globalThis.UZ = globalThis.UZ || {});

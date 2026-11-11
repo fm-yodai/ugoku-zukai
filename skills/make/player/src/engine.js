@@ -60,7 +60,8 @@
   };
 
   // ---- 動作の既定の長さ ----
-  const DUR = { show: 0.7, hide: 0.5, focus: 0.6, unfocus: 0.6, pulse: 0.8, mark: 0.5, unmark: 0.4, trace: 1.5, reply: 0.8, note: 0.6, badge: 0.5, relabel: 0.6, tint: 0.6, move: 1.0, custom: 2.0 };
+  const LABEL_HOLD = 2.4;   // 点の札を見せておく秒数
+  const DUR = { show: 0.7, hide: 0.5, focus: 0.6, unfocus: 0.6, pulse: 0.8, mark: 0.5, unmark: 0.4, trace: 2.0, reply: 0.8, note: 0.6, badge: 0.5, relabel: 0.6, tint: 0.6, move: 1.0, custom: 2.0 };
   const STAGGER = 0.22;
 
   const verbOf = a => UZ.VERBS.find(v => Object.prototype.hasOwnProperty.call(a, v));
@@ -240,8 +241,10 @@
             if (!ok) return;
             act.key = key; act.poly = UZ.withLengths(dedupe(pts)); act.appear = !cur;
             act.label = a.label; act.fig = fid;
+            // 札は、点が何を表すかを最初に 1 回だけ見せる（同じ言葉の札は、その後の trace では出さない）
+            act.labelNew = a.label != null && a.label !== (cur ? cur.label : undefined);
             dur = a.dur ?? Math.max(0.6, DUR.trace * segs);
-            dotState[key] = { node: path[path.length - 1], last: path };
+            dotState[key] = { node: path[path.length - 1], last: path, label: a.label != null ? a.label : (cur ? cur.label : undefined) };
           } else if (verb === "reply") {
             const path = asList(val);
             const fid = a.fig || sc.figs.find(f => path.every(p => figs[f].items[p] && figs[f].items[p].dotAt));
@@ -474,6 +477,11 @@
           const q = a.appear ? clamp((t - a.start - 0.25) / Math.max(0.1, a.dur - 0.25)) : p;
           s.pos = UZ.along(a.poly, ease(q));
           if (a.label != null) s.labelText = a.label;
+          if (a.labelNew) {   // 出て、LABEL_HOLD 秒だけ見せて、消える。出るときに少し大きくして目を引く
+            const u = t - a.start;
+            s.labelShow = smooth(clamp(u / 0.3)) * (1 - smooth(clamp((u - LABEL_HOLD) / 0.5)));
+            s.labelPop = u < 0.7 ? Math.sin(Math.PI * clamp(u / 0.7)) : 0;
+          }
           s.moving = q > 0 && q < 1;
           break;
         }

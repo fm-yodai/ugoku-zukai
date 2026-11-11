@@ -24,7 +24,7 @@ for f in references/run-code.md references/run-chat.md; do
 done
 grep -q "エージェントを呼べないとき" references/run-code.md || ng "run-code.md に、エージェントを呼べないときの代わり方がない"
 grep -q "manim-web で描きます" ../../README.md && ng "README.md が、まだない manim-web を使えるように書いている"
-grep -q '区間数 × 1.5' references/storyboard.md || ng "storyboard.md の trace の既定の長さが、エンジン（区間 1 つに 1.5 秒）と合っていない"
+grep -q '区間数 × 2.0' references/storyboard.md || ng "storyboard.md の trace の既定の長さが、エンジン（区間 1 つに 2 秒）と合っていない"
 # 見送っていた軽い指摘（指摘の一覧の検査は run_r2.sh の test_ledger.py が回す）
 grep -q "agents/" references/writing/review-format.md && ng "review-format.md が agents/ を指している（チャットの zip には入っていない）"
 grep -q "scripts/tests/outlines/ok_ux.json" ../../CLAUDE.md && ng "CLAUDE.md の構成メモの見本が、検査用のファイルを指している"

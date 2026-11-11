@@ -175,8 +175,7 @@
         } else if (it.kind === "dot") {
           E.g = el("g", null, L.fx);
           el("circle", { r: it.r, fill: it.color, filter: glow ? "url(#uz-glow)" : null, stroke: glow ? null : S.bg, "stroke-width": glow ? null : 2 }, E.g);
-          E.pill = el("g", { transform: "translate(0,-30)" }, E.g);
-          E.pill.style.transition = "opacity .3s";
+          E.pill = el("g", { transform: "translate(0,30)" }, E.g);
           E.pillR = el("rect", { y: -15, height: 30, rx: 15, fill: S.bg, stroke: it.color, "stroke-width": 1.6 }, E.pill);
           E.pillT = this.text(E.pill, [""], 0, 0, 17, { weight: S.bold, color: S.ink });
         } else {
@@ -277,11 +276,9 @@
           if (s.pos) E.g.setAttribute("transform", `translate(${s.pos[0].toFixed(1)},${s.pos[1].toFixed(1)})`);
           const label = s.labelText || "";
           if (E._label !== label) { E._label = label; this.setLines(E.pillT, [label]); const w = UZ.textW(label, 17, 700) + 22; E.pillR.setAttribute("x", -w / 2); E.pillR.setAttribute("width", w); }
-          // 札は、箱に重ならない所を動いている間だけ出す（札の四角で見る。出入りは E.pill の transition でなめらかにする）
-          const pw = UZ.textW(label, 17, 700) + 22;
-          const pr = s.pos && { x: s.pos[0] - pw / 2, y: s.pos[1] - 45, w: pw, h: 30 };
-          const inBox = pr && Object.values(M.figs[it.fig].items).some(o => o.kind === "box" && UZ.pillHits(pr, o.bbox));
-          E.pill.style.opacity = label && !inBox ? 1 : 0;
+          // 札は、点が何を表すかを最初に 1 回だけ見せる（engine.js の labelShow。箱の文字に重ならないよう、点の下に出す）
+          E.pill.style.opacity = label ? op(s.labelShow || 0) : 0;
+          E.pill.setAttribute("transform", `translate(0,30) scale(${(1 + 0.14 * (s.labelPop || 0)).toFixed(3)})`);
         }
       }
       // 章の題

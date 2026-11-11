@@ -49,19 +49,30 @@ const tests = {
     assert.ok(M.errors.some(e => e.includes("hide だけ")), JSON.stringify(M.errors));
   },
   async trace_default_speed() {
-    // 利用者の指摘: 区間 1 つに 1.0 秒では速くて見づらい → 1.5 秒
+    // 利用者の指摘: 区間 1 つに 1.0 秒では速くて見づらい → 2 秒
     const M = await UZ.build(sb([{ id: "l1", text: "申請を送ります。", do: [{ show: "flow" }, { trace: ["app", "sys", "kacho"] }] }]), TH, null);
     const a = M.acts.find(x => x.verb === "trace");
-    assert.strictEqual(a.dur, 3.0);
+    assert.strictEqual(a.dur, 4.0);
   },
-  async pill_hidden_when_it_overlaps_a_box() {
-    // 札（点の上 45〜15）が箱に掛かる間は出さない。点が箱の外に出ただけでは足りない
-    const box = { x: 100, y: 100, w: 200, h: 80 };
-    assert.strictEqual(UZ.pillHits({ x: 150, y: 185 - 45, w: 80, h: 30 }, box), true, "点は箱の下 5px。札は箱に重なる");
-    assert.strictEqual(UZ.pillHits({ x: 150, y: 240 - 45, w: 80, h: 30 }, box), false, "点は箱の下 60px。札は重ならない");
-    assert.strictEqual(UZ.pillHits({ x: 310, y: 120, w: 80, h: 30 }, box), false, "箱の右に離れている");
+  async label_shown_once() {
+    // 利用者の指摘: 札が出たり消えたりすると不自然 → 点が何を表すかを最初に 1 回だけ見せ、その後は出さない
+    const M = await UZ.build(sb([
+      { id: "l0", text: "経費の申請は、申請者から経理まで、五つの役割を順に通って届きます。全体を見てみましょう。", do: [{ show: "flow" }] },
+      { id: "l1", text: "申請者が申請を送ると、最初に入力チェックを通ります。ここで金額と領収書を見ます。", do: [{ trace: ["app", "sys"], label: "申請書" }] },
+      { id: "l2", text: "金額が十万円までなら、申請は課長へ進みます。多くの申請はここで終わります。", do: [{ trace: ["sys", "kacho"], label: "申請書" }] },
+      { id: "l3", text: "課長が承認すると、経理に承認の通知が届きます。これで精算の手続きに進めます。", do: [{ trace: ["kacho", "keiri"], label: "承認の通知" }] }]), TH, null);
+    assert.deepStrictEqual(M.errors, []);
+    const [t1, t2, t3] = ["l1", "l2", "l3"].map(id => M.acts.find(a => a.verb === "trace" && a.line === id));
+    assert.ok(t1.end <= t2.start && t2.end <= t3.start, "検査の前提: trace が台本の順に並ぶ");
+    const lab = t => { const s = UZ.frame(M, t).st["flow/dot:dot"]; return { show: s.labelShow || 0, text: s.labelText }; };
+    assert.ok(lab(t1.start + 1.0).show > 0.99, "最初の trace の頭で札が出る");
+    assert.strictEqual(lab(t1.start + 1.0).text, "申請書");
+    assert.ok(lab(t1.start + 3.5).show < 0.01, "しばらくしたら消える");
+    assert.ok(lab(t2.start + 0.5).show < 0.01 && lab(t2.start + 1.5).show < 0.01, "同じ札の 2 回目の trace では出ない");
+    assert.ok(lab(t3.start + 1.0).show > 0.99, "札の言葉が変わったら、もう一度だけ出る");
+    assert.strictEqual(lab(t3.start + 1.0).text, "承認の通知");
     const view = fs.readFileSync(path.join(__dirname, "..", "..", "player", "src", "view_svg.js"), "utf8");
-    assert.ok(view.includes("UZ.pillHits(") && view.includes('E.pill.style.transition = "opacity'), "view_svg.js が札の四角で見て、出入りをなめらかにする");
+    assert.ok(view.includes("s.labelShow") && !view.includes("inBox"), "view_svg.js は labelShow で札を出す（箱の出入りで出し入れしない）");
   },
   async sequence_sub_warns() {
     const b = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "..", "examples", "sequence.json"), "utf8"));

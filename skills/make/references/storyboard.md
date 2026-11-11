@@ -268,7 +268,7 @@ python3 scripts/build_player.py storyboard.json -o preview.html     # 音声な�
 | `pulse` | `{"pulse": "sys"}` | 一瞬強調する | 0.8 |
 | `mark` | `{"mark": "keiri", "as": "check"}` | 印を付ける。`as` は `check` `cross` `question`。付け直すと差し替わる | 0.5 |
 | `unmark` | `{"unmark": "keiri"}` | 印を外す | 0.4 |
-| `trace` | `{"trace": ["app", "sys", "kacho"], "label": "申請書", "dot": "dot"}` | 点が経路をたどる（箱と辺のある図）。1 つ目は点のいる所。初めてなら 1 つ目に現れる。`label` は点の札（箱に重ならない所を動く間だけ出る） | 区間数 × 1.5 |
+| `trace` | `{"trace": ["app", "sys", "kacho"], "label": "申請書", "dot": "dot"}` | 点が経路をたどる（箱と辺のある図）。1 つ目は点のいる所。初めてなら 1 つ目に現れる。`label` は点の札。点が何を表すかを、最初の 1 回だけ 2〜3 秒見せて消える（同じ言葉の札は、後の `trace` に書いても出ない。言葉を変えたら、もう一度だけ出る） | 区間数 × 2.0 |
 | `reply` | `{"reply": ["kacho", "sys", "app"], "label": "差し戻し", "as": "bad"}` | 戻りの矢印を、行きの辺のラベルと反対の側に引く。区間ごとに逆向きの辺の宣言が要る | 区間数 × 0.8＋0.4 |
 | `note` | `{"note": "kacho", "text": "多くはここで終わる", "link": false}` | 対象の脇に注記を置く（`id` を書くと、同じ対象に別の注記を付けられ、`hide` でその id を指定できる。重ならない所を自動で選ぶ。`move` する前の位置で決まるので、動かす部品には付けない） | 0.6 |
 | `badge` | `{"badge": "2 / 3"}` | 右上の札。`""` で消す | 0.5 |
