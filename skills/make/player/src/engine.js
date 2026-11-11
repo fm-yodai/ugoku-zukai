@@ -60,7 +60,7 @@
   };
 
   // ---- 動作の既定の長さ ----
-  const DUR = { show: 0.7, hide: 0.5, focus: 0.6, unfocus: 0.6, pulse: 0.8, mark: 0.5, unmark: 0.4, trace: 1.0, reply: 0.8, note: 0.6, badge: 0.5, relabel: 0.6, tint: 0.6, move: 1.0, custom: 2.0 };
+  const DUR = { show: 0.7, hide: 0.5, focus: 0.6, unfocus: 0.6, pulse: 0.8, mark: 0.5, unmark: 0.4, trace: 1.5, reply: 0.8, note: 0.6, badge: 0.5, relabel: 0.6, tint: 0.6, move: 1.0, custom: 2.0 };
   const STAGGER = 0.22;
 
   const verbOf = a => UZ.VERBS.find(v => Object.prototype.hasOwnProperty.call(a, v));
@@ -129,6 +129,19 @@
       if (cands.length > 1) { err(`${ctxv}: 「${ref}」が複数の図にある。「図/id」で書く（${cands.join(", ")}）`); return null; }
       return { fig: cands[0], id };
     }
+    // 点（dot:<名前>）と注記（note:<id>）は、trace と note が出した後でだけ指せる。
+    // 返すもの: 部品のキー / null = 誤り（知らせた）/ undefined = 点でも注記でもない
+    function extraKey(sc, ref, ctxv) {
+      if (typeof ref !== "string") return undefined;
+      const [fid, id] = ref.includes("/") ? ref.split("/") : [null, ref];
+      if (!/^(dot|note):/.test(id)) return undefined;
+      const pool = id.startsWith("dot:") ? extras.dots : extras.notes;
+      const hit = (fid ? [fid] : sc.figs).map(f => `${f}/${id}`).filter(k => pool[k]);
+      if (hit.length === 1) return hit[0];
+      if (hit.length > 1) err(`${ctxv}: 「${ref}」が複数の図にある。「図/${id}」で書く`);
+      else err(`${ctxv}: 「${ref}」はまだ出ていない（${id.startsWith("dot:") ? "trace" : "note"} で出した後に消す）`);
+      return null;
+    }
     // 表示・強調の対象を部品の列に広げる（図ごと・行・カード・枠 → 中身も）
     function expand(r) {
       const F = figs[r.fig];
@@ -171,7 +184,15 @@
           const val = a[verb];
           if (verb === "show" || verb === "hide" || verb === "pulse" || verb === "focus") {
             const keys = [];
-            for (const ref of asList(val)) { const r = resolve(sc, ref, where); if (r) keys.push(...expand(r)); }
+            for (const ref of asList(val)) {
+              const x = extraKey(sc, ref, where);   // 点（dot:<名前>）と注記（note:<id>）
+              if (x !== undefined) {
+                if (x && verb !== "hide") err(`${where}: 点と注記（${ref}）に使えるのは hide だけ`);
+                else if (x) { keys.push(x); delete dotState[x]; }   // 消した点は、次の trace で 1 つ目のノードにもう一度現れる
+                continue;
+              }
+              const r = resolve(sc, ref, where); if (r) keys.push(...expand(r));
+            }
             act.keys = keys;
             if (verb === "show" || verb === "hide") {
               act.stagger = a.stagger ?? (keys.length > 1 ? STAGGER : 0);

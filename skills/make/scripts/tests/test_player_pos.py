@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""再生ページの「直したい箇所を指す」の検査（標準ライブラリだけ）。python3 test_player_pos.py で回す。"""
+"""再生ページの「直したい箇所を指定する」の検査（標準ライブラリだけ）。python3 test_player_pos.py で回す。"""
 import json
 import os
 import re
@@ -74,6 +74,14 @@ class PlayerPosTest(unittest.TestCase):
         for w in ("navigator.clipboard", 'execCommand("copy")', "getSelection"):
             self.assertIn(w, html)
         self.assertNotIn("<audio", html)
+
+    def test_wording(self):
+        # 利用者の指摘: ボタンは「範囲指定」「範囲指定解除」、見出しは「直したい箇所を指定する」（「指す」を目的語なしで使わない）
+        html = open(TEMPLATE, encoding="utf-8").read()
+        for w in ("<summary>直したい箇所を指定する</summary>", ">範囲指定</button>", '"範囲指定解除" : "範囲指定"', "「範囲指定」を押し"):
+            self.assertIn(w, html)
+        for w in ("箇所を指す", "範囲をやめる", "範囲の始まりにする"):
+            self.assertNotIn(w, html)
 
     def test_copy_failure_pauses(self):
         # コピーできなかったら一時停止する（再生中は位置の文字が書き換わり、選択が消えるため）

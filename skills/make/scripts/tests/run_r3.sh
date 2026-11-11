@@ -8,6 +8,10 @@ bash scripts/tests/run_r2.sh || fail=1
 for t in test_player_pos test_workdir test_tts_audition test_stale_voice; do
   python3 scripts/tests/$t.py >/dev/null 2>&1 || { ng "$t.py"; python3 scripts/tests/$t.py; }
 done
+# 通し（第 2 部）で見つかったこと
+node scripts/tests/test_engine_tooshi.cjs >/dev/null 2>&1 || { ng "test_engine_tooshi.cjs"; node scripts/tests/test_engine_tooshi.cjs; }
+grep -q 'note:<id>' references/storyboard.md && grep -q 'note:<id>' references/visual-grammar.md || ng "hide で注記を消す書き方（note:<id>）が文書にない"
+grep -q '区間数 × 1.5' references/storyboard.md || ng "storyboard.md の trace の既定の長さが、エンジン（区間 1 つに 1.5 秒）と合っていない"
 # 見送っていた軽い指摘（指摘の一覧の検査は run_r2.sh の test_ledger.py が回す）
 grep -q "agents/" references/writing/review-format.md && ng "review-format.md が agents/ を指している（チャットの zip には入っていない）"
 grep -q "scripts/tests/outlines/ok_ux.json" ../../CLAUDE.md && ng "CLAUDE.md の構成メモの見本が、検査用のファイルを指している"
@@ -29,7 +33,7 @@ else
 fi
 # 公開した後の直しと声の試聴（進行役の文書）
 grep -q "^## 公開した後の直し" SKILL.md || ng "SKILL.md に「## 公開した後の直し」がない"
-for w in "s2 / l2 @0:14" "直したい箇所を指す" "workdir.py" "audition" "新しく合成" "同じ Artifact"; do grep -q -- "$w" SKILL.md || ng "SKILL.md に $w がない"; done
+for w in "s2 / l2 @0:14" "直したい箇所を指定する" "workdir.py" "audition" "新しく合成" "同じ Artifact"; do grep -q -- "$w" SKILL.md || ng "SKILL.md に $w がない"; done
 for w in "字幕の言い回し" "図や動作" "章の中身や順番" "見た目（テーマ）" "声（話者・話速）"; do grep -q "^| $w" SKILL.md || ng "SKILL.md の直しの表に「$w」の行がない"; done
 grep -q "published page" SKILL.md || ng "SKILL.md の description に、公開したページを指して直す場面がない"
 grep -q 'version: "0.4.0"' SKILL.md || ng "SKILL.md の version が 0.4.0 でない"

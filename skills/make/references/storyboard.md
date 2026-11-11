@@ -261,15 +261,15 @@ python3 scripts/build_player.py storyboard.json -o preview.html     # 音声な�
 | 動詞 | 例 | 意味 | 既定の長さ |
 |---|---|---|---|
 | `show` | `{"show": "flow"}` / `{"show": ["app", "app>sys"]}` | 出す。図全体なら宣言の順（ノード → 両端が出た辺）に。行・カード・枠は中身ごと | 0.7 秒＋0.22 秒ずつずらす |
-| `hide` | `{"hide": ["dot:dot"]}` | 消す | 0.5 |
+| `hide` | `{"hide": ["dot:dot"]}` / `{"hide": "note:kacho"}` | 消す。点は `dot:<名前>`（`trace` の `dot`。省いたら `dot:dot`）、注記は `note:<id>`（`note` の `id`。省いたら対象の id）で指定する。どちらも出した後でだけ消せる。消した点は、次の `trace` で 1 つ目のノードにもう一度現れる | 0.5 |
 | `focus` | `{"focus": ["sys", "kacho", "sys>kacho"]}` | 対象以外を薄くする（同じ図の中）。注記・点・戻りの矢印は薄くしない | 0.6 |
 | `unfocus` | `{"unfocus": true}` | 薄くしたのを戻す | 0.6 |
 | `pulse` | `{"pulse": "sys"}` | 一瞬強調する | 0.8 |
 | `mark` | `{"mark": "keiri", "as": "check"}` | 印を付ける。`as` は `check` `cross` `question`。付け直すと差し替わる | 0.5 |
 | `unmark` | `{"unmark": "keiri"}` | 印を外す | 0.4 |
-| `trace` | `{"trace": ["app", "sys", "kacho"], "label": "申請書", "dot": "dot"}` | 点が経路をたどる（箱と辺のある図）。1 つ目は点のいる所。初めてなら 1 つ目に現れる。`label` は点の札（箱の外を動く間だけ出る） | 区間数 × 1.0 |
+| `trace` | `{"trace": ["app", "sys", "kacho"], "label": "申請書", "dot": "dot"}` | 点が経路をたどる（箱と辺のある図）。1 つ目は点のいる所。初めてなら 1 つ目に現れる。`label` は点の札（箱に重ならない所を動く間だけ出る） | 区間数 × 1.5 |
 | `reply` | `{"reply": ["kacho", "sys", "app"], "label": "差し戻し", "as": "bad"}` | 戻りの矢印を、行きの辺のラベルと反対の側に引く。区間ごとに逆向きの辺の宣言が要る | 区間数 × 0.8＋0.4 |
-| `note` | `{"note": "kacho", "text": "多くはここで終わる", "link": false}` | 対象の脇に注記を置く（重ならない所を自動で選ぶ。`move` する前の位置で決まるので、動かす部品には付けない） | 0.6 |
+| `note` | `{"note": "kacho", "text": "多くはここで終わる", "link": false}` | 対象の脇に注記を置く（`id` を書くと、同じ対象に別の注記を付けられ、`hide` でその id を指定できる。重ならない所を自動で選ぶ。`move` する前の位置で決まるので、動かす部品には付けない） | 0.6 |
 | `badge` | `{"badge": "2 / 3"}` | 右上の札。`""` で消す | 0.5 |
 | `relabel` | `{"relabel": "k2.after", "text": "半日"}` | 文字を書き換える | 0.6 |
 | `tint` | `{"tint": "sys>bucho", "as": "warn"}` | 線や行の色を役割の色に変える | 0.6 |

@@ -57,6 +57,7 @@
       }
       if (f.type === "sequence") {
         for (const p of f.participants || []) { addId(p.id, "参加者"); role(p.role, p.id); }
+        for (const p of f.participants || []) if (p.sub) W(`${where}: 参加者 ${p.id} の sub は描かれない（シーケンス図の参加者は label だけ。補足は note で付ける）`);
         const pid = new Set((f.participants || []).map(p => p.id));
         (f.messages || []).forEach((m, i) => {
           addId(m.id || `m${i + 1}`, "メッセージ");

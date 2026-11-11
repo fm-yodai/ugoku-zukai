@@ -76,7 +76,7 @@ python3 tools/build_voice_check.py
 
 ## 全体の構造
 
-**進め方**: 番号の付いた決まった手順はない。進行役（`SKILL.md` を実行しているセッション）が利用者と話して構成を固め、決まったことを構成メモ（`outline.json`。`by` = 誰が言ったか、`state` = 利用者が見たか）に書く。話題ごとに「聞く・案を出す・調べる」を選び、案を出すときは他の選択肢を残す。任されたら、絵コンテまで自分で決めてから見せる。そこから台本（`storyboard.json`。場面の `chapter` で構成メモの章を指す）→ 絵コンテ（`frames.cjs`・`build_sheet.py`）→ 声（`tts.py --readings` で読みを確かめてから合成）→ 組み立て（`build_player.py`）と Artifact での公開、と進む。順番として守るのは 3 つだけ: 声を合成する前に利用者が絵コンテを見ている、公開する前に機械検査が通っている、must を直さずに公開するときは報告に残論点として書く。公開した後は、利用者が再生ページの「直したい箇所を指す」で出る `s2 / l2 @0:14`（場面 / 行 @時刻）を伝えて直しを頼む。直すのは指された行だけで、変えていない行の声は作り直さない。Claude Code では、`workdir.py list` で作業フォルダを探して、別のセッションからも直せる。原則と道具の一覧は `skills/make/SKILL.md`、環境ごとのコマンドは `references/run-code.md`（Claude Code）と `references/run-chat.md`（チャット）。
+**進め方**: 番号の付いた決まった手順はない。進行役（`SKILL.md` を実行しているセッション）が利用者と話して構成を固め、決まったことを構成メモ（`outline.json`。`by` = 誰が言ったか、`state` = 利用者が見たか）に書く。話題ごとに「聞く・案を出す・調べる」を選び、案を出すときは他の選択肢を残す。任されたら、絵コンテまで自分で決めてから見せる。そこから台本（`storyboard.json`。場面の `chapter` で構成メモの章を指す）→ 絵コンテ（`frames.cjs`・`build_sheet.py`）→ 声（`tts.py --readings` で読みを確かめてから合成）→ 組み立て（`build_player.py`）と Artifact での公開、と進む。順番として守るのは 3 つだけ: 声を合成する前に利用者が絵コンテを見ている、公開する前に機械検査が通っている、must を直さずに公開するときは報告に残論点として書く。公開した後は、利用者が再生ページの「直したい箇所を指定する」で出る `s2 / l2 @0:14`（場面 / 行 @時刻）を伝えて直しを頼む。直すのは指された行だけで、変えていない行の声は作り直さない。Claude Code では、`workdir.py list` で作業フォルダを探して、別のセッションからも直せる。原則と道具の一覧は `skills/make/SKILL.md`、環境ごとのコマンドは `references/run-code.md`（Claude Code）と `references/run-chat.md`（チャット）。
 
 **プレーヤー（`skills/make/player/src/`）は、ブラウザと node で同じコードを動かす**のが要。
 - `util → figures → figures2 → validate → engine → check` は DOM に触らない。グローバルの `UZ` に生えていく（`UZ.build(storyboard, theme, timeline)` が配置と時刻を計算する）。DOM に触るのは `view_svg.js` だけ
