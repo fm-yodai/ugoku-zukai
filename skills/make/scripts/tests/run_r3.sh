@@ -5,7 +5,7 @@ cd "$(dirname "$0")/../.."
 fail=0
 ng() { echo "NG: $1"; fail=1; }
 bash scripts/tests/run_r2.sh || fail=1
-for t in test_player_pos test_workdir test_tts_audition test_stale_voice; do
+for t in test_player_pos test_workdir test_tts_audition test_stale_voice test_extract_design; do
   python3 scripts/tests/$t.py >/dev/null 2>&1 || { ng "$t.py"; python3 scripts/tests/$t.py; }
 done
 # 通し（第 2 部）で見つかったこと

@@ -1,0 +1,31 @@
+{
+  "name": "検査用のデザイン（名前付きのトークンと別名）",
+  "color": {
+    "tokens": [
+      { "name": "c-paper", "value": "#f1efe9", "usage": "page background" },
+      { "name": "c-card", "value": "#ffffff", "usage": "card / panel surface" },
+      { "name": "c-text", "value": "#222222", "usage": "body + headings" },
+      { "name": "c-deep", "value": "#14324a", "usage": "cover, table header" },
+      { "name": "c-sub", "value": "#5a6066", "usage": "sub text" },
+      { "name": "c-teal", "value": "#3aa6a0", "usage": "accent, chart primary" },
+      { "name": "c-sun", "value": "#f2b53c", "usage": "warm accent" },
+      { "name": "c-rule", "value": "#d9d5cc", "usage": "rules" },
+      { "name": "c-on-deep-text", "value": "#ffffff", "usage": "text on the deep surface" },
+      { "name": "surface-page", "value": "{c-paper}", "usage": "page" },
+      { "name": "surface-card", "value": "{c-card}", "usage": "card" },
+      { "name": "surface-inverse", "value": "{c-deep}", "usage": "inverted" },
+      { "name": "text-heading", "value": "{c-deep}", "usage": "headings" },
+      { "name": "text-body", "value": "{c-text}", "usage": "body" },
+      { "name": "text-sub", "value": "{c-sub}", "usage": "sub" },
+      { "name": "border-card", "value": "{c-rule}", "usage": "card border" },
+      { "name": "border-claim", "value": "{c-sun}", "usage": "claim border" },
+      { "name": "accent", "value": "{c-teal}", "usage": "accent" },
+      { "name": "accent-warm", "value": "{c-sun}", "usage": "warm accent" },
+      { "name": "numeral", "value": "{c-sun}", "usage": "numbers" },
+      { "name": "link", "value": "{accent}", "usage": "link (別名の別名)" }
+    ]
+  },
+  "type": { "fonts": [], "families": { "jp": "\"Zen Kaku Gothic New\",\"Noto Sans JP\",sans-serif", "num": "\"Oswald\",sans-serif" } },
+  "radius": { "tokens": [ { "name": "r-box", "value": "12px", "usage": "box" } ] },
+  "shadow": { "tokens": [ { "name": "shadow-card", "value": "none", "usage": "影は使わない" } ] }
+}
