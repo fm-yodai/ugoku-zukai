@@ -11,7 +11,7 @@ tools: Read, Write, Edit, Glob, Grep, Bash(node ${CLAUDE_PLUGIN_ROOT}/skills/mak
 ## 呼び出し元から受け取るもの
 
 - 作業フォルダの絶対パス（以下 `<workdir>`）
-- テーマ（名前か `<workdir>/theme.json` のパス。以下 `<テーマ>`）
+- テーマ（名前か `<workdir>/theme.json` のパス。以下 `<テーマ>`）。構成メモの `basics.look.theme` に書いてあるテーマと同じもの。下のコマンドの `--theme` は省いてよく、違うテーマを渡すと道具が止まる（見本の台本やコマンドの例のテーマに合わせない）
 - **書く範囲**。「全部」か、章の id の一覧（例 `c2,c3`）。章の id のときは、その章の場面だけを書く・書き直す
 - **直す指摘のキー**（あれば）。例 `l7:S-W1`、`c3.1:A-1`。本文は `<workdir>/review/ledger.json` の `items` を Read して読む（そのキーの `problem`・`suggestion`・`evidence`）
 - または「機械検査の差し戻し」と、検査の出力（このとき書く範囲と指摘のキーはない）
@@ -25,7 +25,7 @@ tools: Read, Write, Edit, Glob, Grep, Bash(node ${CLAUDE_PLUGIN_ROOT}/skills/mak
 3. `${CLAUDE_PLUGIN_ROOT}/skills/make/references/review-protocol.md`（「作り手の約束」）
 4. `${CLAUDE_PLUGIN_ROOT}/skills/make/references/storyboard.md`（台本の形式の正。図の種類・場面と行・文中の印・動詞の一覧・検査が見ること）と、`${CLAUDE_PLUGIN_ROOT}/skills/make/examples/` の見本のうち、使う図の種類に近いもの
 5. `${CLAUDE_PLUGIN_ROOT}/skills/make/references/visual-grammar.md`（演出の約束 VG-1〜VG-8）
-6. `${CLAUDE_PLUGIN_ROOT}/skills/make/references/writing/rules.md`（TW-1〜TW-9）と `${CLAUDE_PLUGIN_ROOT}/skills/make/references/writing/spoken.md`（聞いて分かる文の規則 SP-1〜SP-9。書く前に読み、書いた後に見直す）
+6. `${CLAUDE_PLUGIN_ROOT}/skills/make/references/writing/rules.md`（TW-1〜TW-9）と `${CLAUDE_PLUGIN_ROOT}/skills/make/references/writing/spoken.md`（聞いて分かる文の規則 SP-1〜SP-10 と SP-15、話の流れ SP-11〜SP-14、章扉。書く前に読み、書いた後に見直す）
 
 ## 台本の書き方
 
@@ -36,6 +36,7 @@ tools: Read, Write, Edit, Glob, Grep, Bash(node ${CLAUDE_PLUGIN_ROOT}/skills/mak
 3. **声**（`voice`）: 構成メモの `basics.voice` に `speaker`・`speed` があれば、そのまま台本の `voice` に写す。なければ `{"speaker": 8, "speed": 1.1}`（春日部つむぎ）にして、最後の報告に「声は既定のまま」と書く
 4. **字幕と印**（各行の `text`・`read`・`source`）
    - その章の言うこと（`says`）を、すべて字幕で言う（A-1）。構成メモにない主張を足さない（A-2）。つなぎの文と、言うことを説明するための具体例は足してよい
+   - **1 文ごとに、誰が・何を・どうするを書く（SP-15）。** 構成メモの言うことは見出しのように短いので、そのまま字幕にしない。主語は、前の文と同じで間に別の主語が挟まっていないときだけ省く。目的語（何を・何に・何と）は省かない。文と文の間に、理由・順番・対比の言葉を書く。書いた後に、各行を 1 つだけ取り出して読み、誰が何をしたのかが言えるかを確かめる
    - **語りとして書く。** 言うことを 1 行ずつ置き換えて並べない。前の行を受けて次の行を始め、章の終わりと動画の終わりにまとめを言う（SP-11・SP-13）。比べる章では新しい仕組みを説明しない（SP-14）。書いた後に、字幕だけを上から順に声に出して読む
    - 章が 3 つ以上あれば、章の頭に `title` 図の場面（章扉）を置き、前の章を受けた問いを 1 行で言う（SP-12。「この章では〜を話します」の型にしない。答えまで言わない）
    - 1 行 1 つの主張。字幕は 2 行（1 行およそ全角 38 字）に収める。動作を結ぶ語の頭に印 `{a}` を置く（語の途中に置かない）
@@ -44,7 +45,7 @@ tools: Read, Write, Edit, Glob, Grep, Bash(node ${CLAUDE_PLUGIN_ROOT}/skills/mak
    - 言葉は `basics.knows`（視聴者が知っている前提）の人に合わせる。分からない語は、別の文で意味を言う（SP-2・SP-3）。冒頭の 1 行目と `title` 図で、何の説明かを言う（SP-1）。比喩・造語・スキル内部の用語（`${CLAUDE_PLUGIN_ROOT}/skills/make/assets/banned_terms.json`）を使わない。用語は仕組みの言葉で呼び、初出で一言説明する（TW-1・TW-5・TW-9）
    - 英字の語や読みの分かれる漢字は `read` に読みを書く（印も同じ位置に置く）。`read` ではかぎ括弧を外す（閉じの後に間が入り、「〜」と言えば、の助詞が前の語から切れるため）。引用だと耳で分かるようにしたいときは、読点で区切る
    - 利用者が指定した文は、長くても言い回しを変えない。前に 1 行足すか、切れ目で分けて収める
-   - 書いた後に SP-1〜SP-14 を 1 つずつ見直す
+   - 書いた後に SP-1〜SP-15 を 1 つずつ見直す
 5. **動作**（各行の `do`）: 1 行 1 つの画面変化にし、`at` で印に結ぶ（VG-3）。流れを追う場面では、流れるデータを `trace` の点（`label` にデータの名前）で主役にし（VG-1）、同じ 1 件を端から端まで同じ `dot` でたどる（VG-5）。区間の説明は `focus` → 説明 → `unfocus`（VG-4）。強調は字幕の主題に付ける（VG-6）。応答は `reply` で来た道を戻す（VG-7）。役目の終わった点・注記・印・札は消す（VG-8。点は `{"hide": "dot:dot"}`、注記は `{"hide": "note:<id>"}`）。多対多の関係（3 つ → 3 つなど）は `graph` にすると辺が増えて文字が小さくなるので、`table` か `list` にする
 
 下の層（`canvas`・`move`・`custom`）は使わない。今の動詞で言えない見せ方が要るときは、書かずに最後の報告に「ここは今の動詞で言えない」と書く。

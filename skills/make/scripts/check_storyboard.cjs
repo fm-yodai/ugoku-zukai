@@ -1,11 +1,12 @@
 #!/usr/bin/env node
 // 台本の検査（形・id の解決・経路・配置）。プレーヤーと同じ JS で配置を計算して調べる。
+// テーマ: 台本と同じフォルダの構成メモ（outline.json）が見た目を決めていたら（basics.look.theme）、--theme を省くとそのテーマを使う。違うテーマを渡すと終了コード 2
 // 使い方: node check_storyboard.cjs storyboard.json [--theme 3b1b|flat|theme.json] [--timeline timeline.json] [--outline outline.json] [--complete] [--json]
 //   --outline   構成メモ（references/outline.md）と突き合わせる。場面の chapter が構成メモの章にあるか、章ごとの見積もりの長さが尺の目安に合うかを見る
 //   --complete  台本を書き終えたものとして見る。場面のない章を誤りにし、全体の長さも構成メモと比べる
 // 終了コード: 0 = 誤りなし（警告は出る）、1 = 誤りか配置の問題がある、2 = 使い方の誤りかファイルを読めない
 const fs = require("fs");
-const { load, theme } = require("./uz_node.cjs");
+const { load, pickTheme } = require("./uz_node.cjs");
 const { checkAgainstOutline } = require("./outline_check.cjs");
 const args = process.argv.slice(2);
 const VAL = ["--theme", "--timeline", "--outline"];   // 値を取る引数
@@ -21,7 +22,9 @@ if (args.includes("--outline")) {
 (async () => {
   const UZ = load();
   const sb = JSON.parse(fs.readFileSync(file, "utf8"));
-  const th = theme(opt("--theme") || "3b1b");
+  let th;
+  try { th = pickTheme(file, opt("--theme")); }
+  catch (e) { if (e.code !== "THEME") throw e; console.error(e.message); process.exit(2); }
   const tl = opt("--timeline") ? JSON.parse(fs.readFileSync(opt("--timeline"), "utf8")) : null;
   const M = await UZ.build(sb, th, tl);
   const issues = M.errors.length ? [] : UZ.checkLayout(M);

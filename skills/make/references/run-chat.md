@@ -75,8 +75,11 @@ python3 <skill>/scripts/check_outline.py <workdir> --json
 
 ```sh
 python3 <skill>/scripts/extract_design.py <資料…> --report <workdir>/design-report.json --theme <workdir>/theme.json --name <名前>
-python3 <skill>/scripts/check_theme.py <workdir>/theme.json
+python3 <skill>/scripts/check_theme.py <workdir>/theme.json --design <workdir>/design-report.json
 ```
+
+- `theme.json` は下書きを直して作る。同梱のテーマや文書の例から値を写さない。`--design` が、テーマがデザインから外れていないか（背景・本文・強調・字体・影）を見る
+- 見た目が決まったら、構成メモの `basics.look.theme` に書く（`flat`・`3b1b`・`theme.json`）。検査・コマ・組み立ては、`--theme` を省くとこのテーマを使い、違うテーマを渡すと止まる。下のコマンドの `--theme <テーマ>` は省いてよい
 
 ## 調べる
 
@@ -87,7 +90,7 @@ python3 <skill>/scripts/check_theme.py <workdir>/theme.json
 
 ## 台本と機械検査
 
-作り手として `<workdir>/storyboard.json` を書く（形式は `storyboard.md`、見本は `<skill>/examples/`）。物差しは構成メモ。各章の言うことをすべて字幕で言い、構成メモにない主張を足さない。すべての場面に `chapter`（章の id）を書く。口調は `basics.tone`、言葉は `basics.knows` の視聴者に合わせ、声は `basics.voice` を台本の `voice` に写す。書く前に `references/writing/spoken.md` を読み、書いた後に SP-1〜SP-14 で見直す（言うことを 1 行ずつ並べず、語りとして書く。章が 3 つ以上あれば章扉を置く）。行の id と章の id は振り直さない。
+作り手として `<workdir>/storyboard.json` を書く（形式は `storyboard.md`、見本は `<skill>/examples/`）。物差しは構成メモ。各章の言うことをすべて字幕で言い、構成メモにない主張を足さない。すべての場面に `chapter`（章の id）を書く。口調は `basics.tone`、言葉は `basics.knows` の視聴者に合わせ、声は `basics.voice` を台本の `voice` に写す。書く前に `references/writing/spoken.md` を読み、書いた後に SP-1〜SP-15 で見直す（1 文ごとに誰が・何を・どうするを書く。言うことを 1 行ずつ並べず、語りとして書く。章が 3 つ以上あれば章扉を置く）。行の id と章の id は振り直さない。
 
 台本を変えるたびに、機械検査を回す（時刻は見積もり）。
 

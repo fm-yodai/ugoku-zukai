@@ -441,6 +441,8 @@ def main():
                           for h, v in bag.colors.items()), key=lambda x: -x["count"])[:40],
         "fonts": [{"family": f, "count": v["count"], "role": sorted(v["role"]), "sources": sorted(v["sources"])} for f, v in sorted(bag.fonts.items(), key=lambda kv: -kv[1]["count"])],
         "radius": sorted(bag.radii)[len(bag.radii) // 2] if bag.radii else None,
+        # 影のトークン: none = どれも「影なし」、some = 影がある、None = 影のトークンがない（check_theme.py --design が見る）
+        "shadow": "none" if bag.shadows["none"] and not bag.shadows["some"] else "some" if bag.shadows["some"] else None,
         "notes": bag.notes,
     }
     json.dump(report, open(a.report, "w", encoding="utf-8"), ensure_ascii=False, indent=2)

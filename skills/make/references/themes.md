@@ -17,35 +17,43 @@
 - スクリーンショットやスライドの画像、ロゴ
 - 題材のリポジトリの CSS や UI 部品
 
+## 決めたテーマに従う
+
+見た目が決まったら、構成メモの `basics.look.theme` にテーマの名前（`3b1b`・`flat`）か、作業フォルダの中のファイル名（`theme.json`）を書く。ここに書いたテーマが、その動画のテーマである。
+
+- 検査（`check_storyboard.cjs`）・コマ（`frames.cjs`）・組み立て（`build_player.py`）は、台本と同じフォルダの構成メモを読み、`--theme` を省くとそのテーマを使う。**違うテーマを `--theme` で渡すと、何も書かずに止まる**（文書の例にある `--theme flat` を写しても、決めたテーマから外れない）
+- 見た目を変えるときは、利用者と決めてから、構成メモを先に直す
+- 利用者がデザインを渡したら、そのデザインがテーマの正である。同梱のテーマ（`3b1b`・`flat`）や見本のテーマの値で置き換えない
+
 ## デザインからテーマを作る手順
 
-1. 拾う: `python3 scripts/extract_design.py 入力… --report report.json --theme theme.json --name ブランド名`
+1. 拾う: `python3 scripts/extract_design.py 入力… --report <workdir>/design-report.json --theme <workdir>/theme.json --name ブランド名`
    - claude.ai のサンドボックスでは URL を直接読めないことがある。そのときは web_fetch などで HTML を取り、ファイルに保存してから渡す
    - claude.ai の Design System は、その Artifact の tokens.json を保存して渡す
-2. 確かめる: `report.json` の色の一覧（回数・名前・出どころ）と入力そのものを見比べ、下書きの役割が合っているか確かめる。とくに、名前の付いていない色だけの入力（画像・PDF・ブランドガイド）は推測なので、次を Claude が決め直す
-   - `bg`（背景）・`ink`（本文）・`accent`（強調。ブランドの主色）
-   - `roles` の 4 色（actor / process / store / external）。主色と、ブランドの補助色から選ぶ。足りなければ主色の色相を回した色でよい
-   - `good` / `bad` / `warn` は意味の色。ブランドに赤や緑がなくても、見分けやすさを優先する
-3. 検査する: `python3 scripts/check_theme.py theme.json`。不合格なら色の明るさを動かして直す（色相は保つ）
-4. 見本で確かめる: 台本の検査（`check_storyboard.cjs --theme theme.json`）と下見で、箱の文字が読めるかを見る
-5. 使ったテーマのファイルは成果物と一緒に残し、`derived_from` に入力を書く
+2. **下書きから始める。** `theme.json` は `extract_design.py` が書いた下書きを直して作る。新しく書き起こさない。同梱のテーマや、この文書の「テーマの項目」の例から値を写さない（写すと、渡されたデザインから外れる）。直してよいのは次のときだけで、直したら理由を報告に書く
+   - 役割の読み違い: `design-report.json` の色の一覧（回数・名前・出どころ）と入力そのものを見比べ、背景・本文・強調が違っていたら、**デザインにある色の中から**選び直す。名前の付いていない色だけの入力（画像・PDF・ブランドガイド）は推測なので、必ず見比べる
+   - `roles` の 4 色（actor / process / store / external）: 主色と、デザインの補助色から選ぶ。足りなければ主色の色相を回した色でよい
+   - `good` / `bad` / `warn` は意味の色。デザインに赤や緑がなくても、見分けやすさを優先する
+   - コントラストの不合格: 色の明るさだけを動かす（色相は保つ）
+3. 検査する: `python3 scripts/check_theme.py <workdir>/theme.json --design <workdir>/design-report.json`。読みやすさ（コントラスト）に加えて、テーマがデザインから外れていないかを見る。背景・本文はデザインの色そのまま、強調はデザインの色相、字体の先頭はデザインの字体、デザインが影を使わないなら影なし、が合格の条件。出力の「デザイン: bg … ← デザインの …」の行が、どの色がデザインのどの色から来たかの記録になる
+4. 構成メモに書く: `basics.look.theme` に `theme.json` と書く。以後の道具は、このテーマを使う
+5. 見本で確かめる: 台本の検査（`check_storyboard.cjs`）と下見で、箱の文字が読めるかを見る
+6. 利用者に見せるときは、3 の「デザイン:」の行を添える（どの色をどこに使ったか。デザインにない色を足したなら、その理由）
+7. 使ったテーマのファイルは成果物と一緒に残す（`derived_from` に入力が入っている）
 
 ## テーマの項目
 
-```json
-{
-  "name": "kumo", "label": "くも運輸の Web ページから作る", "mode": "light",
-  "colors": {
-    "bg": "#fbf7f0", "surface": "#ece8e1", "ink": "#1f2a37", "muted": "#5b6573", "line": "#cfcac2",
-    "accent": "#0e7c86", "good": "#2d9656", "bad": "#d64541", "warn": "#b26a00",
-    "roles": { "actor": "…", "process": "…", "store": "…", "external": "…", "muted": "…", "added": "…", "removed": "…" }
-  },
-  "font": { "family": "\"Zen Kaku Gothic New\", \"Noto Sans JP\", sans-serif", "weight": 400, "bold": 700,
-            "css": "https://fonts.googleapis.com/css2?family=…" },
-  "shape": { "radius": 12, "stroke": 2.2, "fill": "solid", "fillMix": 0.12, "fillAlpha": 0.14, "edgeWidth": 2.1, "glow": false, "shadow": true },
-  "subtitle": { "bg": "#fdfbf8f0", "ink": "#1f2a37" }
-}
-```
+項目の形だけを示す。値は、同梱のテーマを選んだならそのファイル、デザインから作るなら `extract_design.py` の下書きにある。
+
+| 項目 | 中身 |
+|---|---|
+| `name`・`label`・`mode` | テーマの名前、説明、`light` か `dark` |
+| `colors.bg`・`surface`・`ink`・`muted`・`line`・`accent` | 背景、面、本文、補足、線、強調 |
+| `colors.good`・`bad`・`warn` | 意味の色 |
+| `colors.roles` | 役割の色: `actor`・`process`・`store`・`external`・`muted`・`added`・`removed` |
+| `font.family`・`weight`・`bold`・`css` | 字体の並び、太さ、Google Fonts の URL |
+| `shape.radius`・`stroke`・`fill`・`fillMix`・`fillAlpha`・`edgeWidth`・`glow`・`shadow` | 角丸、線の太さ、塗り方、光らせるか、影 |
+| `subtitle.bg`・`ink` | 字幕の帯と文字 |
 
 - `shape.fill`: `solid`（背景と役割の色を `fillMix` で混ぜた塗り）・`tint`（役割の色を `fillAlpha` で透かす。暗い背景向き）・`none`
 - `glow`: 線と点を光らせる（暗い背景向き）。`shadow`: 箱に薄い影（明るい背景向き）
@@ -56,3 +64,4 @@
 - 本文・補足・強調と背景、箱の塗りの上の本文、字幕: コントラスト 4.5 以上
 - 役割の色・good / bad / warn と背景: 3 以上（図形の線）
 - 役割の 4 色どうし・good と bad: 色差 ΔE 20 以上
+- `--design` を付けたとき: 背景・本文がデザインの色（色差 ΔE 2 以内）、強調がデザインの有彩色と同じ色相、字体の先頭がデザインの字体、デザインが影を使わないなら `shadow` が false。役割の色がデザインにないときは注意

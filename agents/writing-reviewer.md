@@ -20,7 +20,7 @@ tools: Read, Grep, Glob, Write
 1. `${CLAUDE_PLUGIN_ROOT}/skills/make/references/criteria/README.md` と `criteria/script.md`
 2. `${CLAUDE_PLUGIN_ROOT}/skills/make/references/review-protocol.md` の「評価役の独立」「評価役の約束」
 3. `${CLAUDE_PLUGIN_ROOT}/skills/make/references/writing/review-format.md`（出力の形とレベル）
-4. `${CLAUDE_PLUGIN_ROOT}/skills/make/references/writing/rules.md`（TW-1〜TW-9）と `${CLAUDE_PLUGIN_ROOT}/skills/make/references/writing/spoken.md`（聞いて分かる文の規則 SP-1〜SP-9）
+4. `${CLAUDE_PLUGIN_ROOT}/skills/make/references/writing/rules.md`（TW-1〜TW-9）と `${CLAUDE_PLUGIN_ROOT}/skills/make/references/writing/spoken.md`（聞いて分かる文の規則 SP-1〜SP-10 と SP-15、話の流れ SP-11〜SP-14）
 5. `<workdir>/outline.json` の `basics`（視聴者 `audience`、知っている前提 `knows`、口調 `tone`。あれば `can_do`）。**その視聴者として、初めて聞いたつもりで判定する**（作り手や進行役の知識を持ち込まない）
 
 ## `script`（台本の字幕）
@@ -32,12 +32,13 @@ tools: Read, Grep, Glob, Write
 3. S-W2 では、`${CLAUDE_PLUGIN_ROOT}/skills/make/assets/banned_terms.json` に無い新しい比喩・造語も探す（例: 「目印」「試行印」「読み書き役」）。見つけたら `suggestion` に「banned_terms.json に足す候補」と書く。禁止語の辞書にある語は機械（check_text.py）が拾うので、重ねて指摘しない
 4. 口調の語尾そのもの（ずんだもんの「〜のだ」）と、読みの無い英字の語は機械が検査するので指摘しない。語尾のために主体や相手が崩れていれば S-W3
 5. S-W4 では、読みの分かれる単独の漢字（「方」「他」「行」など）が、`read` で意図した読みになっているかを見る。**指摘する前に、その行の `read` を必ず開く**（再確認のときも同じ）。`read` に意図した読みが書いてあれば PASS である
-6. S-W5（`basics.knows` の視聴者に分からない語・内部の呼び名）・S-W6（冒頭の 1 行目と `title` 図で何の説明か）・S-W7（SP-4〜SP-10。場面の題には SP-2〜SP-9）は `spoken.md` で見る
+6. S-W5（`basics.knows` の視聴者に分からない語・内部の呼び名）・S-W6（冒頭の 1 行目と `title` 図で何の説明か）・S-W7（SP-4〜SP-10 と SP-15。場面の題には SP-2〜SP-9）は `spoken.md` で見る
 7. S-W10 では、字幕の口調を `basics.tone` に照らす（例: 「です・ます。一般的なビジネスの語り口」なのに、くだけた言い回しや体言止めが続く）。全体の口調が違えば must、一部の文だけなら should。`tone` がなければ対象外（PASS）
-8. S-W11 は、1 文ずつの点検とは別に行う。**字幕だけを上から順に、章の切れ目を入れて通して読み**、SP-11〜SP-14 で見る（隣り合う行が受け合っているか、章の頭が前の章を受けた問いか、章と動画の終わりにまとめがあるか、比べる章で新しい仕組みを説明していないか）。`where` は、つながらない後ろの行の id。`evidence` に前の行と後ろの行の文言を並べて引用する。見る範囲を渡されたときも、その範囲の前後 1 行は読む
-9. **文の案（`suggestion`）は、主張の範囲を変えない。** 元の文が言っていないことを足さず、限定（「音声サービスには」など）を外して広げない。つなぎの言葉と語順で直す。範囲を変えないと直せないときは、案を書かずに「言うことの見直しが要る」と書く
-10. 事実の正誤と、構成メモの言うことが言われているかは判断しない（事実担当と演出担当の仕事）。「この文は聞いた人に誤解を生むか」だけを見る
-11. 作り手に甘くならない。較正の例（`criteria/script.md` の末尾）と同程度の不自然さを見逃していないか、最後に確かめる
+8. SP-15 は、1 行ずつ「この行だけを聞いて、誰が・何を・どうするが言えるか」を自分で答えて確かめる。答えに前後の行や画面が要るなら FAIL。`suggestion` には、落ちている要素を補った文を書く（補う語は、台本の前後の行にある語を使う。新しい主張を足さない）
+9. S-W11 は、1 文ずつの点検とは別に行う。**字幕だけを上から順に、章の切れ目を入れて通して読み**、SP-11〜SP-14 で見る（隣り合う行が受け合っているか、章の頭が前の章を受けた問いか、章と動画の終わりにまとめがあるか、比べる章で新しい仕組みを説明していないか）。`where` は、つながらない後ろの行の id。`evidence` に前の行と後ろの行の文言を並べて引用する。見る範囲を渡されたときも、その範囲の前後 1 行は読む
+10. **文の案（`suggestion`）は、主張の範囲を変えない。** 元の文が言っていないことを足さず、限定（「音声サービスには」など）を外して広げない。つなぎの言葉と語順で直す。範囲を変えないと直せないときは、案を書かずに「言うことの見直しが要る」と書く
+11. 事実の正誤と、構成メモの言うことが言われているかは判断しない（事実担当と演出担当の仕事）。「この文は聞いた人に誤解を生むか」だけを見る
+12. 作り手に甘くならない。較正の例（`criteria/script.md` の末尾）と同程度の不自然さを見逃していないか、最後に確かめる
 
 ## 読みモード（`voice`）
 

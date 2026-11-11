@@ -61,6 +61,42 @@ def stale_voice(storyboard, timeline):
     return out
 
 
+def theme_id(p):
+    """同梱のテーマは名前、それ以外は実体のパスで比べる"""
+    builtin = os.path.join(PLAYER, "themes", f"{p}.json")
+    if not os.path.exists(p):
+        return f"同梱:{p}" if os.path.exists(builtin) else None
+    real = os.path.realpath(p)
+    if os.path.dirname(real) == os.path.realpath(os.path.join(PLAYER, "themes")):
+        return "同梱:" + os.path.splitext(os.path.basename(real))[0]
+    return real
+
+
+def pick_theme(storyboard_path, given):
+    """台本と同じフォルダの構成メモが見た目を決めていたら（basics.look.theme）、そのテーマを返す。
+    違うテーマを渡されたら止まる（uz_node.cjs の pickTheme と同じ約束）"""
+    wd = os.path.dirname(os.path.abspath(storyboard_path))
+    try:
+        with open(os.path.join(wd, "outline.json"), encoding="utf-8") as f:
+            look = json.load(f)["basics"]["look"]["theme"]
+    except (OSError, ValueError, KeyError, TypeError):
+        look = None
+    if not isinstance(look, str) or not look.strip():
+        return given or "3b1b"
+    path = os.path.join(wd, look) if os.path.exists(os.path.join(wd, look)) else look
+    want = theme_id(path)
+    msg = None
+    if not want:
+        msg = f"構成メモの見た目（basics.look.theme = {look}）のテーマが見つからない。テーマを作るか、構成メモを直す"
+    elif given and theme_id(given) != want:
+        msg = (f"--theme {given} が、構成メモで決めた見た目（basics.look.theme = {look}）と違う。"
+               "--theme を外すか合わせる。見た目を変えるなら、利用者と決めて構成メモを先に直す")
+    if msg:
+        print("build_player: " + msg, file=sys.stderr)
+        sys.exit(2)
+    return path
+
+
 def build(storyboard, theme, timeline=None, audio_b64=None, artifact=False):
     tpl = open(os.path.join(PLAYER, "template.html"), encoding="utf-8").read()
     title = storyboard.get("title", "動く図解")
@@ -83,13 +119,14 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("storyboard")
     ap.add_argument("-o", "--out", required=True)
-    ap.add_argument("--theme", default="3b1b")
+    ap.add_argument("--theme", help="省くと、構成メモが決めたテーマ（なければ 3b1b）")
     ap.add_argument("--timeline")
     ap.add_argument("--audio")
     ap.add_argument("--voice", help="tts.py の出力先。timeline.json と narration.mp3（か .wav）をまとめて読む")
     ap.add_argument("--artifact", action="store_true")
     a = ap.parse_args()
     sb = json.load(open(a.storyboard, encoding="utf-8"))
+    a.theme = pick_theme(a.storyboard, a.theme)
     if a.voice:
         a.timeline = a.timeline or os.path.join(a.voice, "timeline.json")
         a.audio = a.audio or next((p for p in (os.path.join(a.voice, "narration.mp3"), os.path.join(a.voice, "narration.wav")) if os.path.exists(p)), None)

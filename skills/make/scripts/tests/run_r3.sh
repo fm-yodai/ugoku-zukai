@@ -5,7 +5,7 @@ cd "$(dirname "$0")/../.."
 fail=0
 ng() { echo "NG: $1"; fail=1; }
 bash scripts/tests/run_r2.sh || fail=1
-for t in test_player_pos test_workdir test_tts_audition test_stale_voice test_extract_design; do
+for t in test_player_pos test_workdir test_tts_audition test_stale_voice test_extract_design test_theme_follow; do
   python3 scripts/tests/$t.py >/dev/null 2>&1 || { ng "$t.py"; python3 scripts/tests/$t.py; }
 done
 # 通し（第 2 部）で見つかったこと
@@ -13,6 +13,10 @@ node scripts/tests/test_engine_tooshi.cjs >/dev/null 2>&1 || { ng "test_engine_t
 grep -q 'note:<id>' references/storyboard.md && grep -q 'note:<id>' references/visual-grammar.md || ng "hide で注記を消す書き方（note:<id>）が文書にない"
 grep -q "^| SP-11 " references/writing/spoken.md && grep -q "^| SP-14 " references/writing/spoken.md && grep -q "^## 章扉" references/writing/spoken.md || ng "spoken.md に、話の流れ（SP-11〜SP-14）と章扉がない"
 grep -q "^| SP-10 .*確認する" references/writing/spoken.md || ng "spoken.md に「確かめる」を重ねない規則（SP-10）がない"
+grep -q "^| SP-15 .*誰が・何を・どうする" references/writing/spoken.md && grep -q "SP-15" ../../agents/writer.md && grep -q "SP-15" ../../agents/writing-reviewer.md && grep -q "SP-15" references/criteria/script.md && grep -q "SP-15" references/run-chat.md || ng "主語・目的語・接続の言葉を省かない規則（SP-15）が、規則・基準・writer・writing-reviewer・run-chat にそろっていない"
+grep -q "^## 決めたテーマに従う" references/themes.md && grep -q -- "--design" references/themes.md || ng "themes.md に、決めたテーマに従う仕組みと --design がない"
+grep -q '"bg": "#' references/themes.md && ng "themes.md に、写せる色の値の例が残っている"
+for f in references/run-code.md references/run-chat.md; do grep -q -- "--design" $f && grep -q "basics.look.theme" $f || ng "$f に、テーマをデザインと照らす検査と、構成メモに書くことがない"; done
 grep -q "^| S-W11 " references/criteria/script.md || ng "script.md に S-W11（通して聞いて話がつながる）がない"
 for f in ../../agents/writing-reviewer.md references/criteria/README.md references/run-chat.md; do grep -q "S-W11" $f || ng "$f に S-W11 がない"; done
 grep -q "主張の範囲を変えない" ../../agents/writing-reviewer.md && grep -q "文の案をそのまま入れない" references/review-protocol.md || ng "文の案が主張の範囲を変えないことの約束がない"

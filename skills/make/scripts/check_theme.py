@@ -1,8 +1,11 @@
 #!/usr/bin/env python3
 """テーマの検査。読めるか（WCAG のコントラスト）・役割の色が見分けられるか・必要な項目がそろっているか。
 
-使い方: python3 check_theme.py theme.json [--json]
-終了コード: 0 = 合格（注意は出る）、1 = 不合格
+使い方: python3 check_theme.py theme.json [--json] [--design design-report.json]
+  --design  extract_design.py の報告を渡すと、テーマがそのデザインから外れていないかも見る。
+            背景・本文はデザインの色そのまま、強調はデザインの色相（明るさは動かしてよい）、字体の先頭はデザインの字体、
+            デザインが影を使わないなら影なし、が不合格の条件。役割の色がデザインにないときは注意に留める
+終了コード: 0 = 合格（注意は出る）、1 = 不合格、2 = 使い方の誤りかファイルを読めない
 基準:
   - 本文の色（ink）と背景: 4.5 以上（WCAG 1.4.3）。字幕の文字と字幕の帯も同じ
   - 補足の色（muted）・強調（accent）と背景: 4.5 以上（ラベルや注記の文字に使うため）
@@ -100,12 +103,84 @@ def check(th):
     return fails, notes, rows
 
 
+def check_design(th, report):
+    """テーマが、取り込んだデザイン（extract_design.py の報告）から外れていないか。返すもの: (不合格, 注意, 対応の行)"""
+    fails, notes, lines = [], [], []
+    design = [(UC.parse(c["hex"]), c.get("names") or []) for c in report.get("colors", []) if UC.parse(c.get("hex", ""))]
+    col = th.get("colors", {})
+
+    def origin(c):
+        """c がデザインのどの色から来たか。(色, 名前, 関係) か None"""
+        near = min(design, key=lambda d: UC.delta_e(c, d[0]), default=None)
+        if near and UC.delta_e(c, near[0]) <= 2:
+            return near[0], near[1], "同じ色"
+        if UC.saturation(c) >= 0.18:
+            hue = lambda x: UC.hls(x)[0]  # noqa: E731
+            same = [d for d in design if UC.saturation(d[0]) >= 0.18 and abs(((hue(d[0]) - hue(c) + 0.5) % 1) - 0.5) <= 0.04]
+            if same:
+                d = min(same, key=lambda d: UC.delta_e(c, d[0]))
+                return d[0], d[1], "色相を保って明るさを動かした色"
+        return None
+
+    def one(key, value, must, why):
+        c = UC.parse(value or "")
+        if not c:
+            return
+        o = origin(c)
+        if o:
+            names = "・".join(o[1][:3])
+            lines.append(f"{key} {value} ← デザインの {UC.hexs(o[0])}{'（' + names + '）' if names else ''}。{o[2]}")
+        elif must:
+            fails.append(f"{key} {value} はデザインにない色（{why}）")
+        else:
+            notes.append(f"{key} {value} はデザインにない色（{why}）")
+    one("bg", col.get("bg"), True, "背景は、デザインの地の色をそのまま使う")
+    one("ink", col.get("ink"), True, "本文は、デザインの本文の色をそのまま使う")
+    one("accent", col.get("accent"), True, "強調は、デザインの主色の色相を保つ。コントラストが足りなければ明るさだけを動かす")
+    for r in ("actor", "process", "store", "external"):
+        one(f"roles.{r}", (col.get("roles") or {}).get(r), False, "デザインの有彩色が足りずに、色相を回して作った色なら、このままでよい")
+    fonts = [f["family"].lower() for f in report.get("fonts", [])]
+    first = (th.get("font", {}).get("family") or "").split(",")[0].strip().strip("'\"")
+    if fonts and first.lower() not in fonts:
+        fails.append(f"字体の先頭「{first}」がデザインにない（デザインの字体: {'、'.join(f['family'] for f in report['fonts'][:4])}）")
+    elif fonts:
+        lines.append(f"字体 {first} ← デザインの字体")
+    if report.get("shadow") == "none" and th.get("shape", {}).get("shadow"):
+        fails.append("shape.shadow が true だが、デザインは影を使わない（影のトークンがどれも none）")
+    rad, mine = report.get("radius"), th.get("shape", {}).get("radius")
+    if rad is not None and mine is not None and abs(rad - mine) > 4:
+        notes.append(f"shape.radius {mine} が、デザインの角丸（中央の値 {rad:g}）から離れている")
+    return fails, notes, lines
+
+
 def main():
-    if len(sys.argv) < 2:
+    argv = sys.argv[1:]
+    design_path = None
+    if "--design" in argv:
+        i = argv.index("--design")
+        if i + 1 >= len(argv):
+            print("--design には extract_design.py の報告（design-report.json）を渡す", file=sys.stderr)
+            return 2
+        design_path = argv[i + 1]
+        del argv[i:i + 2]
+    files = [a for a in argv if not a.startswith("--")]
+    if len(files) != 1:
         print(__doc__)
         return 2
-    th = json.load(open(sys.argv[1], encoding="utf-8"))
+    try:
+        th = json.load(open(files[0], encoding="utf-8"))
+        report = json.load(open(design_path, encoding="utf-8")) if design_path else None
+    except (OSError, ValueError) as e:
+        print(f"読めない: {e}", file=sys.stderr)
+        return 2
+    sys.argv[1] = files[0]
     fails, notes, rows = check(th)
+    d_lines = []
+    if report is not None:
+        d_fails, d_notes, d_lines = check_design(th, report)
+        fails, notes = fails + d_fails, notes + d_notes
+        if not d_fails:
+            d_lines.append("デザインに沿っている")
     if "--json" in sys.argv:
         print(json.dumps({"ok": not fails, "fails": fails, "notes": notes, "checks": rows}, ensure_ascii=False, indent=2))
     else:
@@ -114,6 +189,8 @@ def main():
             print("  不合格: " + f)
         for n in notes:
             print("  注意: " + n)
+        for ln in d_lines:
+            print("  デザイン: " + ln)
     return 1 if fails else 0
 
 

@@ -11,7 +11,7 @@
 // 終了コード: 0 = PNG まで書けた、1 = 台本の誤りか想定外の誤り、2 = 使い方の誤り（--scenes の場面が台本にないときも。何も書かない）、4 = resvg を読めず SVG と frames.json だけ書いた
 "use strict";
 const fs = require("fs"), path = require("path"), vm = require("vm"), os = require("os"), cp = require("child_process");
-const { load, theme, PLAYER } = require("./uz_node.cjs");
+const { load, pickTheme, PLAYER } = require("./uz_node.cjs");
 const { makeDocument, serialize } = require("./svg_dom.cjs");
 
 const args = process.argv.slice(2);
@@ -55,7 +55,9 @@ const esc = s => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(
   globalThis.document = makeDocument();
   vm.runInThisContext(fs.readFileSync(path.join(PLAYER, "src", "view_svg.js"), "utf8"), { filename: "view_svg.js" });
   const sb = JSON.parse(fs.readFileSync(file, "utf8"));
-  const th = theme(opt("--theme") || "3b1b");
+  let th;   // 構成メモが見た目を決めていたら、そのテーマ（違うテーマを渡したら、何も書かずに止まる）
+  try { th = pickTheme(file, opt("--theme")); }
+  catch (e) { if (e.code !== "THEME") throw e; console.error(e.message); process.exit(2); }
   const tl = opt("--timeline") ? JSON.parse(fs.readFileSync(opt("--timeline"), "utf8")) : null;
   // --lines は、その行のある場面に直す（台本にない行は、出力先に触る前に知らせる）
   if (onlyLines && Array.isArray(sb.scenes)) {
