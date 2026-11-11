@@ -11,6 +11,19 @@ done
 # 通し（第 2 部）で見つかったこと
 node scripts/tests/test_engine_tooshi.cjs >/dev/null 2>&1 || { ng "test_engine_tooshi.cjs"; node scripts/tests/test_engine_tooshi.cjs; }
 grep -q 'note:<id>' references/storyboard.md && grep -q 'note:<id>' references/visual-grammar.md || ng "hide で注記を消す書き方（note:<id>）が文書にない"
+grep -q "^| SP-11 " references/writing/spoken.md && grep -q "^| SP-14 " references/writing/spoken.md && grep -q "^## 章扉" references/writing/spoken.md || ng "spoken.md に、話の流れ（SP-11〜SP-14）と章扉がない"
+grep -q "^| SP-10 .*確認する" references/writing/spoken.md || ng "spoken.md に「確かめる」を重ねない規則（SP-10）がない"
+grep -q "^| S-W11 " references/criteria/script.md || ng "script.md に S-W11（通して聞いて話がつながる）がない"
+for f in ../../agents/writing-reviewer.md references/criteria/README.md references/run-chat.md; do grep -q "S-W11" $f || ng "$f に S-W11 がない"; done
+grep -q "主張の範囲を変えない" ../../agents/writing-reviewer.md && grep -q "文の案をそのまま入れない" references/review-protocol.md || ng "文の案が主張の範囲を変えないことの約束がない"
+grep -q "語りとして書く" ../../agents/writer.md && grep -q "章扉" ../../agents/writer.md && grep -q "かぎ括弧を外す" ../../agents/writer.md || ng "writer.md に、語りとして書く・章扉・read のかぎ括弧がない"
+grep -q "FAIL にした基準には、必ず指摘" ../../agents/fact-checker.md || ng "fact-checker.md に、FAIL には指摘を付ける約束がない"
+grep -q "言うこと 1 つで 8〜10 秒" references/outline.md || ng "outline.md に、言うことの数からの尺の見積もりがない"
+for f in references/run-code.md references/run-chat.md; do
+  for w in "--agree-all" "--lines" "--close"; do grep -q -- "$w" $f || ng "$f に $w がない"; done
+done
+grep -q "エージェントを呼べないとき" references/run-code.md || ng "run-code.md に、エージェントを呼べないときの代わり方がない"
+grep -q "manim-web で描きます" ../../README.md && ng "README.md が、まだない manim-web を使えるように書いている"
 grep -q '区間数 × 1.5' references/storyboard.md || ng "storyboard.md の trace の既定の長さが、エンジン（区間 1 つに 1.5 秒）と合っていない"
 # 見送っていた軽い指摘（指摘の一覧の検査は run_r2.sh の test_ledger.py が回す）
 grep -q "agents/" references/writing/review-format.md && ng "review-format.md が agents/ を指している（チャットの zip には入っていない）"

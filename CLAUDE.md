@@ -28,6 +28,7 @@ node skills/make/scripts/check_storyboard.cjs skills/make/examples/sequence.json
 
 # 構成メモの検査（<workdir>/outline.json か、ファイルを直接渡す。形式は references/outline.md、見本は examples/outlines/）。--ready は台本に進める状態かも見る
 python3 skills/make/scripts/check_outline.py skills/make/examples/outlines/ux.json [--ready] [--json]
+python3 skills/make/scripts/check_outline.py <workdir> --agree-all   # 利用者が全部を見て通したとき、proposed をまとめて agreed にする
 
 # 台本と構成メモの突き合わせ（場面の chapter と構成メモの章、章ごとの見積もりの長さ）。--complete は台本を書き終えたものとして見る
 node skills/make/scripts/check_storyboard.cjs skills/make/scripts/tests/outlines/pair/storyboard.json --outline skills/make/scripts/tests/outlines/pair/outline.json [--complete]
@@ -42,6 +43,7 @@ python3 skills/make/scripts/check_text.py skills/make/examples/sequence.json
 python3 skills/make/scripts/ledger.py ingest <workdir> <評価役の出力.json …>
 python3 skills/make/scripts/ledger.py list <workdir> [--full] [--by lead|user] [--state open,fixing,kept,closed] [--json]   # must は全文、should は 1 件 1 行、nits は件数だけ
 python3 skills/make/scripts/ledger.py decide <workdir> --by lead|user [--fix <key> …] [--keep <key> …]   # lead = 進行役が先に直した、user = 利用者が選んだ。--keep は user だけ
+python3 skills/make/scripts/ledger.py decide <workdir> --by lead|user --close <key> … --note <理由>   # 直し中の指摘を、再確認なしで閉じる（must は user だけ）
 python3 skills/make/scripts/ledger.py status <workdir>     # 件数の要約
 python3 skills/make/scripts/ledger.py residual <workdir>   # must で直っていない指摘（残論点）を review/residual.md に書く
 
@@ -54,7 +56,7 @@ python3 skills/make/scripts/workdir.py list [--json]
 # 各行の落ち着いたコマ（SVG と PNG のシート）。PNG には初回だけ resvg を入れる。終了コード 4 = PNG なし（SVG と frames.json だけ）
 python3 skills/make/scripts/setup_render.py
 node skills/make/scripts/frames.cjs skills/make/examples/sequence.json --theme flat -o work/frames
-node skills/make/scripts/frames.cjs skills/make/examples/mixed.json --theme flat -o work/frames-s2 --scenes s2   # 一部の場面のコマだけ書く（カンマ区切り。出力先の前の回のコマは消えるので、全体とは分ける）
+node skills/make/scripts/frames.cjs skills/make/examples/mixed.json --theme flat -o work/frames-s2 --scenes s2   # 一部の場面のコマだけ書く（カンマ区切り。出力先の前の回のコマは消えるので、全体とは分ける。--lines l8,l33 なら、その行のある場面）
 
 # 利用者向けの絵コンテのページ（コマの横に「s2 / l2 @0:14」と字幕の全文。PNG は要らない。--outline で章の見出しと「Claude が決めたこと」が付く。台本を直したら frames.cjs を回し直す。コマが古いと終了コード 2 で止まる）
 python3 skills/make/scripts/build_sheet.py skills/make/examples/sequence.json --frames work/frames -o work/sheet.html [--outline outline.json] [--artifact]
@@ -89,7 +91,7 @@ python3 tools/build_voice_check.py
 
 **テーマ**（`player/themes/*.json`、`references/themes.md`）: 色・文字・線の定義。`extract_design.py` が手持ちのデザイン（トークン・CSS・HTML・Tailwind・Office・画像・PDF）からテーマを作り、`check_theme.py` で検査する。
 
-**作り手と評価役**: Claude Code では `agents/` のサブエージェントを使う（作り手は researcher = 調べる、writer = 台本の初稿と章単位の書き直し。評価役は fact-checker / writing-reviewer / director。animator は保留中で呼ばない）。チャットでは 1 会話で役を順に演じる。評価役は決まった関門ではなく、章立てが固まったとき・台本の初稿・絵コンテを見せる前・直した後・合成の前に呼ぶ。成功基準は `references/criteria/`（構成メモ O-、合意との照合 A-、台本 S-、図 G-、画面 V-）、評価役の約束と指摘の扱いは `references/review-protocol.md`、評価役の出力の形は `references/writing/review-format.md`。指摘にはレベル（must / should / nits）が付き、`scripts/ledger.py` の指摘の一覧に入る。どれを直すかは利用者が選ぶ（台本の初稿に限り、合意した内容を変えない指摘は進行役が 1 回だけ先に直す）。自動で合格まで回すことはしない。
+**作り手と評価役**: Claude Code では `agents/` のサブエージェントを使う（作り手は researcher = 調べる、writer = 台本の初稿と章単位の書き直し。評価役は fact-checker / writing-reviewer / director。animator は保留中で呼ばない）。チャットでは 1 会話で役を順に演じる。評価役は決まった関門ではなく、章立てが固まったとき・台本の初稿・絵コンテを見せる前・直した後・合成の前に呼ぶ。成功基準は `references/criteria/`（構成メモ O-、合意との照合 A-、台本 S-、図 G-、画面 V-。文章の規則は `references/writing/` の TW- と SP-。SP-11〜SP-14 は行と章のつながり）、評価役の約束と指摘の扱いは `references/review-protocol.md`、評価役の出力の形は `references/writing/review-format.md`。指摘にはレベル（must / should / nits）が付き、`scripts/ledger.py` の指摘の一覧に入る。どれを直すかは利用者が選ぶ（台本の初稿に限り、合意した内容を変えない指摘は進行役が 1 回だけ先に直す）。自動で合格まで回すことはしない。
 
 ## 守ること
 

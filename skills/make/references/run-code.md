@@ -23,6 +23,11 @@
 
 評価役の出力先は、呼ぶたびに連番を付けたフォルダにする: `<workdir>/review/<2 桁の連番>-<target>/<評価役の名前>.json`（例 `review/01-outline/director.json`、`review/03-script/fact-checker.json`）。再確認も新しい連番にする。評価役は、同じメッセージで複数呼んで並列にする。
 
+**エージェントを呼べないとき**（`ugoku-zukai:<名前>` が見つからない。セッションの途中で使えなくなることがある）は、止まらずに次のどちらかで続ける。どちらで続けたかを報告に書く。
+
+- general-purpose のエージェントに、`${CLAUDE_PLUGIN_ROOT}/agents/<名前>.md` を最初に Read させて、その役として働かせる（渡すものと出力先は上の表と同じ）
+- それもできなければ、チャットと同じく、進行役が役を順に演じる（`run-chat.md` の「評価役の番」の宣言と、評価役の独立の約束を守る）
+
 頼み方の例:
 
 ```text
@@ -79,6 +84,7 @@ python3 ${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/check_outline.py <workdir> --j
 
 - `--ready` は、台本に進む前に付ける（`basics` に `audience`・`knows`・`takeaway` があり、どの章にも言うことがある）。利用者が言っていない項目は、案を `by: claude`・`state: proposed` で書く
 - `--json` の `proposed` が、自分で決めて、利用者がまだ見ていない項目の一覧。利用者に見せるときに使う
+- 利用者が「Claude が決めたこと」を全部見て通したら、`check_outline.py <workdir> --agree-all` で `proposed` をまとめて `agreed` にする。一部だけ通したときは、その項目を手で書き換える
 - 聞くときは AskUserQuestion を使ってよい。決まった質問を並べるのではなく、その話題で聞きたいことだけを聞く
 
 手持ちのデザインに合わせるなら、受け取った資料からテーマを作って検査する（直し方は `themes.md`）。
@@ -96,7 +102,7 @@ python3 ${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/check_theme.py <workdir>/theme
 
 ## 台本と機械検査
 
-台本の初稿と章単位の書き直しは writer に任せる（書く範囲を「全部」か章の id で渡す）。一文の言い回しや動作 1 つの直しは、進行役が `<workdir>/storyboard.json` を直接直す。行の id と章の id は振り直さない。
+台本の初稿と章単位の書き直しは writer に任せる（書く範囲を「全部」か章の id で渡す）。writer に章や全体の書き直しを頼むときは、閉じた指摘（`ledger.py list <workdir> --state closed`）で直した言い回しを戻さないよう伝える（writer は `review/ledger.json` を読む）。一文の言い回しや動作 1 つの直しは、進行役が `<workdir>/storyboard.json` を直接直す。行の id と章の id は振り直さない。
 
 台本を変えるたびに、機械検査を回す（時刻は見積もり）。
 
@@ -185,6 +191,12 @@ python3 ${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/ledger.py status <workdir>
 ```
 
 - `list` の出力（must は全文、should は 1 件 1 行、nits は件数だけ）を、そのまま利用者に見せる。求められたら `--full` で開く
+- 「同じ箇所に <キー>」と添えられた指摘は、直し方が食い違っていないかを見て、1 つにまとめてから見せる
+- 再確認を頼まずに済ませた指摘（評価役の見落とし、利用者が自分の言葉で直した）は、理由を書いて閉じる。公開の前に `status` が「直し中 0」になっているようにする（must を閉じられるのは `--by user` だけ）
+
+```sh
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/ledger.py decide <workdir> --by lead --close l18:S-W4 --note "read は前から付いていた"
+```
 - どの評価役の指摘かは、`list --full` と `--json` の `reviewer` で分かる（`--reviewer director` で絞れる）
 - `*` で始まるキー（場所の決まらない指摘）は、シェルに展開されないよう引用符で囲む（`--fix '*:V-1'`）
 - 直しが合意に関わるなら、先に構成メモを直して検査し、それから台本を直す
@@ -197,6 +209,8 @@ python3 ${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/ledger.py status <workdir>
 ```sh
 python3 ${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/setup_voice.py --agree
 ```
+
+このコマンドが許可されずに止まったら（利用者の同意を、進行役が代わりに渡すことになるため、自動の許可では通らないことがある）、利用者に、プロンプトで `! python3 ${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/setup_voice.py --agree` と打って実行してもらう（`${CLAUDE_PLUGIN_ROOT}` は実際のパスに置き換えて伝える）。VOICEVOX がもう入っているとき（`tts.py --readings` が動く）は、実行しなくてよい。
 
 最後に、入っている声の一覧が出る。名前だけでは声を選べないときは、候補の話者 2〜3 人に同じ 1 文を読ませた、声の試聴のページを作る。
 
@@ -277,6 +291,8 @@ python3 ${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/check_text.py <workdir>/storyb
 ```sh
 node ${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/frames.cjs <workdir>/storyboard.json --theme <テーマ> -o <workdir>/frames-part --scenes <変えた場面の id をカンマ区切り> [--timeline <workdir>/voice/timeline.json]
 ```
+
+直しが行の id で来たときは、`--scenes` の代わりに `--lines l8,l33` と書ける（その行のある場面のコマを書く）。
 
 **6. 評価役。** SKILL.md の表の評価役を呼ぶ。渡すのは、`target`、出力先（新しい連番）、見る範囲（変えた行と場面の id）、前の指摘を直したのなら再確認するキー。出力を `ingest` し、指摘が出たら、いつものとおり `list` で利用者に見せて選んでもらう（先に直すのは初稿だけなので、ここでは先に直さない）。
 

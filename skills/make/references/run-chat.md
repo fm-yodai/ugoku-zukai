@@ -68,6 +68,7 @@ python3 <skill>/scripts/check_outline.py <workdir> --json
 
 - `--ready` は、台本に進む前に付ける（`basics` に `audience`・`knows`・`takeaway` があり、どの章にも言うことがある）。利用者が言っていない項目は、案を `by: claude`・`state: proposed` で書く
 - `--json` の `proposed` が、自分で決めて、利用者がまだ見ていない項目の一覧。利用者に見せるときに使う
+- 利用者が「Claude が決めたこと」を全部見て通したら、`check_outline.py <workdir> --agree-all` で `proposed` をまとめて `agreed` にする。一部だけ通したときは、その項目を手で書き換える
 - 聞くときは、質問のフォーム（ask_user_input など）があれば使ってよい。フォームに決まった質問を並べるのではなく、その話題で聞きたいことだけを聞く
 
 手持ちのデザインに合わせるなら、受け取った資料からテーマを作って検査する（直し方は `themes.md`）。
@@ -86,7 +87,7 @@ python3 <skill>/scripts/check_theme.py <workdir>/theme.json
 
 ## 台本と機械検査
 
-作り手として `<workdir>/storyboard.json` を書く（形式は `storyboard.md`、見本は `<skill>/examples/`）。物差しは構成メモ。各章の言うことをすべて字幕で言い、構成メモにない主張を足さない。すべての場面に `chapter`（章の id）を書く。口調は `basics.tone`、言葉は `basics.knows` の視聴者に合わせ、声は `basics.voice` を台本の `voice` に写す。書く前に `references/writing/spoken.md` を読み、書いた後に SP-1〜SP-9 で見直す。行の id と章の id は振り直さない。
+作り手として `<workdir>/storyboard.json` を書く（形式は `storyboard.md`、見本は `<skill>/examples/`）。物差しは構成メモ。各章の言うことをすべて字幕で言い、構成メモにない主張を足さない。すべての場面に `chapter`（章の id）を書く。口調は `basics.tone`、言葉は `basics.knows` の視聴者に合わせ、声は `basics.voice` を台本の `voice` に写す。書く前に `references/writing/spoken.md` を読み、書いた後に SP-1〜SP-14 で見直す（言うことを 1 行ずつ並べず、語りとして書く。章が 3 つ以上あれば章扉を置く）。行の id と章の id は振り直さない。
 
 台本を変えるたびに、機械検査を回す（時刻は見積もり）。
 
@@ -134,7 +135,7 @@ python3 <skill>/scripts/build_player.py <workdir>/storyboard.json --theme <テ�
 | 場面 | `target` | まとめて判定する基準 |
 |---|---|---|
 | 章立てが固まったとき | `outline` | O-D1〜O-D5、O-F1〜O-F3（`criteria/outline.md`） |
-| 台本の初稿ができたとき | `script` | S-F1・S-F2・S-F4、A-1〜A-4、S-D1・S-D2・S-D4、G-D1〜G-D7、S-W1〜S-W7・S-W10（`criteria/agreement.md`・`script.md`・`structure.md`） |
+| 台本の初稿ができたとき | `script` | S-F1・S-F2・S-F4、A-1〜A-4、S-D1・S-D2・S-D4、G-D1〜G-D7、S-W1〜S-W7・S-W10・S-W11（`criteria/agreement.md`・`script.md`・`structure.md`） |
 | 絵コンテを見せる前 | `screen` | V-1〜V-5、G-D5、G-D8（`criteria/screen.md`・`structure.md`） |
 | 合成の前 | `voice` | S-W8・S-W9（`criteria/script.md`） |
 | 直した後 | 元と同じ | 直した項目の再確認（`rechecks`）と、変えた章と行だけ |
@@ -180,6 +181,12 @@ python3 <skill>/scripts/ledger.py status <workdir>
 ```
 
 - `list` の出力（must は全文、should は 1 件 1 行、nits は件数だけ）を、そのまま利用者に見せる。求められたら `--full` で開く
+- 「同じ箇所に <キー>」と添えられた指摘は、直し方が食い違っていないかを見て、1 つにまとめてから見せる
+- 再確認を頼まずに済ませた指摘（評価役の見落とし、利用者が自分の言葉で直した）は、理由を書いて閉じる。公開の前に `status` が「直し中 0」になっているようにする（must を閉じられるのは `--by user` だけ）
+
+```sh
+python3 <skill>/scripts/ledger.py decide <workdir> --by lead --close l18:S-W4 --note "read は前から付いていた"
+```
 - 直しが合意に関わるなら、先に構成メモを直して検査し、それから台本を直す
 - `*` で始まるキー（場所の決まらない指摘）は、シェルに展開されないよう引用符で囲む（`--fix '*:V-1'`）
 - `status` が「今の台本にも構成メモにもない id を指す指摘」を警告したら、行や章の id を振り直していないかを確かめて戻す
@@ -256,6 +263,8 @@ python3 <skill>/scripts/check_text.py <workdir>/storyboard.json
 ```sh
 node <skill>/scripts/frames.cjs <workdir>/storyboard.json --theme <テーマ> -o <workdir>/frames-part --scenes <変えた場面の id をカンマ区切り> [--timeline <workdir>/voice/timeline.json]
 ```
+
+直しが行の id で来たときは、`--scenes` の代わりに `--lines l8,l33` と書ける（その行のある場面のコマを書く）。
 
 **6. 評価役。** 評価役の番を宣言して、SKILL.md の表の評価役の基準で、変えた行と場面だけを判定する。画面を見るときは、`<workdir>/frames-part` のコマを見る（`<workdir>/frames` は直す前のコマ）。出力は新しい連番の `combined.json` に書いて `ingest` し、指摘が出たら `list` で利用者に見せて選んでもらう（先に直すのは初稿だけなので、ここでは先に直さない）。
 

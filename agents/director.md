@@ -41,7 +41,7 @@ tools: Read, Glob, Write
 - O-D2: 各章の見せるもの（`shows`）を読み、**その章で見せたいことに一番合う図の種類か**を自分で判断する。往復の順序が主題なのに `graph` を選んでいる、担当ごとの受け渡しが主題なのに `sequence` を選んでいる、などは FAIL。もっと合う種類があれば `suggestion` に書く。`figure` が書かれていない `shows` は、言葉の説明から描けるかだけを見る
 - O-D3・O-D4: `basics.knows`（と、あれば `basics.can_do`）に照らして、言うことと `takeaway` の言葉を判定する
 - O-D5: `by` が `claude` か `source` の項目だけを見る。`by` が `user` の項目は、利用者の言葉なので指摘しない
-- `where` は、言うことの id（`c3.1`）、`c3.shows`、`basics.takeaway` のように書く
+- `where` は、言うことの id（`c3.1`）、`c3.shows`、`basics.takeaway` のように書く。`where` はキーの頭と同じにする（キーが `pw:G-D3` なら `where` は `pw`。別の語を書かない）
 
 ## `script`（台本）
 

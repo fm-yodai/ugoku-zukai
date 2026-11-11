@@ -127,6 +127,7 @@ python3 scripts/build_player.py storyboard.json -o preview.html     # 音声な�
 - `direction`: `right`（既定）か `down`。省くと両方を試し、大きく描ける方を選ぶ
 - 辺の `label` は具体的な動詞句（「公開鍵を取得」）。同じ向きの辺を 2 本引くときだけ `id` を書く
 - 点は宣言した辺の上だけを通れる（`trace`）
+- 多対多の関係（3 つ → 3 つなど）を `graph` で描くと、辺が増えて文字が小さくなる。`table` か `list` にする
 
 ### 提案資料の図（M1b）
 

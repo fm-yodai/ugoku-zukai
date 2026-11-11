@@ -63,10 +63,10 @@ metadata:
 
 | 道具 | 使うもの | 呼びどころ |
 |---|---|---|
-| 構成メモ | `outline.json`（`references/outline.md`）、`scripts/check_outline.py`（`--ready`） | 決めるたびに書き、書いたら検査する。台本に進む前に `--ready` |
+| 構成メモ | `outline.json`（`references/outline.md`）、`scripts/check_outline.py`（`--ready`・`--agree-all`） | 決めるたびに書き、書いたら検査する。台本に進む前に `--ready` |
 | 調べる | 渡された資料、Web 検索。Claude Code では researcher（取材メモ `brief.md`） | 調べれば分かる話題が出たとき |
 | 台本 | `storyboard.json`（`references/storyboard.md`）、`scripts/check_storyboard.cjs`（`--outline`。書き終えたら `--complete`）、`scripts/check_text.py` | 章立てが固まった章から。Claude Code では初稿と章単位の書き直しを writer に任せる |
-| 絵コンテ | `scripts/frames.cjs`（`--scenes`）、`scripts/build_sheet.py`（`--outline`） | 場面が固まってきたら。任されたときの最初の確認 |
+| 絵コンテ | `scripts/frames.cjs`（`--scenes`・`--lines`）、`scripts/build_sheet.py`（`--outline`） | 場面が固まってきたら。任されたときの最初の確認 |
 | 粗い再生ページ | `scripts/build_player.py`（声なし） | 動きと間を見たいとき。合成の前の最終確認 |
 | テーマ | `references/themes.md`、`scripts/check_theme.py` | 手持ちのデザインに合わせるとき |
 | 評価役 | `references/criteria/`、`references/review-protocol.md` | 下の「検査」の場面 |
