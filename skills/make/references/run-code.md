@@ -207,7 +207,14 @@ python3 ${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/ledger.py decide <workdir> --b
 
 ## 声
 
-利用者が絵コンテを見て、VOICEVOX の利用規約に同意した後に行う。VOICEVOX は `${CLAUDE_PLUGIN_DATA}/voicevox` に 1 回入れれば使い回す。
+利用者が絵コンテを見た後に行う。VOICEVOX は `${CLAUDE_PLUGIN_DATA}/voicevox` に 1 回入れれば使い回す。利用規約への同意も、入れたときに置き場に記録されるので、先に記録を調べる。
+
+```sh
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/setup_voice.py --status
+```
+
+- 終了コード 0: 入っていて、今の規約への同意の記録がある。**聞かずに進める**（下の `--agree` は実行しない）。報告に「前に同意した利用規約（出力にある日付）のもとで作った」と書く
+- 終了コード 3: 出力の理由（入っていない・記録がない・規約か音声モデルの版が変わった）を伝えて、利用者に規約を示し、同意を取ってから次を実行する。もう入っているときは、記録するだけで取り直さない
 
 ```sh
 python3 ${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/setup_voice.py --agree
@@ -331,7 +338,7 @@ python3 ${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/tts.py <workdir>/storyboard.js
 node ${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/check_storyboard.cjs <workdir>/storyboard.json --theme <テーマ> --outline <workdir>/outline.json --complete --timeline <workdir>/voice/timeline.json
 ```
 
-図や動作だけの直しでは、`tts.py` は「新しく合成 0 行」で終わる（時刻表を作り直すだけ）。別のセッションでも、VOICEVOX は `${CLAUDE_PLUGIN_DATA}/voicevox` に入っていれば入れ直さない（`tts.py` が「voicevox_core が入っていない」と止まったら、`setup_voice.py --agree` を実行する。利用規約への同意は、作ったときに取ってある）。
+図や動作だけの直しでは、`tts.py` は「新しく合成 0 行」で終わる（時刻表を作り直すだけ）。別のセッションでも、VOICEVOX は `${CLAUDE_PLUGIN_DATA}/voicevox` に入っていれば入れ直さない（`tts.py` が「voicevox_core が入っていない」と止まったら、`setup_voice.py --agree` を実行する。同意の記録は `setup_voice.py --status` で分かる）。
 
 **9. 組み立てて、同じ Artifact に公開し直す。** 組み立ては「組み立てと公開」と同じコマンド。同じセッションなら、同じ `file_path` で公開し直す（同じページが更新される）。別のセッションなら、Artifact ツールの `url` に `published.json` の `url` を渡す（`title` と `icon` は渡さない。前のままになる）。更新の前に今のページを読むよう求められたら、読んでから公開する（公開するのは、組み立て直した `<workdir>/player.html`）。再生ページは、新しいページを作らない。公開し直したら、記録を更新する（テーマを変えたら `--theme` も渡す）。
 

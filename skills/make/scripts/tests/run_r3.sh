@@ -5,7 +5,7 @@ cd "$(dirname "$0")/../.."
 fail=0
 ng() { echo "NG: $1"; fail=1; }
 bash scripts/tests/run_r2.sh || fail=1
-for t in test_player_pos test_workdir test_tts_audition test_stale_voice test_extract_design test_theme_follow; do
+for t in test_voice_consent test_player_pos test_workdir test_tts_audition test_stale_voice test_extract_design test_theme_follow; do
   python3 scripts/tests/$t.py >/dev/null 2>&1 || { ng "$t.py"; python3 scripts/tests/$t.py; }
 done
 # 通し（第 2 部）で見つかったこと
@@ -18,6 +18,8 @@ grep -q "^## 決めたテーマに従う" references/themes.md && grep -q -- "--
 grep -q "デザインにある色だけで作る" references/themes.md && grep -q "図の色の見本" references/themes.md || ng "themes.md に、役割の色をデザインの色だけで作ることと、図の色の見本を見せる手順がない"
 grep -q '"bg": "#' references/themes.md && ng "themes.md に、写せる色の値の例が残っている"
 for f in references/run-code.md references/run-chat.md; do grep -q -- "--design" $f && grep -q "basics.look.theme" $f || ng "$f に、テーマをデザインと照らす検査と、構成メモに書くことがない"; done
+grep -q -- "setup_voice.py --status" SKILL.md && grep -q -- "setup_voice.py --status" references/run-code.md && grep -q -- "--status" references/run-chat.md || ng "同意の記録を調べる手順（setup_voice.py --status）が、SKILL.md と環境ごとの文書にない"
+grep -q "同意なしに、声を作らない" SKILL.md || ng "SKILL.md から、同意なしに声を作らない約束が消えている"
 grep -q "^| S-W11 " references/criteria/script.md || ng "script.md に S-W11（通して聞いて話がつながる）がない"
 for f in ../../agents/writing-reviewer.md references/criteria/README.md references/run-chat.md; do grep -q "S-W11" $f || ng "$f に S-W11 がない"; done
 grep -q "主張の範囲を変えない" ../../agents/writing-reviewer.md && grep -q "文の案をそのまま入れない" references/review-protocol.md || ng "文の案が主張の範囲を変えないことの約束がない"

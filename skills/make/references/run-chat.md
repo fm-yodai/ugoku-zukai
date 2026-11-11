@@ -196,7 +196,7 @@ python3 <skill>/scripts/ledger.py decide <workdir> --by lead --close l18:S-W4 --
 
 ## 声
 
-利用者が絵コンテを見て、VOICEVOX の利用規約に同意した後に行う。VOICEVOX を入れる（約 94MB を GitHub から。会話ごとに要る）。
+利用者が絵コンテを見て、VOICEVOX の利用規約に同意した後に行う。VOICEVOX を入れる（約 94MB を GitHub から。会話ごとに要る）。同意の記録は置き場に残るが、チャットでは会話ごとに置き場が消えるので、会話ごとに同意を取る（同じ会話の中で 2 回目に合成するときは、`setup_voice.py --status` が終了コード 0 なら聞かない）。
 
 ```sh
 python3 <skill>/scripts/setup_voice.py --agree

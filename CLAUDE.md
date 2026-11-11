@@ -64,7 +64,8 @@ node skills/make/scripts/frames.cjs skills/make/examples/mixed.json --theme flat
 python3 skills/make/scripts/build_sheet.py skills/make/examples/sequence.json --frames work/frames -o work/sheet.html [--outline outline.json] [--artifact]
 
 # 声: 初回だけ VOICEVOX を入れ（約 94MB）、1 行ずつ合成して timeline.json と narration.mp3 を作る
-python3 skills/make/scripts/setup_voice.py --agree
+python3 skills/make/scripts/setup_voice.py --status   # 入っているかと、利用規約への同意の記録があるか（終了コード 0 = 聞かずに使える、3 = 利用者に聞く）
+python3 skills/make/scripts/setup_voice.py --agree    # 利用者が同意したときだけ。同意の日時と規約の場所を、置き場の consent.json に記録する
 python3 skills/make/scripts/tts.py <storyboard.json> -o work/voice --readings   # 合成せずに読みの一覧 work/voice/readings.md を書く（合成の前の確認。辞書は既定で work/voice_dict.json を重ねる）
 python3 skills/make/scripts/tts.py <storyboard.json> -o work/voice   # 終了コード 3 = 時間切れで続きあり。同じコマンドを繰り返す
 python3 skills/make/scripts/tts.py -o work/voice --audition 8,2,3 --sample "聞き比べる文です。" [--artifact]   # 声の試聴。同じ 1 文を話者ごとに読ませたページ work/voice/audition.html を書く（--sample を省くと台本の最初の行）
@@ -100,5 +101,6 @@ python3 tools/build_voice_check.py
 - claude.ai のサンドボックスでも動くようにする: シェルは sh（`time` や `${PIPESTATUS}` を使わない）、CPU 1 つ・メモリ 4GB、chromium なし、通信は GitHub・PyPI・npm などだけ（jsDelivr には届かないので JS は同梱する）、長いコマンドは止められる（だから `tts.py` は `--budget` で区切る）
 - 音声はプレーヤー内で WebAudio で鳴らす（チャットのプレビューでは audio 要素が拒否される）
 - ナレーションを外部サービスへ送らない（VOICEVOX をその場で動かす）。VOICEVOX のクレジットを再生ページに出す
+- VOICEVOX の利用規約への同意なしに声を作らない。同意は置き場の `consent.json` に記録し、記録があって規約と音声モデルの版が同じなら、次からは聞かない（2026-11-11 に利用者が決めた）
 - GitHub への書き込み系のコマンドを、スキルの手順として実行させない
 - `prototypes/compare/` は画風の見比べ用の試作で、本体からは使わない
