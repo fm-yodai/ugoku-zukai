@@ -15,6 +15,7 @@ grep -q "^| SP-11 " references/writing/spoken.md && grep -q "^| SP-14 " referenc
 grep -q "^| SP-10 .*確認する" references/writing/spoken.md || ng "spoken.md に「確かめる」を重ねない規則（SP-10）がない"
 grep -q "^| SP-15 .*誰が・何を・どうする" references/writing/spoken.md && grep -q "SP-15" ../../agents/writer.md && grep -q "SP-15" ../../agents/writing-reviewer.md && grep -q "SP-15" references/criteria/script.md && grep -q "SP-15" references/run-chat.md || ng "主語・目的語・接続の言葉を省かない規則（SP-15）が、規則・基準・writer・writing-reviewer・run-chat にそろっていない"
 grep -q "^## 決めたテーマに従う" references/themes.md && grep -q -- "--design" references/themes.md || ng "themes.md に、決めたテーマに従う仕組みと --design がない"
+grep -q "デザインにある色だけで作る" references/themes.md && grep -q "図の色の見本" references/themes.md || ng "themes.md に、役割の色をデザインの色だけで作ることと、図の色の見本を見せる手順がない"
 grep -q '"bg": "#' references/themes.md && ng "themes.md に、写せる色の値の例が残っている"
 for f in references/run-code.md references/run-chat.md; do grep -q -- "--design" $f && grep -q "basics.look.theme" $f || ng "$f に、テーマをデザインと照らす検査と、構成メモに書くことがない"; done
 grep -q "^| S-W11 " references/criteria/script.md || ng "script.md に S-W11（通して聞いて話がつながる）がない"

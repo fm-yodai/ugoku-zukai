@@ -9,6 +9,7 @@
       { "name": "c-sub", "value": "#5a6066", "usage": "sub text" },
       { "name": "c-teal", "value": "#3aa6a0", "usage": "accent, chart primary" },
       { "name": "c-sun", "value": "#f2b53c", "usage": "warm accent" },
+      { "name": "c-sun-deep", "value": "#8a5a08", "usage": "sun as text on light surfaces" },
       { "name": "c-rule", "value": "#d9d5cc", "usage": "rules" },
       { "name": "c-on-deep-text", "value": "#ffffff", "usage": "text on the deep surface" },
       { "name": "surface-page", "value": "{c-paper}", "usage": "page" },

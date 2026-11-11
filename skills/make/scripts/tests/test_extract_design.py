@@ -61,6 +61,25 @@ class NamedTokensTest(unittest.TestCase):
         hues = [UC.hls(UC.parse(self.theme["colors"]["roles"][r]))[0] for r in ("actor", "process", "store", "external")]
         self.assertTrue(any(abs(((h - sun + 0.5) % 1) - 0.5) < 0.04 for h in hues), self.theme["colors"]["roles"])
 
+    # ---- 図の色（役割の色）がデザインからぶれない。利用者の指摘「テーマのブレを感じたのは、主に図の色」 ----
+    def hue(self, hx):
+        return UC.hls(UC.parse(hx))[0]
+
+    def near(self, a, b, tol=0.04):
+        return abs(((self.hue(a) - self.hue(b) + 0.5) % 1) - 0.5) < tol
+
+    def test_default_box_gets_the_main_color(self):   # 既定の箱（process）は、デザインの主色（accent = c-teal）
+        self.assertTrue(self.near(self.theme["colors"]["roles"]["process"], "#3aa6a0"), self.theme["colors"]["roles"])
+
+    def test_roles_are_all_from_design(self):   # デザインに色が足りるなら、色相を回した色を作らない
+        r = subprocess.run([sys.executable, CHECK, self.theme_path, "--design", self.report_path], capture_output=True, text=True)
+        self.assertEqual(r.returncode, 0, r.stdout)
+        self.assertNotIn("roles.", "".join(l for l in r.stdout.splitlines() if "注意" in l), r.stdout)
+
+    def test_uses_designs_own_darker_color(self):   # 明るすぎる色は、計算で暗くする前に、デザインにある同じ色相の暗い色を使う
+        roles = self.theme["colors"]["roles"]
+        self.assertIn("#8a5a08", [roles[r] for r in ("actor", "process", "store", "external")], roles)
+
     def test_font_stack_has_no_duplicates(self):
         fams = [f.strip() for f in self.theme["font"]["family"].split(",")]
         self.assertEqual(len(fams), len(set(fams)), fams)

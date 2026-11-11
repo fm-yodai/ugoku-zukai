@@ -351,31 +351,47 @@ def draft_theme(bag, name):
     muted = pick(muted_pool, "muted") if muted_pool else UC.ensure_contrast(UC.mix(ink, bg, 0.4), bg, 4.6)
     acc_pool = [cv for cv in chroma if hint_score(cv[1]["names"], "accent") > 0] or chroma
     accent = pick(acc_pool, "accent") if acc_pool else ((88, 196, 221) if dark else (26, 95, 208))
-    accent = UC.ensure_contrast(accent, bg, 4.6)   # 注記やラベルの文字に使うので、check_theme.py の 4.5 を満たすところまで色相を保って寄せる
+    def fit(c, target=3.2):
+        """背景とのコントラストが足りない色は、デザインにある同じ色相の色を先に探し、なければ色相を保って明るさを動かす"""
+        if UC.contrast(c, bg) >= target:
+            return c
+        h = UC.hls(c)[0]
+        made = UC.ensure_contrast(c, bg, target)
+        # デザインの色を採るのは、計算で動かした色に近いときだけ（青の代わりに紺を採るような、別の色への置き換えはしない）
+        alts = [d for d, _ in chroma if abs(((UC.hls(d)[0] - h + 0.5) % 1) - 0.5) <= 0.04 and UC.contrast(d, bg) >= target and UC.delta_e(d, made) <= 22]
+        return min(alts, key=lambda d: UC.delta_e(d, made)) if alts else made
+    accent = fit(accent, 4.6)   # 注記やラベルの文字に使うので、check_theme.py の 4.5 を満たすところまで寄せる
 
     def semantic(role, hue, default):
         named = [cv for cv in chroma if hint_score(cv[1]["names"], role) > 0]
         if named:
-            return UC.ensure_contrast(pick(named, role), bg, 3.2)
+            return fit(pick(named, role))
         near = [cv for cv in chroma if abs(((UC.hls(cv[0])[0] - hue + 0.5) % 1) - 0.5) < 0.05]
         if near:
-            return UC.ensure_contrast(max(near, key=lambda cv: cv[1]["count"])[0], bg, 3.2)
+            return fit(max(near, key=lambda cv: cv[1]["count"])[0])
         return UC.ensure_contrast(default, bg, 3.2)
     good = semantic("good", 0.36, (30, 138, 76))
     bad = semantic("bad", 0.01, (201, 54, 43))
     warn = semantic("warn", 0.1, (230, 160, 0))
-    # 役割の色: 強調色から始め、拾えた有彩色を色差の大きい順に足す。足りなければ色相を回して作る
-    roles_order = ["actor", "process", "store", "external"]
+    # 役割の色（図の箱の色）は、デザインにある色だけで作る。強調色から始め、デザインの有彩色、次に無彩色を、色差の大きい順に足す。
+    # それでも 4 色に足りないときだけ、色相を回して作る（check_theme.py --design が「デザインにない色」と知らせる）。
+    # 何も書かない箱は process になるので、process にデザインの主色（強調色）を当てる
+    roles_order = ["process", "actor", "store", "external"]
     chosen = [accent]
-    semantic_names = lambda names: any(hint_score(names, r) > 0 for r in ("good", "bad", "warn"))  # noqa: E731（本文・背景の色は、下の色差で外す）
-    role_pool = [(c, v) for c, v in chroma if 0.2 < UC.hls(c)[1] < 0.85 and not semantic_names(v["names"])
-                 and UC.delta_e(c, ink) > 18 and UC.delta_e(c, bg) > 18 and min(UC.delta_e(c, x) for x in (good, bad)) > 20]
-    for c, _ in sorted(role_pool, key=lambda cv: -cv[1]["count"]):
-        c2 = UC.ensure_contrast(c, bg, 3.2)
-        if all(UC.delta_e(c2, x) > 28 for x in chosen):
-            chosen.append(c2)
-        if len(chosen) >= 4:
-            break
+    semantic_names = lambda names: any(hint_score(names, r) > 0 for r in ("good", "bad", "warn"))  # noqa: E731
+
+    def usable(c, v):
+        return (not semantic_names(v["names"]) and UC.delta_e(c, bg) > 18 and UC.delta_e(fit(c), ink) > 8
+                and min(UC.delta_e(c, x) for x in (good, bad)) > 20)
+    for pool, gap in ((chroma, 28), (neutral, 20)):
+        for c, v in sorted(pool, key=lambda cv: -cv[1]["count"]):
+            if len(chosen) >= 4:
+                break
+            if not usable(c, v):
+                continue
+            c2 = fit(c)
+            if UC.contrast(c2, bg) >= 3 and all(UC.delta_e(c2, x) > gap for x in chosen):
+                chosen.append(c2)
     h, l, s = UC.hls(accent)
     for rot in (0.42, 0.11, 0.75, 0.25, 0.58):
         if len(chosen) >= 4:
