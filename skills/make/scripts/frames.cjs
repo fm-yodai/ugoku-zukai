@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // 台本の各行の「落ち着いたコマ」を SVG に書き、6 コマずつ並べたシートを PNG にする（評価役が画面を見るため）
-// 使い方: node frames.cjs <storyboard.json> --theme <名前|パス> -o <出力先> [--timeline timeline.json] [--scenes s2,s3]
+// 使い方: node frames.cjs <storyboard.json> --theme <名前|パス> -o <出力先> [--timeline timeline.json] [--scenes s2,s3 | --lines l8,l33]
+//   --lines   カンマで区切った行の id。その行のある場面を --scenes で選んだのと同じになる（直しは行の id で来るため）
 //   --scenes  カンマで区切った場面の id。その場面の行だけを書く（配置と時刻は台本全体で計算するので、コマの中身は全体のときと同じ）。
 //             出力先にある前の回のコマは消えるので、全体のコマを残したいときは出力先を分ける
 // 書くもの: <出力先>/svg/<行 id>.svg、<出力先>/sheet-NN.png、<出力先>/frames.json（始めに、前の回のこの 3 つだけを消す）
@@ -14,12 +15,14 @@ const { load, theme, PLAYER } = require("./uz_node.cjs");
 const { makeDocument, serialize } = require("./svg_dom.cjs");
 
 const args = process.argv.slice(2);
-const VAL = ["--theme", "--timeline", "-o", "--scenes"];
+const VAL = ["--theme", "--timeline", "-o", "--scenes", "--lines"];
 const opt = k => { const i = args.indexOf(k); return i >= 0 ? args[i + 1] : null; };
 const file = args.find((a, i) => !a.startsWith("-") && !VAL.includes(args[i - 1]));
 const outDir = opt("-o");
-const only = args.includes("--scenes") ? String(opt("--scenes") || "").split(",").map(s => s.trim()).filter(Boolean) : null;
-if (!file || !outDir || (only && !only.length)) { console.error("使い方: node frames.cjs <storyboard.json> --theme <名前|パス> -o <出力先> [--timeline timeline.json] [--scenes s2,s3]"); process.exit(2); }
+const csv = k => args.includes(k) ? String(opt(k) || "").split(",").map(s => s.trim()).filter(Boolean) : null;
+let only = csv("--scenes");
+const onlyLines = csv("--lines");
+if (!file || !outDir || (only && !only.length) || (onlyLines && !onlyLines.length) || (only && onlyLines)) { console.error("使い方: node frames.cjs <storyboard.json> --theme <名前|パス> -o <出力先> [--timeline timeline.json] [--scenes s2,s3 | --lines l8,l33]"); process.exit(2); }
 
 const W = 1280, H = 720, CW = 640, CH = 360, COLS = 2, ROWS = 3, PER = COLS * ROWS;
 const BAND = 30;   // シートのコマの上に置く帯の高さ（シートの座標）。コマには重ねない（章の題を隠さない）
@@ -54,6 +57,17 @@ const esc = s => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(
   const sb = JSON.parse(fs.readFileSync(file, "utf8"));
   const th = theme(opt("--theme") || "3b1b");
   const tl = opt("--timeline") ? JSON.parse(fs.readFileSync(opt("--timeline"), "utf8")) : null;
+  // --lines は、その行のある場面に直す（台本にない行は、出力先に触る前に知らせる）
+  if (onlyLines && Array.isArray(sb.scenes)) {
+    const sceneOf = {};
+    for (const sc of sb.scenes) for (const ln of sc.lines || []) sceneOf[ln.id] = sc.id;
+    const unknown = onlyLines.filter(id => !sceneOf[id]);
+    if (unknown.length) {
+      for (const id of unknown) console.error(`行「${id}」が台本にない`);
+      process.exit(2);
+    }
+    only = [...new Set(onlyLines.map(id => sceneOf[id]))];
+  }
   // --scenes の場面が台本にあるかは、出力先に触る前に確かめる
   if (only && Array.isArray(sb.scenes)) {
     const known = new Set(sb.scenes.map(sc => sc.id));

@@ -2,9 +2,13 @@
 """構成メモ outline.json の形を機械で点検する（仕様は references/outline.md）。
 
   python3 check_outline.py <outline.json か作業フォルダ> [--ready] [--json]
+  python3 check_outline.py <outline.json か作業フォルダ> --agree-all
 
   --ready  台本に進める状態かも見る（basics に audience・knows・takeaway がある、章が 1 つ以上ある、どの章にも says がある）
   --json   結果を JSON で出す: {"file", "errors", "warnings", "proposed", "open"}（proposed = Claude が決めて利用者がまだ見ていない項目、open = まだ決めていないこと）
+
+  --agree-all  state が proposed の項目を、まとめて agreed に書き換える（by は変えない）。利用者が「Claude が決めたこと」を
+               全部見て通したときにだけ使う。一部だけ通したときは、その項目を手で書き換える。誤りのある構成メモは書き換えない
 
 終了コード: 0 = 誤りなし（警告は出る）、1 = 誤りあり、2 = 使い方の誤りかファイルがない。
 結果は標準出力に 1 件 1 行で書く（「誤り: …」「警告: …」。誤りがなければ最後に「OK」）。
@@ -237,7 +241,7 @@ def check(outline, ready=False):
 def main(argv):
     args = [a for a in argv if not a.startswith("--")]
     flags = {a for a in argv if a.startswith("--")}
-    if len(args) != 1 or flags - {"--ready", "--json"}:
+    if len(args) != 1 or flags - {"--ready", "--json", "--agree-all"} or ("--agree-all" in flags and len(flags) > 1):
         print(__doc__, file=sys.stderr)
         return 2
     path = os.path.join(args[0], "outline.json") if os.path.isdir(args[0]) else args[0]
@@ -251,6 +255,23 @@ def main(argv):
         outline, errors, warnings = None, [f"JSON として読めない: {e}"], []
     else:
         errors, warnings = check(outline, ready="--ready" in flags)
+    if "--agree-all" in flags:
+        for e in errors:
+            print("誤り:", e)
+        if errors:
+            print("誤りがあるので書き換えなかった")
+            return 1
+        n = 0
+        for _where, _label, item in _items(outline):
+            if item.get("state") == "proposed":
+                item["state"] = "agreed"
+                n += 1
+        if n:
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(outline, f, ensure_ascii=False, indent=2)
+                f.write("\n")
+        print(f"{n} 項目を agreed にした: {path}")
+        return 0
     if "--json" in flags:
         print(json.dumps({"file": path, "errors": errors, "warnings": warnings,
                           "proposed": proposed_items(outline), "open": _open(outline)}, ensure_ascii=False, indent=2))

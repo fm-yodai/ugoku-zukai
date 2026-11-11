@@ -110,6 +110,34 @@ class CheckOutlineTest(unittest.TestCase):
         self.assertEqual(json.loads(self.run_check("ok_draft.json", "--json").stdout)["open"], [])
 
 
+    def test_agree_all(self):   # 利用者が全部を見て通したとき、proposed をまとめて agreed にする（by は変えない）
+        with tempfile.TemporaryDirectory() as d:
+            p = os.path.join(d, "outline.json")
+            shutil.copy(os.path.join(DIR, "ok_ux.json"), p)
+            before = load(p)
+            n = len(check_outline.proposed_items(before))
+            r = subprocess.run([sys.executable, CHECK, d, "--agree-all"], capture_output=True, text=True)
+            self.assertEqual(r.returncode, 0, r.stderr)
+            self.assertIn(f"{n} 項目を agreed にした", r.stdout)
+            after = load(p)
+            self.assertEqual(check_outline.proposed_items(after), [])
+            self.assertEqual(after["basics"]["look"]["by"], before["basics"]["look"]["by"])
+            self.assertEqual(after["basics"]["look"]["state"], "agreed")
+            self.assertEqual(after["open"], before["open"])
+            # もう一度回しても変わらない
+            r = subprocess.run([sys.executable, CHECK, d, "--agree-all"], capture_output=True, text=True)
+            self.assertIn("0 項目を agreed にした", r.stdout)
+
+    def test_agree_all_refuses_broken(self):   # 誤りのある構成メモは書き換えない
+        with tempfile.TemporaryDirectory() as d:
+            p = os.path.join(d, "outline.json")
+            shutil.copy(os.path.join(DIR, "bad_by.json"), p)
+            before = open(p, encoding="utf-8").read()
+            r = subprocess.run([sys.executable, CHECK, d, "--agree-all"], capture_output=True, text=True)
+            self.assertEqual(r.returncode, 1)
+            self.assertEqual(open(p, encoding="utf-8").read(), before)
+
+
 class ChapterTest(unittest.TestCase):
     """台本の場面の chapter と、構成メモとの突き合わせ（check_storyboard.cjs --outline）"""
 

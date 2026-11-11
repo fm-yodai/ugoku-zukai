@@ -19,6 +19,8 @@ __FONT_LINK__
   .uz-bar button { font: inherit; font-weight: 700; color: var(--ink); background: transparent; border: 1px solid var(--line); border-radius: 999px; padding: 6px 16px; cursor: pointer; min-width: 96px; }
   .uz-bar button:hover, .uz-bar button:focus-visible { border-color: var(--accent); outline: none; }
   .uz-bar input[type=range] { accent-color: var(--accent); }
+  .uz-bar select { font: inherit; color: var(--ink); background: transparent; border: 1px solid var(--line); border-radius: 8px; padding: 4px 6px; cursor: pointer; }
+  .uz-bar select option { color: #111; background: #fff; }
   .uz-bar output { font-variant-numeric: tabular-nums; color: var(--muted); min-width: 92px; text-align: right; }
   .uz-bar label { color: var(--muted); display: flex; align-items: center; gap: 6px; cursor: pointer; }
   .uz-note { color: var(--muted); font-size: 12px; }
@@ -78,6 +80,7 @@ __FONT_LINK__
     <button id="uz-play" type="button">▶ 再生</button>
     <div class="uz-seek"><input id="uz-seek" type="range" min="0" max="1000" value="0" aria-label="再生位置"><div id="uz-ticks" aria-hidden="true"></div></div>
     <output id="uz-clock">0:00 / 0:00</output>
+    <label>速さ <select id="uz-rate" aria-label="再生の速さ"><option value="0.75">0.75 倍</option><option value="1" selected>1 倍</option><option value="1.25">1.25 倍</option><option value="1.5">1.5 倍</option><option value="2">2 倍</option></select></label>
     <label><input id="uz-subs" type="checkbox" checked> 字幕</label>
   </div>
   <div class="uz-note" id="uz-note"></div>
@@ -101,10 +104,11 @@ const UZ_DATA = /*UZ:DATA*/null;
   const fmt = s => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
   const showErr = m => { const e = $("uz-err"); e.textContent = m; e.hidden = false; };
   UZ.ELK = window.ELK;
-  let M, view, ctx = null, buffer = null, src = null, t0 = 0, pausedAt = 0, playing = false, wallT0 = 0;
+  let M, view, ctx = null, buffer = null, src = null, t0 = 0, pausedAt = 0, playing = false, wallT0 = 0, rate = 1;
   const hasAudio = !!UZ_DATA.audio;
   // 時計: 音声があれば WebAudio の時計、なければ performance.now()（チャットのプレビューでは audio 要素が使えないため）
-  const now = () => !playing ? pausedAt : hasAudio ? ctx.currentTime - t0 : (performance.now() - wallT0) / 1000;
+  // 速さ（rate）を変えても、時刻は台本の時刻のまま（声の再生と時計を同じ倍率で進める。声の高さも一緒に変わる）
+  const now = () => !playing ? pausedAt : hasAudio ? (ctx.currentTime - t0) * rate : (performance.now() - wallT0) / 1000 * rate;
   async function ensureAudio() {
     if (!hasAudio || ctx) return;
     ctx = new (window.AudioContext || window.webkitAudioContext)();
@@ -116,9 +120,10 @@ const UZ_DATA = /*UZ:DATA*/null;
     if (hasAudio) {
       if (src) { src.onended = null; try { src.stop(); } catch (e) {} }
       src = ctx.createBufferSource(); src.buffer = buffer; src.connect(ctx.destination);
+      src.playbackRate.value = rate;
       if (off < buffer.duration) src.start(0, off);
-      t0 = ctx.currentTime - off;
-    } else wallT0 = performance.now() - off * 1000;
+      t0 = ctx.currentTime - off / rate;
+    } else wallT0 = performance.now() - off * 1000 / rate;
     playing = true; $("uz-play").textContent = "❚❚ 一時停止";
     requestAnimationFrame(tick);
   }
@@ -147,6 +152,7 @@ const UZ_DATA = /*UZ:DATA*/null;
   };
   function seekTo(t) { if (playing) startAt(t); else { pausedAt = t; $("uz-play").textContent = "▶ 再生"; tick(); } }
   $("uz-seek").oninput = () => seekTo($("uz-seek").value / 1000 * M.duration);
+  $("uz-rate").onchange = () => { const t = now(); rate = +$("uz-rate").value || 1; if (playing) startAt(t); };
   $("uz-subs").onchange = () => { view.subtitles = $("uz-subs").checked; view._sub = null; tick(); };
   document.addEventListener("keydown", e => { if (e.code === "Space" && e.target === document.body) { e.preventDefault(); $("uz-play").click(); } });
   UZ.player = { seek: seekTo, get model() { return M; } };

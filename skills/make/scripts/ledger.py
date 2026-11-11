@@ -6,9 +6,13 @@ references/writing/review-format.md が正。
   python3 ledger.py decide   <workdir> --by lead|user [--fix <key> …] [--keep <key> …]
                                                                 直す（--fix）・直さない（--keep）を記録する。
                                                                 lead = 進行役が先に直した、user = 利用者が選んだ。--keep は user だけ
+  python3 ledger.py decide   <workdir> --by lead|user --close <key> … --note <理由>
+                                                                直し中（fixing）の指摘を、評価役の再確認なしで閉じる（評価役の見落としだった、
+                                                                利用者が別の言い方に直した、など）。理由は履歴に残る。must を閉じられるのは user だけ
   python3 ledger.py list     <workdir> [--state open,fixing,kept,closed] [--by lead|user] [--reviewer <名前>] [--full] [--json]
                                                                 利用者に見せる形で出す。must は全文（直し方と根拠も）、should は指摘の文を 1 件 1 行、nits は件数だけ
-                                                                （--full で全部開く）。既定は open だけ。--by を付けたら既定は全状態
+                                                                （--full で全部開く）。既定は open だけ。--by を付けたら既定は全状態。
+                                                                同じ箇所に別の基準の指摘があれば「同じ箇所に <key>」と添える（直し方が食い違っていないかを見るため）
   python3 ledger.py status   <workdir>                          件数の要約と、今の台本・構成メモにない id を指す指摘の警告
   python3 ledger.py residual <workdir>                          must で閉じていない指摘（残論点）を review/residual.md・residual.json に書く
 
@@ -20,7 +24,7 @@ references/writing/review-format.md が正。
   open    見つかった。まだ扱いを決めていないか、直したが再確認で通らなかった
   fixing  直すと決めた（by が lead か user）。再確認を待っている
   kept    利用者が直さないと決めた
-  closed  再確認で通った
+  closed  再確認で通った（か、decide --close で理由を書いて閉じた）
 
 遷移:
   findings に新しいキー            → open で足す
@@ -264,10 +268,32 @@ def ingest(workdir, files):
     print(summary(led))
 
 
-def decide(workdir, by, fix, keep):
+def decide(workdir, by, fix, keep, close=(), note=""):
     led = load(workdir)
-    if not fix and not keep:
-        raise Refuse("--fix か --keep にキーを渡す")
+    close, note = list(close), (note or "").strip()
+    if not fix and not keep and not close:
+        raise Refuse("--fix か --keep か --close にキーを渡す")
+    if close:
+        if fix or keep:
+            raise Refuse("--close は --fix・--keep と一緒に渡さない")
+        if not note:
+            raise Refuse("--close には --note で理由を書く（再確認なしで閉じた理由が履歴に残る）")
+        missing = [k for k in close if k not in led["items"]]
+        if missing:
+            raise Refuse("台帳にないキー: " + "、".join(missing))
+        bad = [k for k in close if led["items"][k]["state"] != "fixing"]
+        if bad:
+            raise Refuse("--close で閉じられるのは直し中（fixing）の指摘だけ（先に --fix。直さないなら --keep）: " + "、".join(bad))
+        musts = [k for k in close if led["items"][k]["level"] == "must"]
+        if musts and by != "user":
+            raise Refuse("must の指摘を再確認なしで閉じられるのは利用者だけ（--by user。そうでなければ評価役に再確認を頼む）: " + "、".join(musts))
+        for k in close:
+            it = led["items"][k]
+            it["state"] = "closed"
+            log(it, f"close:{by}", note)
+        save(workdir, led)
+        print(summary(led))
+        return
     if keep and by != "user":
         raise Refuse("--keep（直さない）を決められるのは利用者だけ（--by user）")
     both = [k for k in fix if k in keep]
@@ -330,6 +356,13 @@ def show(workdir, states, by, reviewer, full, as_json):
             ensure_ascii=False, indent=1))
         return
     print(summary(led))
+    shown = {}   # 箇所ごとの、いま見せている指摘のキー
+    for k, it in rows:
+        if it["where"] != "*":
+            shown.setdefault(it["where"], []).append(k)
+    def same(k, it):
+        others = [o for o in shown.get(it["where"], []) if o != k]
+        return f"（同じ箇所に {'、'.join(others)}）" if others else ""
     for lv in LEVELS:
         group = [(k, it) for k, it in rows if it["level"] == lv]
         if not group:
@@ -340,12 +373,12 @@ def show(workdir, states, by, reviewer, full, as_json):
             continue
         for k, it in group:
             if lv == "must" or full:
-                print(f"- `{k}`{tag(it)}（{it['reviewer']}）{one_line(it.get('problem'))}")
+                print(f"- `{k}`{tag(it)}（{it['reviewer']}）{one_line(it.get('problem'))}{same(k, it)}")
                 if it.get("suggestion"):
                     print(f"  直し方: {one_line(it['suggestion'])}")
                 print(f"  根拠: {one_line(it.get('evidence'))}")
             else:
-                print(f"- `{k}`{tag(it)} {one_line(it.get('problem'))}")
+                print(f"- `{k}`{tag(it)} {one_line(it.get('problem'))}{same(k, it)}")
 
 
 def known_ids(workdir):
@@ -423,6 +456,8 @@ def main(argv):
     p.add_argument("--by", required=True, choices=("lead", "user"))
     p.add_argument("--fix", nargs="*", default=[])
     p.add_argument("--keep", nargs="*", default=[])
+    p.add_argument("--close", nargs="*", default=[])
+    p.add_argument("--note", default="")
     p = sub.add_parser("list")
     p.add_argument("workdir")
     p.add_argument("--state")
@@ -438,7 +473,7 @@ def main(argv):
         if a.cmd == "ingest":
             ingest(a.workdir, a.files)
         elif a.cmd == "decide":
-            decide(a.workdir, a.by, a.fix, a.keep)
+            decide(a.workdir, a.by, a.fix, a.keep, a.close, a.note)
         elif a.cmd == "list":
             states = None
             if a.state:

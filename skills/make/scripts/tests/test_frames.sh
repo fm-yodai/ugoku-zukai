@@ -105,6 +105,20 @@ const fr = JSON.parse(require("fs").readFileSync(process.argv[1] + "/frames.json
 process.exit(fr.lines.every(l => typeof l.start === "number" && l.start <= l.t) ? 0 : 1);
 ' "$out/a" || ng "frames.json の行に start がない（か t より後）"
 
+# --lines: 行の id から、その行のある場面を選ぶ（直しは行の id で来るため）
+ln=$(node -e 'const sb = JSON.parse(require("fs").readFileSync("examples/mixed.json", "utf8")); console.log(sb.scenes[1].lines[0].id)')
+node scripts/frames.cjs examples/mixed.json --theme flat -o "$out/bylines" --lines "$ln" >/dev/null 2>&1
+code=$?
+[ $code = 0 ] || [ $code = 4 ] || ng "--lines の終了コードが $code"
+node -e '
+const fs = require("fs"), sb = JSON.parse(fs.readFileSync("examples/mixed.json", "utf8"));
+const got = JSON.parse(fs.readFileSync(process.argv[1] + "/frames.json", "utf8")).lines.map(l => l.id).join(",");
+if (got !== sb.scenes[1].lines.map(l => l.id).join(",")) process.exit(1);
+' "$out/bylines" 2>/dev/null || ng "--lines の出力が、その行のある場面の行になっていない"
+node scripts/frames.cjs examples/mixed.json --theme flat -o "$out/nolines" --lines "$ln,l999" >"$out/nolines.log" 2>&1
+[ $? = 2 ] && grep -q "l999" "$out/nolines.log" && [ ! -e "$out/nolines" ] || ng "--lines に台本にない行を渡したとき、終了コード 2 で止まらない"
+node scripts/frames.cjs examples/mixed.json --theme flat -o "$out/both" --lines "$ln" --scenes s1 >/dev/null 2>&1
+[ $? = 2 ] || ng "--lines と --scenes を両方渡したとき、終了コード 2 で止まらない"
 # --scenes: その場面の行だけを書き、コマの中身は全体のときと同じ
 node scripts/frames.cjs examples/mixed.json --theme flat -o "$out/all" >/dev/null 2>&1
 sc=$(node -e 'const sb = JSON.parse(require("fs").readFileSync("examples/mixed.json", "utf8")); console.log(sb.scenes[1].id)')

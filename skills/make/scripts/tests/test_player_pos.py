@@ -83,6 +83,21 @@ class PlayerPosTest(unittest.TestCase):
         for w in ("箇所を指す", "範囲をやめる", "範囲の始まりにする"):
             self.assertNotIn(w, html)
 
+    def test_rate_control(self):
+        # 利用者の要望: 再生の速さを変えられる。声と図の時計を同じ倍率で進める（位置の表記 @0:14 は台本の時刻のまま）
+        html = open(TEMPLATE, encoding="utf-8").read()
+        self.assertIn('<select id="uz-rate"', html)
+        for v in ("0.75", "1.25", "1.5", "2"):
+            self.assertIn(f'<option value="{v}"', html)
+        self.assertIn('<option value="1" selected', html)
+        self.assertIn("src.playbackRate.value = rate", html)
+        self.assertIn("(ctx.currentTime - t0) * rate", html)
+        self.assertIn("(performance.now() - wallT0) / 1000 * rate", html)
+        self.assertIn("t0 = ctx.currentTime - off / rate", html)
+        self.assertIn("wallT0 = performance.now() - off * 1000 / rate", html)
+        for extra in ([], ["--artifact"]):
+            self.assertIn('id="uz-rate"', self.build(*extra))
+
     def test_copy_failure_pauses(self):
         # コピーできなかったら一時停止する（再生中は位置の文字が書き換わり、選択が消えるため）
         html = open(TEMPLATE, encoding="utf-8").read()

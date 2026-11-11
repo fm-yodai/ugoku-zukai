@@ -345,6 +345,51 @@ class LedgerTest(unittest.TestCase):
             self.assertNotIn(other, ids)
         self.assertFalse([i for i in ids if i.startswith("C-")], "契約の基準が残っている")
 
+    # ---- 再確認を頼まずに閉じる（--close）。通しで、直したのに「直し中」のまま公開した指摘があった ----
+    def test_close_fixing_by_lead(self):
+        self.run("ingest", self.wd, self.out("writing-reviewer", [F("l1:S-W4", "should")]))
+        self.run("decide", self.wd, "--by", "lead", "--fix", "l1:S-W4")
+        rc, so, se = self.run("decide", self.wd, "--by", "lead", "--close", "l1:S-W4", "--note", "read は前から付いていた（評価役の見落とし）")
+        self.assertEqual(rc, 0, se)
+        it = self.items()["l1:S-W4"]
+        self.assertEqual(it["state"], "closed")
+        self.assertEqual(it["history"][-1], ["close:lead", "read は前から付いていた（評価役の見落とし）"])
+        self.assertIn("閉じた 1", so)
+
+    def test_close_needs_note(self):
+        self.run("ingest", self.wd, self.out("writing-reviewer", [F("l1:S-W4", "should")]))
+        self.run("decide", self.wd, "--by", "lead", "--fix", "l1:S-W4")
+        for note in ([], ["--note", "  "]):
+            rc, _, se = self.run("decide", self.wd, "--by", "lead", "--close", "l1:S-W4", *note)
+            self.assertEqual(rc, 2)
+            self.assertIn("--note", se)
+        self.assertEqual(self.items()["l1:S-W4"]["state"], "fixing")
+
+    def test_close_only_fixing(self):       # 直すと決めていない指摘は閉じられない（直さないなら --keep）
+        self.run("ingest", self.wd, self.out("writing-reviewer", [F("l1:S-W4", "should")]))
+        rc, _, se = self.run("decide", self.wd, "--by", "lead", "--close", "l1:S-W4", "--note", "直した")
+        self.assertEqual(rc, 2)
+        self.assertIn("直し中", se)
+        self.assertEqual(self.items()["l1:S-W4"]["state"], "open")
+
+    def test_close_must_only_by_user(self):  # must を、評価役の再確認なしで進行役だけでは閉じない
+        self.run("ingest", self.wd, self.out("fact-checker", [F("l1:S-F1")]))
+        self.run("decide", self.wd, "--by", "user", "--fix", "l1:S-F1")
+        rc, _, se = self.run("decide", self.wd, "--by", "lead", "--close", "l1:S-F1", "--note", "直した")
+        self.assertEqual(rc, 2)
+        self.assertIn("must", se)
+        self.assertEqual(self.items()["l1:S-F1"]["state"], "fixing")
+        self.assertEqual(self.run("decide", self.wd, "--by", "user", "--close", "l1:S-F1", "--note", "利用者が見て通した")[0], 0)
+        self.assertEqual(self.items()["l1:S-F1"]["state"], "closed")
+
+    def test_list_marks_same_place(self):    # 同じ行に別の評価役の指摘があるときは、並べて見られるよう印を付ける
+        self.run("ingest", self.wd, self.out("fact-checker", [F("l22:S-F1")]))
+        self.run("ingest", self.wd, self.out("writing-reviewer", [F("l22:S-W1", "should"), F("l5:S-W1", "should")]))
+        _, so, _ = self.run("list", self.wd)
+        line = next(l for l in so.splitlines() if l.startswith("- `l22:S-W1`"))
+        self.assertIn("同じ箇所に l22:S-F1", line)
+        self.assertNotIn("同じ箇所", next(l for l in so.splitlines() if l.startswith("- `l5:S-W1`")))
+
     def test_decide_same_key_in_fix_and_keep(self):
         # 同じキーを --fix と --keep の両方に渡したら、何も書き換えずに終了コード 2
         self.run("ingest", self.wd, self.out("director", [F("l1:S-D2"), F("l2:S-D2")]))
