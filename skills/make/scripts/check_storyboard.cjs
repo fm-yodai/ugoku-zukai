@@ -38,6 +38,7 @@ if (args.includes("--outline")) {
     out.errors = out.errors.concat(r.errors);
     out.warnings = out.warnings.concat(r.warnings);
     out.chapters = r.chapters;
+    out.slides = r.slides;
   }
   if (args.includes("--json")) console.log(JSON.stringify(out, null, 2));
   else {

@@ -4,7 +4,8 @@ const CHAPTER_TOLERANCE = 0.3;   // 章ごとの見積もりと尺の目安の�
 const LENGTH_TOLERANCE = 0.15;   // 台本全体の長さと構成メモの長さのずれ
 const positive = v => typeof v === "number" && v > 0;
 
-// 戻り値: { errors, warnings, chapters: [{ id, planned, estimated }] }
+// 戻り値: { errors, warnings, chapters: [{ id, planned, estimated }], slides: [{ id, chapter, in_storyboard }] }
+//   slides は、構成メモ（/2）に書いたスライド（書いた順）。/1 の構成メモでは空
 //   planned は構成メモの seconds（なければ null）、estimated はその章の行の長さの合計（秒、小数 1 桁。場面がなければ 0）
 function checkAgainstOutline(sb, M, outline, opts) {
   const complete = !!(opts && opts.complete);
@@ -53,8 +54,34 @@ function checkAgainstOutline(sb, M, outline, opts) {
   if (complete && positive(length) && Math.abs(M.endCard - length) > length * LENGTH_TOLERANCE)
     warnings.push(`台本の長さ ${M.endCard.toFixed(1)} 秒が、構成メモの長さ ${length} 秒から 15% を超えてずれている`);
 
+  // スライド（構成メモが /2 のとき）: 構成メモのスライドと台本のスライドを、同じ id で照らす
+  const slides = [];
+  if (outline && outline.format === "ugoku-zukai-outline/2") {
+    const used = M.slides || {};   // 場面が使っているスライド（id → { scenes }）
+    const some = complete ? errors : warnings;
+    const inOutline = new Map();
+    for (const c of chapters) for (const sl of Array.isArray(c.slides) ? c.slides : []) {
+      if (!sl || typeof sl.id !== "string" || inOutline.has(sl.id)) continue;
+      inOutline.set(sl.id, c.id);
+      const has = !!(sb.slides && sb.slides[sl.id]);
+      slides.push({ id: sl.id, chapter: c.id, in_storyboard: has });
+      if (!has) { some.push(`スライド「${sl.id}」が台本にない`); continue; }
+      const first = used[sl.id] && used[sl.id].scenes[0];
+      const ch = first != null ? chapterOf.get(first) : null;
+      if (ch != null && ch !== c.id) errors.push(`スライド「${sl.id}」: 構成メモでは章「${c.id}」だが、台本で最初に使う場面「${first}」は章「${ch}」`);
+    }
+    for (const id of Object.keys(used)) if (!inOutline.has(id)) some.push(`スライド「${id}」が構成メモにない（意図を書く）`);
+    // 章の中のスライドの順: 台本で最初に出る順と比べる
+    const firstAt = id => sb.scenes.findIndex(sc => sc.id === (used[id] && used[id].scenes[0]));
+    for (const c of chapters) {
+      const ids = (Array.isArray(c.slides) ? c.slides : []).map(sl => sl && sl.id).filter(id => used[id] && inOutline.get(id) === c.id);
+      const sorted = ids.slice().sort((a, b) => firstAt(a) - firstAt(b));
+      if (ids.join("\n") !== sorted.join("\n")) warnings.push(`章「${c.id}」: スライドの順が台本と違う（台本: ${sorted.join(" → ")}、構成メモ: ${ids.join(" → ")}）`);
+    }
+  }
+
   return {
-    errors, warnings,
+    errors, warnings, slides,
     chapters: chapters.map(c => ({ id: c.id, planned: positive(c.seconds) ? c.seconds : null, estimated: +est.get(c.id).toFixed(1) })),
   };
 }

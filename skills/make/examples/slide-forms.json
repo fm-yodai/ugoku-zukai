@@ -55,23 +55,23 @@
     }
   },
   "scenes": [
-    { "id": "s1", "figure": "cover", "lines": [
+    { "id": "s1", "chapter": "c1", "figure": "cover", "lines": [
       { "id": "l1", "text": "ユーザビリティと UX は、よく並べて語られます。", "read": "ユーザビリティとユーエックスは、よく並べて語られます。" } ] },
-    { "id": "s2", "slide": "relation", "lines": [
+    { "id": "s2", "chapter": "c1", "slide": "relation", "lines": [
       { "id": "l2", "text": "まず、二つの言葉の関係を図で確認します。", "do": [ { "show": ["outer", "ux"] } ] },
       { "id": "l3", "text": "{a}ユーザビリティは、UX の内側に入ります。", "read": "{a}ユーザビリティは、ユーエックスの内側に入ります。", "do": [ { "at": "a", "show": "inner" } ] } ] },
-    { "id": "s3", "slide": "definitions", "lines": [
+    { "id": "s3", "chapter": "c2", "slide": "definitions", "lines": [
       { "id": "l4", "text": "それぞれの定義を、国際規格から引きます。", "do": [ { "blur": "rel" } ] },
       { "id": "l5", "text": "{a}ユーザビリティは、目標を達成できる度合いです。", "do": [ { "at": "a", "blur": ["u", "u1", "inner"] } ] },
       { "id": "l6", "text": "{a}UX は、使うことで生じる知覚と反応の全部です。", "read": "{a}ユーエックスは、使うことで生じる知覚と反応の全部です。", "do": [ { "at": "a", "blur": ["x", "x1", "outer", "ux"] } ] },
       { "id": "l7", "text": "度合いと、知覚と反応。見ているものが違います。", "do": [ { "unblur": true } ] } ] },
-    { "id": "s4", "slide": "ux-def", "lines": [
+    { "id": "s4", "chapter": "c2", "slide": "ux-def", "lines": [
       { "id": "l8", "text": "{a}規格の定義は、利用だけでなく、利用の予測も含みます。", "do": [ { "at": "a", "show": "q" } ] },
       { "id": "l9", "text": "つまり範囲は、{a}使う前、{b}使っている間、{c}使った後に及びます。", "do": [ { "at": "a", "show": "before" }, { "at": "b", "show": "during" }, { "at": "c", "show": "after" } ] } ] },
-    { "id": "s5", "slide": "whose", "lines": [
+    { "id": "s5", "chapter": "c3", "slide": "whose", "lines": [
       { "id": "l10", "text": "では、誰の体験でしょうか。{a}主語は利用者です。", "do": [ { "at": "a", "show": "person" } ] },
       { "id": "l11", "text": "{a}利用者は、使う前から期待を持っています。", "do": [ { "at": "a", "show": ["box", "e.1"] } ] } ] },
-    { "id": "s6", "slide": "whose", "lines": [
+    { "id": "s6", "chapter": "c3", "slide": "whose", "lines": [
       { "id": "l12", "text": "{a}使っている間の使いやすさは、体験の一部です。", "do": [ { "at": "a", "show": "e.2" } ] },
       { "id": "l13", "text": "{a}そして使った後に、また使いたいかが決まります。", "do": [ { "at": "a", "show": "e.3" } ] } ] }
   ]
