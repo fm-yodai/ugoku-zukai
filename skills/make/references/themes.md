@@ -76,7 +76,7 @@
 | `font.family`・`weight`・`bold`・`css` | 字体の並び、太さ、Google Fonts の URL |
 | `shape.radius`・`stroke`・`fill`・`fillMix`・`fillAlpha`・`edgeWidth`・`glow`・`shadow` | 角丸、線の太さ、塗り方、光らせるか、影 |
 | `subtitle.bg`・`ink` | 字幕の帯と文字 |
-| `chapter.bg`・`ink`・`sub`・`muted`・`line`（任意） | 章扉の色。あれば、`title` 図か `toc` 図だけの場面の地が `bg` になり、題が `ink`、`sub` の文字と目次の番号が `sub`（目次に `current` があるときは、今の章以外が `muted`）、クレジットが `muted`、字幕の帯の枠が `line` になる。なければ章扉も通常の地 |
+| `chapter.bg`・`ink`・`sub`・`muted`・`line`・`accent`（任意） | 章扉の色。あれば、`title` 図か `toc` 図だけの場面の地が `bg` になり、題が `ink`、`sub` の文字と目次の番号が `sub`（目次に `current` があるときは、今の章以外が `muted`）、クレジットが `muted`、字幕の帯の枠が `line` になる。`tone: "dark"` のスライドでも同じ地と文字の色を使い、強調の語・見出しの棒・言いたいことの印は `accent`（なければ `colors.accent`。章扉の地の上で 4.5:1 以上。`check_theme.py` が見る）、図の線は `line`、補足の文字は `sub` になる。なければ章扉も通常の地 |
 | `tokens`（任意） | 色の値とデザインのトークン名の対応。人と Claude が読むための記録で、プレーヤーは使わない |
 
 - `shape.fill`: `solid`（背景と役割の色を `fillMix` で混ぜた塗り）・`tint`（役割の色を `fillAlpha` で透かす。暗い背景向き）・`none`

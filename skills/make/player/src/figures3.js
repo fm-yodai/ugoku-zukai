@@ -45,7 +45,8 @@
   }
 
   // ======== テキスト（text）========
-  const SIZE = { heading: 22, para: 20, bullets: 20, quote: 24 };
+  // 既定の文字の大きさ（1280×720 の画面の px）。利用者の要望があれば、ブロックの size で変える
+  const SIZE = { heading: 26, para: 24, bullets: 24, quote: 28 };
   UZ.TEXT_KINDS = Object.keys(SIZE);
   FIG.text = {
     async layout(f, S, ctx) {
@@ -54,7 +55,7 @@
       let y = 0, prevKind = null;
       for (const b of f.blocks) {
         if (prevKind) y += prevKind === "heading" ? 6 : 18;
-        const size = SIZE[b.kind];
+        const size = typeof b.size === "number" ? b.size : SIZE[b.kind];
         if (b.kind === "heading") {
           const T = block(b.text, 0, y, size, W, { weight: S.bold, color: S.ink });
           items.push({ id: b.id, kind: "text", texts: [T], bbox: { x: 0, y, w: T.bbox.w, h: T.bbox.h } });
@@ -88,6 +89,8 @@
         }
         prevKind = b.kind;
       }
+      // 強調の色は、組んだときの地の色（暗い地のスライドでは chapter.accent）
+      for (const it of items) for (const T of it.texts || []) if (T.spans) T.emColor = S.accent;
       // 幅は区画いっぱい。拡大しない（文字の大きさを保つ）。区画の上に寄せる
       return { w: W, h: Math.max(y, 1), items, order, maxScale: 1, valign: "top" };
     },

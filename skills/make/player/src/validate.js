@@ -206,6 +206,7 @@
             if (!Array.isArray(b.items) || !b.items.length || b.items.some(x => typeof x !== "string" || !x)) E(`${where}: ブロック ${b.id}（bullets）の items は、文字列の配列で書く`);
             else b.items.forEach((x, i) => addId(`${b.id}.${i + 1}`, "箇条の項目"));
           } else if (typeof b.text !== "string" || !b.text) E(`${where}: ブロック ${b.id} に text がない`);
+          if (b.size != null && !(typeof b.size === "number" && b.size >= 15 && b.size <= 60)) E(`${where}: ブロック ${b.id} の size は 15〜60 の数（px）で書く`);
           if (b.source != null && typeof b.source !== "string" && !(Array.isArray(b.source) && b.source.every(x => typeof x === "string")))
             W(`${where}: ブロック ${b.id} の source は文字列か文字列の配列で書く`);
         }

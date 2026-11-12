@@ -102,21 +102,21 @@
     }
     textSpec(parent, T, o = {}) {
       const t = this.text(parent, T.lines, T.x, T.y, T.size, { weight: T.weight, color: o.color || T.color, anchor: T.anchor, lineH: T.lineH, halo: o.halo });
-      if (T.spans) this.setSpans(t, T.spans);
+      if (T.spans) this.setSpans(t, T.spans, T.emColor);
       return t;
     }
     // 強調の語のある文: 行ごとの tspan の中に、区切りごとの tspan を入れる（強調は太字と強調色）
-    setSpans(t, spans) {
+    setSpans(t, spans, emColor) {
       while (t.firstChild) t.removeChild(t.firstChild);
       const n = spans.length;
       spans.forEach((row, i) => {
         const line = el("tspan", { x: t._x, y: t._y - (n - 1) * t._lineH / 2 + i * t._lineH }, t);
-        for (const seg of row) { const sp = el("tspan", seg.em ? { "font-weight": this.S.bold, fill: this.S.accent } : null, line); sp.textContent = seg.t; }
+        for (const seg of row) { const sp = el("tspan", seg.em ? { "font-weight": this.S.bold, fill: emColor || this.S.accent } : null, line); sp.textContent = seg.t; }
       });
     }
 
     buildFig(F) {
-      const S = this.S, g = el("g", null, this.svg);
+      const S = F.dark ? (this.SD || (this.SD = UZ.darkStyleOf(this.S))) : this.S, g = el("g", null, this.svg);   // 暗い地のスライドで組んだ部品は、暗い地の色
       const L = { back: el("g", null, g), edge: el("g", null, g), box: el("g", null, g), fx: el("g", null, g) };
       this.figG[F.id] = g;
       const glow = this.M.theme.shape.glow, shadow = this.M.theme.shape.shadow;
@@ -364,6 +364,8 @@
           this._dark = on;
           this.creditT.setAttribute("fill", on ? (ch.muted || ch.ink) : S.muted);
           for (const tx of [this.headerT, this.headerT2, this.stT, this.stT2]) tx.setAttribute("fill", on ? ch.ink : S.ink);
+          this.headerBar.setAttribute("fill", on ? (ch.accent || S.accent) : S.accent);
+          this.stMark.setAttribute("fill", on ? (ch.accent || S.accent) : S.accent);
           if (on && ch.line) { this.subR.setAttribute("stroke", ch.line); this.subR.setAttribute("stroke-width", 1); } else this.subR.setAttribute("stroke", "none");
         }
       }

@@ -88,6 +88,7 @@
       if (!sl.title || typeof sl.title !== "string") E(`${where}: title がない（スライドの見出し）`);
       if (sl.statement != null && typeof sl.statement !== "string") E(`${where}: statement は文字列で書く`);
       if (typeof sl.statement === "string" && UZ.statementLines(sl.statement).over) E(`${where}: 言いたいことが 2 行に収まらない（1 文を短くする。3 行目からは画面に出ない）`);
+      if (sl.tone != null && !["dark", "light"].includes(sl.tone)) E(`${where}: tone は dark か light（dark で章扉の地。テーマに chapter がなければ通常の地）`);
       if (sl.start != null && sl.start !== "complete") E(`${where}: start は "complete" だけ（最初から完成形で出す。省くと、行の動作で出していく）`);
       if (!Array.isArray(sl.parts) || !sl.parts.length) { E(`${where}: parts（部品の列）がない`); continue; }
       const seen = new Set(), placed = [];

@@ -12,7 +12,7 @@
   - 補足の色（muted）・強調（accent）と背景: 4.5 以上（ラベルや注記の文字に使うため）
   - 役割の色・good / bad / warn と背景: 3 以上（図形の線。WCAG 1.4.11）
   - 箱の塗りの上の本文: 4.5 以上（colors.boxes に面と文字の色を書いた役割は、その面とその文字で見る）
-  - 章扉（chapter）の文字と章扉の地: 4.5 以上
+  - 章扉（chapter）の文字・添え字・強調（accent）と章扉の地: 4.5 以上
   - 役割の色どうし（actor / process / store / external）、good と bad: 色差 ΔE 20 以上
 """
 import json
@@ -99,6 +99,8 @@ def check(th):
             need("章扉の文字 / 章扉の地", rgba_over(chap["ink"], cbg), cbg, 4.5, "題の札")
             if chap.get("sub"):
                 need("章扉の添え字 / 章扉の地", rgba_over(chap["sub"], cbg), cbg, 4.5, "題の札の sub")
+            if chap.get("accent"):
+                need("暗い地の強調 / 章扉の地", rgba_over(chap["accent"], cbg), cbg, 4.5, "暗い地のスライドの強調の語")
     sub = th.get("subtitle", {})
     if sub:
         need("字幕の文字 / 字幕の帯", UC.parse(sub.get("ink", col["ink"])), rgba_over(sub.get("bg", col["bg"]), bg), 4.5, "字幕")

@@ -30,6 +30,15 @@
     };
   };
 
+  // 暗い地（章扉の色）のスライドで部品を組むときの色。文字は章扉の文字、補足は sub、線は line、強調は chapter.accent。
+  // 箱の面・枠・中の文字（役割の色）は、明るい面の上に乗るのでそのまま
+  UZ.darkStyleOf = function (S) {
+    const ch = S.chapter;
+    if (!ch) return S;
+    return { ...S, dark: true, ink: ch.ink, muted: ch.sub || ch.ink, line: ch.line || ch.sub || ch.ink, bg: ch.bg,
+      surface: C.rgba("#ffffff", 0.08), accent: ch.accent || S.accent };
+  };
+
   // 文字の塊。y は塊の縦の中心。
   UZ.mkText = function (lines, x, y, size, o = {}) {
     if (!Array.isArray(lines)) lines = [String(lines)];

@@ -43,7 +43,7 @@
   },
   "shape": { "radius": 12, "stroke": 2, "fill": "solid", "fillMix": 0.12, "edgeWidth": 2, "glow": false, "shadow": false },
   "subtitle": { "bg": "#0c1b32", "ink": "#ffffff" },
-  "chapter": { "bg": "#0c1b32", "ink": "#ffffff", "sub": "rgba(255,255,255,.7)", "muted": "rgba(255,255,255,.5)", "line": "rgba(255,255,255,.2)" },
+  "chapter": { "bg": "#0c1b32", "ink": "#ffffff", "sub": "rgba(255,255,255,.7)", "muted": "rgba(255,255,255,.5)", "line": "rgba(255,255,255,.2)", "accent": "#5090d9" },
   "derived_from": ["空 提案書デザインシステム（project/tokens.json）"],
   "tokens": {
     "#edf0f5": "c-base", "#ffffff": "c-white", "#1f1f1f": "c-ink", "#0c1b32": "c-navy", "#4f5762": "c-gray-600", "#c9cfd9": "c-gray-300",

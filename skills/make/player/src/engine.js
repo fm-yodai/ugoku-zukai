@@ -70,7 +70,7 @@
 
   // ================= 組み立て =================
   UZ.build = async function (sb, theme, timeline, opts = {}) {
-    const S = UZ.styleOf(theme);
+    const S = UZ.styleOf(theme), S0 = S;
     const errors = [], warnings = [];
     const err = (m) => errors.push(m), warn = (m) => warnings.push(m);
     const v = UZ.validate(sb);
@@ -107,8 +107,10 @@
       });
       // 場面の地: 題の札か目次だけの場面は、テーマに chapter があれば暗い地（章扉）。それ以外は通常の地
       const tones = figs.map(fid => UZ.titleTone(FIGS[fid], theme));
-      if (figs.length > 1 && tones.includes("dark")) err(`場面 ${sc.id}: 題の札や目次を他の図と並べるときは、その図に tone: "light" と書く（暗い地は題の札か目次だけの場面で使う）`);
-      return { id: sc.id, chapter: sc.chapter, figs, header, areas, captions, lines: sc.lines, tone: figs.length === 1 ? tones[0] : "light", slide: P.slide, statement: P.statement };
+      if (figs.length > 1 && tones.includes("dark") && !(P.slide && sb.slides[P.slide].tone === "dark")) err(`場面 ${sc.id}: 題の札や目次を他の図と並べるときは、その図に tone: "light" と書く（暗い地は題の札か目次だけの場面で使う）`);
+      // スライドの地: tone: "dark" なら、テーマに chapter があれば暗い地（部品も暗い地の色で組む）
+      const slideDark = P.slide && sb.slides[P.slide].tone === "dark" && theme.chapter;
+      return { id: sc.id, chapter: sc.chapter, figs, header, areas, captions, lines: sc.lines, tone: slideDark ? "dark" : figs.length === 1 ? tones[0] : "light", slideDark: !!slideDark, slide: P.slide, statement: P.statement };
     });
 
     if (errors.length) return { errors, warnings };
@@ -119,13 +121,15 @@
     const credits = [];
     for (const f of Object.values(FIGS)) if (f.type === "image" && typeof f.credit === "string" && f.credit && !credits.includes(f.credit)) credits.push(f.credit);
 
-    // ---- 図の配置（最初に出る場面の区画で 1 回だけ）----
+    // ---- 図の配置（最初に出る場面の区画で 1 回だけ。色も、その場面の地で決まる）----
     const figs = {};
+    const SD = UZ.darkStyleOf(S);
     for (const sc of scenes) {
       for (let i = 0; i < sc.figs.length; i++) {
         const fid = sc.figs[i];
         if (figs[fid]) continue;
         const f = FIGS[fid];
+        const S = sc.slideDark ? SD : S0;
         const A = sc.areas[i];
         let L = null;
         // スライドの部品は、区画に合わせて組む（図が fill に対応していれば。fit: "content" で止める）。
@@ -144,7 +148,7 @@
         if (!L) L = await UZ.FIG[f.type].layout(f, S, { area: A, tryBoth: !f.direction, assets });
         const items = {};
         for (const it of L.items) { it.fig = fid; it.key = `${fid}/${it.id}`; items[it.id] = it; }
-        figs[fid] = { id: fid, type: f.type, spec: f, w: L.w, h: L.h, items, order: L.order, autoShow: !!L.autoShow, fixed: !!L.fixed, extra: L };
+        figs[fid] = { id: fid, type: f.type, spec: f, w: L.w, h: L.h, items, order: L.order, autoShow: !!L.autoShow, fixed: !!L.fixed, extra: L, dark: !!sc.slideDark };
       }
     }
     // ---- id の解決 ----
@@ -663,7 +667,7 @@
     // 大きさを変えた箱（resize）は、変えた後の形で出す（中に入れた部品と重ならないように）
     for (const a of M.acts) if (a.verb === "resize" && sl.scenes.includes(a.scene) && st[a.key]) { st[a.key].rect = { ...a.to }; st[a.key].textOff = a.textTo.slice(); }
     return { t: sc.start, st, figs: figsF, scene: sc, statement: { lines: sc.statement, opacity: 1, prev: null }, captions: [],
-      header: { text: sc.header, opacity: 1, prev: null }, sub: null, badge: { text: "", show: 0, from: "" }, customs: {}, end: 0, dark: 0 };
+      header: { text: sc.header, opacity: 1, prev: null }, sub: null, badge: { text: "", show: 0, from: "" }, customs: {}, end: 0, dark: sc.tone === "dark" ? 1 : 0 };
   };
   const lineCache = new WeakMap();
   function findLine(sb, id) {

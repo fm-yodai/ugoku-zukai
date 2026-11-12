@@ -8,6 +8,7 @@ node scripts/tests/test_slides.cjs >/dev/null 2>&1 || { ng "test_slides.cjs"; no
 node scripts/tests/test_figures_more.cjs >/dev/null 2>&1 || { ng "test_figures_more.cjs"; node scripts/tests/test_figures_more.cjs; }
 node scripts/tests/test_toc.cjs >/dev/null 2>&1 || { ng "test_toc.cjs"; node scripts/tests/test_toc.cjs; }
 node scripts/tests/test_fill.cjs >/dev/null 2>&1 || { ng "test_fill.cjs"; node scripts/tests/test_fill.cjs; }
+node scripts/tests/test_dark_text.cjs >/dev/null 2>&1 || { ng "test_dark_text.cjs"; node scripts/tests/test_dark_text.cjs; }
 node scripts/tests/test_outline_pair.cjs >/dev/null 2>&1 || { ng "test_outline_pair.cjs"; node scripts/tests/test_outline_pair.cjs; }
 python3 scripts/tests/test_assets.py >/dev/null 2>&1 || { ng "test_assets.py"; python3 scripts/tests/test_assets.py; }
 python3 scripts/tests/test_alts.py >/dev/null 2>&1 || { ng "test_alts.py"; python3 scripts/tests/test_alts.py; }
