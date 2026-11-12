@@ -1,14 +1,17 @@
 #!/usr/bin/env python3
-"""利用者向けの絵コンテのページ（HTML 1 枚）を作る。frames.cjs が書いたコマを、章ごと・行ごとに字幕と並べる。
+"""利用者向けのスライドコンテのページ（HTML 1 枚）を作る。frames.cjs が書いたコマを、章ごと・スライドごと・行ごとに並べる。
 
   python3 build_sheet.py <storyboard.json> --frames <frames.cjs の出力先> -o <sheet.html> [--outline <outline.json>] [--artifact]
 
-- 行ごとに 1 段。左にコマ、右に「s2 / l2 @0:14」（場面の id / 行の id @行の始まりの時刻）と字幕の全文
-- 章の見出し: --outline があり場面に chapter があれば構成メモの章の題（下に、その章の「言うこと」）。
-  なければ再生ページのチャプター一覧と同じ（場面の title、図が 1 つならその図の title、title 型の図は「はじめに」）
-- frames.json にない行（frames.cjs --scenes で一部だけ書いたとき）は出さない。行が 1 つもない章は見出しごと出さない
-- --outline があれば、終わりに「Claude が決めたこと」（構成メモの state: proposed の項目）と「まだ決めていないこと」（構成メモの open）を一覧にする
-- 頭の表記は、コマの時刻の出どころ（frames.json の timed）で変わる。frames.cjs に --timeline を渡したコマなら「時刻は合成した声に合わせたもの」
+ページに出すのは、スライド・原稿・それらの意図・位置の札だけ（進行役が決めたこと、検査の結果、時刻の出どころなどは出さない。会話で伝える）。
+- 章の段: 章の題。構成メモ（--outline）が 3 段の意図の形（/2）なら、章の意図と、前の章からのつながり。最初の章の前に、章の順番の意図
+  章の分け方: --outline があり場面に chapter があれば構成メモの章。なければ再生ページのチャプター一覧と同じ
+  （場面の title、スライドの title、図が 1 つならその図の title、title 型の図は「はじめに」）
+- スライドの段: スライドを最初に使う場面の位置に 1 回だけ。完成形のコマ（frames.json の slides）、スライドの見出し、
+  構成メモ（/2）にあればスライドの意図と、前のスライドからのつながり
+- 行の段: 左にコマ、右に「s2 / l2 @0:14」（場面の id / 行の id @行の始まりの時刻）と字幕の全文
+- frames.json にない行・スライド（frames.cjs --scenes で一部だけ書いたとき）は出さない。行が 1 つもない章は見出しごと出さない
+- 前の形の構成メモ（/1）では、章の題とコマと原稿だけを出す
 - --artifact: Artifact で公開する形（<html>・<head>・<body> を外した断片）で書く
 - コマは SVG を data: の画像として埋め込む。外部のファイルは読まず、JS も使わない。PNG（resvg）は要らない
 
@@ -38,18 +41,16 @@ STYLE = """
   .us-wrap h1 { font-size: 22px; line-height: 1.4; margin: 0 0 4px; overflow-wrap: anywhere; }
   .us-note { color: var(--muted); font-size: 13px; margin: 0 0 8px; }
   .us-chapter { margin-top: 32px; }
-  .us-chapter h2, .us-decided h2, .us-open h2 { font-size: 17px; line-height: 1.5; margin: 0 0 8px; padding-bottom: 6px; border-bottom: 2px solid var(--line); overflow-wrap: anywhere; }
-  .us-says { margin: 0 0 12px; padding-left: 1.4em; color: var(--muted); font-size: 14px; overflow-wrap: anywhere; }
+  .us-chapter h2 { font-size: 17px; line-height: 1.5; margin: 0 0 8px; padding-bottom: 6px; border-bottom: 2px solid var(--line); overflow-wrap: anywhere; }
+  .us-flow, .us-intent, .us-link { margin: 0 0 6px; overflow-wrap: anywhere; }
+  .us-flow, .us-link { color: var(--muted); font-size: 14px; }
+  .us-slide { margin: 20px 0 4px; padding: 12px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; }
+  .us-slide img.us-final { display: block; width: 100%; height: auto; aspect-ratio: 16 / 9; border: 1px solid var(--line); border-radius: 6px; margin: 0 0 10px; }
+  .us-slide h3 { font-size: 16px; line-height: 1.5; margin: 0 0 4px; overflow-wrap: anywhere; }
   .us-row { display: grid; grid-template-columns: minmax(0, 58%) minmax(0, 1fr); gap: 16px; align-items: start; padding: 12px 0; border-bottom: 1px solid var(--line); }
   .us-row img { display: block; width: 100%; height: auto; aspect-ratio: 16 / 9; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); }
   .us-ref { margin: 0 0 4px; font: 13px/1.5 ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace; color: var(--accent); font-variant-numeric: tabular-nums; }
   .us-sub { margin: 0; overflow-wrap: anywhere; }
-  .us-decided { margin-top: 40px; }
-  .us-open { margin-top: 28px; }
-  .us-open ul { margin: 0; padding-left: 20px; overflow-wrap: anywhere; }
-  .us-decided dl { margin: 0; }
-  .us-decided dt { font-weight: 700; font-size: 14px; margin-top: 10px; overflow-wrap: anywhere; }
-  .us-decided dd { margin: 0; overflow-wrap: anywhere; }
   @media (max-width: 640px) { .us-row { grid-template-columns: minmax(0, 1fr); gap: 8px; } }
 """
 
@@ -60,6 +61,9 @@ def _scene_title(storyboard, sc):
     """場面の題。再生ページのチャプター一覧と同じ決め方（題がなければ空文字）"""
     if sc.get("title"):
         return sc["title"]
+    if sc.get("slide") is not None:   # スライドを指す場面は、スライドの見出し
+        sl = (storyboard.get("slides") or {}).get(sc["slide"]) or {}
+        return sl.get("title") or ""
     figs = sc.get("figure")
     figs = figs if isinstance(figs, list) else [figs]
     if len(figs) != 1:
@@ -69,7 +73,7 @@ def _scene_title(storyboard, sc):
 
 
 def chapters(storyboard, outline=None):
-    """場面を章にまとめる。戻り値: [{"title": 章の見出し, "says": [その章で言うこと…], "scenes": [場面の id…]}]
+    """場面を章にまとめる。戻り値: [{"id": 構成メモの章の id（なければ None）, "title": 章の見出し, "scenes": [場面の id…]}]
 
     構成メモがあり場面に chapter があれば構成メモの章、それ以外は場面や図の題でまとめる。
     同じ章が続けば 1 つにまとめ、題のない場面は直前の章に入れる。"""
@@ -81,10 +85,9 @@ def chapters(storyboard, outline=None):
     for sc in storyboard["scenes"]:
         och = by_id.get(sc["chapter"]) if isinstance(sc.get("chapter"), str) else None
         if och:
-            key, title = ("outline", och["id"]), och.get("title") or och["id"]
-            says = [s["text"] for s in och.get("says") or [] if isinstance(s, dict) and isinstance(s.get("text"), str)]
+            key, title, cid = ("outline", och["id"]), och.get("title") or och["id"], och["id"]
         else:
-            title, says = _scene_title(storyboard, sc), []
+            title, cid = _scene_title(storyboard, sc), None
             if not title and out:
                 out[-1]["scenes"].append(sc["id"])
                 continue
@@ -93,7 +96,7 @@ def chapters(storyboard, outline=None):
         if keys and keys[-1] == key:
             out[-1]["scenes"].append(sc["id"])
         else:
-            out.append({"title": title, "says": says, "scenes": [sc["id"]]})
+            out.append({"id": cid, "title": title, "scenes": [sc["id"]]})
             keys.append(key)
     return out
 
@@ -128,16 +131,39 @@ def _clock(seconds):
     return f"{s // 60}:{s % 60:02d}"
 
 
+def _data(frames_dir, rel):
+    with open(os.path.join(frames_dir, rel), "rb") as f:
+        return base64.b64encode(f.read()).decode("ascii")
+
+
+def _item_text(v):
+    return v["text"] if isinstance(v, dict) and isinstance(v.get("text"), str) and v["text"].strip() else None
+
+
+def _slide_block(storyboard, frames_dir, slide, intents):
+    """スライドの段: 完成形のコマ、見出し、（構成メモにあれば）意図と前のスライドからのつながり"""
+    sid = slide["id"]
+    title = ((storyboard.get("slides") or {}).get(sid) or {}).get("title") or sid
+    out = [f'<div class="us-slide"><img class="us-final" src="data:image/svg+xml;base64,{_data(frames_dir, slide["svg"])}" alt="{esc(title)} の完成形" loading="lazy">',
+           f"<h3>{esc(title)}</h3>"]
+    it = intents.get(sid) or {}
+    if it.get("link"):
+        out.append(f'<p class="us-link">前のスライドから: {esc(it["link"])}</p>')
+    if it.get("intent"):
+        out.append(f'<p class="us-intent">{esc(it["intent"])}</p>')
+    out.append("</div>")
+    return "".join(out)
+
+
 def _row(line, frames_dir):
-    with open(os.path.join(frames_dir, line["svg"]), "rb") as f:
-        data = base64.b64encode(f.read()).decode("ascii")
+    data = _data(frames_dir, line["svg"])
     ref = f"{line['scene']} / {line['id']} @{_clock(line['start'])}"
     return (f'<div class="us-row"><img src="data:image/svg+xml;base64,{data}" alt="{esc(ref)} のコマ" loading="lazy">'
             f'<div><p class="us-ref">{esc(ref)}</p><p class="us-sub">{esc(line["text"])}</p></div></div>')
 
 
 def build(storyboard, frames_dir, outline=None, artifact=False):
-    """絵コンテのページの HTML を返す。frames.json やコマの SVG がなければ OSError、形が違えば ValueError"""
+    """スライドコンテのページの HTML を返す。frames.json やコマの SVG がなければ OSError、形が違えば ValueError"""
     with open(os.path.join(frames_dir, "frames.json"), encoding="utf-8") as f:
         frames = json.load(f)
     lines = frames.get("lines")
@@ -152,29 +178,40 @@ def build(storyboard, frames_dir, outline=None, artifact=False):
     if stale:
         raise ValueError(f"コマが今の台本のものでない（{stale}）。台本を直したら frames.cjs を回し直す")
     title = storyboard.get("title") or "動く図解"
-    # 時刻の出どころ（frames.cjs に --timeline を渡したコマなら、合成した声の時刻。timed のない古いコマは見積もりとして扱う）
-    note = "絵コンテ（時刻は合成した声に合わせたもの）" if frames.get("timed") == "voice" else "絵コンテ（声なし。時刻は見積もり）"
-    body = [f'<h1>{esc(title)}</h1>', f'<p class="us-note">{note}</p>']
+    body = [f'<h1>{esc(title)}</h1>']
+    # 意図（3 段の意図の形の構成メモだけ。前の形 /1 では、章の題とコマと原稿だけを出す）
+    v2 = outline is not None and check_outline.version(outline) == 2
+    intents = check_outline.slide_intents(outline) if v2 else {}
+    och = {c["id"]: c for c in (outline or {}).get("chapters") or [] if isinstance(c, dict) and isinstance(c.get("id"), str)} if v2 else {}
+    flow = _item_text(outline.get("flow")) if v2 else None
+    finals = {sl["id"]: sl for sl in frames.get("slides") or [] if isinstance(sl, dict) and sl.get("id") and sl.get("svg")}
+    scene_slide = {sc["id"]: sc.get("slide") for sc in storyboard["scenes"]}
+    done, first = set(), True
     for ch in chapters(storyboard, outline):
-        rows = [_row(ln, frames_dir) for ln in lines if ln.get("scene") in ch["scenes"]]
-        if not rows:
+        parts = []
+        for sid in ch["scenes"]:
+            rows = [_row(ln, frames_dir) for ln in lines if ln.get("scene") == sid]
+            if not rows:
+                continue
+            slide = scene_slide.get(sid)
+            if slide is not None and slide not in done and slide in finals:   # 完成形と意図は、最初に使う場面の位置に 1 回だけ
+                done.add(slide)
+                parts.append(_slide_block(storyboard, frames_dir, finals[slide], intents))
+            parts.extend(rows)
+        if not parts:
             continue
+        if first and flow:
+            body.append(f'<p class="us-flow">章の順番: {esc(flow)}</p>')
         body.append(f'<section class="us-chapter"><h2>{esc(ch["title"])}</h2>')
-        if ch["says"]:
-            body.append('<ul class="us-says">' + "".join(f"<li>{esc(s)}</li>" for s in ch["says"]) + "</ul>")
-        body.extend(rows)
+        c = och.get(ch["id"]) or {}
+        if not first and _item_text(c.get("link")):
+            body.append(f'<p class="us-link">前の章から: {esc(_item_text(c["link"]))}</p>')
+        if _item_text(c.get("intent")):
+            body.append(f'<p class="us-intent">{esc(_item_text(c["intent"]))}</p>')
+        first = False
+        body.extend(parts)
         body.append("</section>")
-    proposed = check_outline.proposed_items(outline) if outline else []
-    if proposed:
-        body.append('<section class="us-decided"><h2>Claude が決めたこと</h2>'
-                    '<p class="us-note">まだ確認していただいていない項目です。直したいものがあれば、項目の名前で教えてください。</p><dl>')
-        body.extend(f'<dt>{esc(p["label"])}</dt><dd>{esc(p["text"])}</dd>' for p in proposed)
-        body.append("</dl></section>")
-    undecided = [x for x in (outline or {}).get("open") or [] if isinstance(x, str) and x.strip()]
-    if undecided:
-        body.append('<section class="us-open"><h2>まだ決めていないこと</h2><ul>'
-                    + "".join(f"<li>{esc(x)}</li>" for x in undecided) + "</ul></section>")
-    head = f"<title>{esc(title)} 絵コンテ</title>\n<style>{STYLE}</style>"
+    head = f"<title>{esc(title)} スライドコンテ</title>\n<style>{STYLE}</style>"
     main = '<div class="us-wrap">\n' + "\n".join(body) + "\n</div>"
     if artifact:
         return head + "\n" + main + "\n"

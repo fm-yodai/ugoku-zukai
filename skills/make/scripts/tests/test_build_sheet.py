@@ -17,6 +17,8 @@ FRAMES = os.path.join(SCRIPTS, "frames.cjs")
 SEQ = os.path.join(SCRIPTS, "..", "examples", "sequence.json")
 PAIR_SB = os.path.join(HERE, "outlines", "pair", "storyboard.json")
 PAIR_OUTLINE = os.path.join(HERE, "outlines", "pair", "outline.json")
+SLIDE_SB = os.path.join(SCRIPTS, "..", "examples", "slide-forms.json")
+SLIDE_OUTLINE = os.path.join(SCRIPTS, "..", "examples", "outlines", "slide-forms.json")
 
 sys.path.insert(0, SCRIPTS)
 try:
@@ -111,11 +113,13 @@ class BuildSheetTest(unittest.TestCase):
         _, html = self.build(PAIR_SB, self.frames_pair, "--outline", PAIR_OUTLINE)
         outline = load(PAIR_OUTLINE)
         self.assertIn(outline["chapters"][1]["title"], html)
-        self.assertIn(outline["chapters"][1]["says"][0]["text"], html)
         self.assertNotIn(outline["chapters"][2]["title"], html)   # 場面のない章は出さない
-        self.assertIn("Claude が決めたこと", html)
-        self.assertIn(outline["basics"]["look"]["text"], html)    # proposed の項目
-        self.assertNotIn(outline["basics"]["audience"]["text"], html)   # agreed の項目は一覧に出さない
+        # 前の形（/1）の構成メモ: 章の題とコマと原稿だけ。「言うこと」と、進行役が決めたことの一覧は出さない
+        self.assertNotIn(outline["chapters"][1]["says"][0]["text"], html)
+        self.assertNotIn("Claude が決めたこと", html)
+        self.assertNotIn(outline["basics"]["look"]["text"], html)
+        for cls in ("us-says", "us-decided", "us-open", "us-intent", "us-slide"):
+            self.assertNotIn(f'class="{cls}', html)
 
     def test_no_proposed_section_when_all_agreed(self):
         outline = load(PAIR_OUTLINE)
@@ -132,11 +136,12 @@ class BuildSheetTest(unittest.TestCase):
         with_outline = build_sheet.chapters(self.sb_pair, load(PAIR_OUTLINE))
         self.assertEqual([(c["title"], c["scenes"]) for c in with_outline],
                          [("現状の課題", ["s1"]), ("案の比較", ["s2", "s3"])])
-        self.assertEqual(len(with_outline[1]["says"]), 2)
+        self.assertEqual([c["id"] for c in with_outline], [load(PAIR_OUTLINE)["chapters"][i]["id"] for i in (0, 1)])
+        self.assertNotIn("says", with_outline[1])
         without = build_sheet.chapters(self.sb_pair, None)
         self.assertEqual([(c["title"], c["scenes"]) for c in without],
                          [("いまの困りごと", ["s1"]), ("二つの案", ["s2"]), ("困りごとへの効き方", ["s3"])])
-        self.assertEqual(without[0]["says"], [])
+        self.assertIsNone(without[0]["id"])
 
     def test_escapes_text(self):
         # 台本の字幕と題に <b>&"x" を入れ、frames.cjs を回し直してから組み立てる
@@ -173,7 +178,7 @@ class BuildSheetTest(unittest.TestCase):
         self.assertNotIn("<html", html)
         self.assertNotIn("<body", html)
         self.assertIn("<title>", html)
-        self.assertIn(" 絵コンテ</title>", html)
+        self.assertIn(" スライドコンテ</title>", html)
         _, full = self.build(SEQ, self.frames_seq)
         self.assertIn("<!doctype html>", full)
         self.assertIn("<body", full)
@@ -202,8 +207,8 @@ class BuildSheetTest(unittest.TestCase):
         self.assertEqual(r.returncode, 2)
         self.assertEqual(html, "")
 
-    def test_long_word_in_says_wraps(self):        # says に長い英字の並びがあっても横スクロールを出さない
-        self.assertRegex(build_sheet.STYLE, r"\.us-says \{[^}]*overflow-wrap: anywhere")
+    def test_long_word_in_intent_wraps(self):      # 意図に長い英字の並びがあっても横スクロールを出さない
+        self.assertRegex(build_sheet.STYLE, r"\.us-intent[^{]*\{[^}]*overflow-wrap: anywhere")
 
     def test_makes_output_folder(self):
         out = os.path.join(self.newdir(), "deep", "sheet.html")
@@ -225,6 +230,70 @@ class BuildSheetTest(unittest.TestCase):
         r, _ = self.build(SEQ, os.path.join(self.dir, "none"))
         self.assertEqual(r.returncode, 2)
         self.assertIn("frames.json", r.stderr)
+
+    # ---- スライドの段（完成形のコマと意図）----
+    def slide_setup(self):
+        if not hasattr(BuildSheetTest, "frames_slide"):
+            BuildSheetTest.frames_slide = self.frames(SLIDE_SB)
+        return BuildSheetTest.frames_slide
+
+    def test_slide_block(self):
+        r, html = self.build(SLIDE_SB, self.slide_setup(), "--outline", SLIDE_OUTLINE)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        ol, sb = load(SLIDE_OUTLINE), load(SLIDE_SB)
+        self.assertEqual(html.count('class="us-slide"'), 4)
+        self.assertEqual(html.count('class="us-final"'), 4)
+        for ch in ol["chapters"]:
+            self.assertIn(ch["intent"]["text"], html)
+            for sl in ch["slides"]:
+                self.assertIn(sl["intent"]["text"], html)
+                self.assertIn(f"<h3>{sb['slides'][sl['id']]['title']}</h3>", html)
+        self.assertIn("章の順番: " + ol["flow"]["text"], html)
+        self.assertIn("前の章から: " + ol["chapters"][1]["link"]["text"], html)
+        self.assertIn("前のスライドから: " + ol["chapters"][1]["slides"][1]["link"]["text"], html)
+        self.assertEqual(html.count("章の順番: "), 1)
+        # 並び: 章の題 → 章の意図 → 完成形 → スライドの意図 → その場面の行
+        order = [html.index(x) for x in ("<h2>二つの言葉の定義</h2>", ol["chapters"][1]["intent"]["text"], "<h3>二つの言葉の定義</h3>",
+                                         ol["chapters"][1]["slides"][0]["intent"]["text"], "s3 / l4 @")]
+        self.assertEqual(order, sorted(order))
+        self.assertEqual(html.count("<img "), 4 + sum(len(sc["lines"]) for sc in sb["scenes"]))
+
+    def test_no_meta(self):
+        _, html = self.build(SLIDE_SB, self.slide_setup(), "--outline", SLIDE_OUTLINE)
+        for word in ("Claude が決めたこと", "まだ決めていないこと", "見積もり", "合成した声", "proposed", "agreed", "検査"):
+            self.assertNotIn(word, html)
+        self.assertRegex(html, r"<title>[^<]* スライドコンテ</title>")
+
+    def test_slide_reused_once(self):
+        sb = load(SLIDE_SB)   # whose（s5・s6）の間に、relation の場面を挟む
+        s6 = sb["scenes"].pop()
+        sb["scenes"] += [{"id": "s9", "chapter": "c3", "slide": "relation", "lines": [{"id": "l90", "text": "関係の図に戻ります。"}]}, s6]
+        path = os.path.join(os.path.dirname(SLIDE_SB), "_tmp_reuse.json")   # 画像の相対パスのため、見本と同じフォルダに置く
+        try:
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(sb, f, ensure_ascii=False)
+            r, html = self.build(path, self.frames(path))
+        finally:
+            os.remove(path)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(html.count('class="us-final"'), 4)   # relation も whose も 1 回だけ
+        self.assertEqual(html.count("<h3>誰の体験か</h3>"), 1)
+        for ref in ("s9 / l90 @", "s6 / l12 @"):
+            self.assertIn(ref, html)
+
+    def test_partial_frames_slides(self):
+        r, html = self.build(SLIDE_SB, self.frames(SLIDE_SB, "--scenes", "s3"), "--outline", SLIDE_OUTLINE)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(html.count('class="us-slide"'), 1)
+        self.assertIn("<h3>二つの言葉の定義</h3>", html)
+        self.assertNotIn("<h3>UX の定義</h3>", html)
+
+    def test_scene_title_from_slide(self):   # 構成メモなし: 章の見出しはスライドの title。意図は出ない
+        _, html = self.build(SLIDE_SB, self.slide_setup())
+        for title in ("二つの言葉の関係", "UX の定義", "誰の体験か"):
+            self.assertIn(f"<h2>{title}</h2>", html)
+        self.assertNotIn('class="us-intent"', html)
+        self.assertEqual(html.count('class="us-final"'), 4)
 
     # ---- まだ決めていないこと（構成メモの open）と、時刻の出どころ ----
     def outline_with_open(self, items):
@@ -254,8 +323,8 @@ class BuildSheetTest(unittest.TestCase):
     def test_open_listed(self):
         r, html = self.build(PAIR_SB, self.frames_pair, "--outline", self.outline_with_open(["呼び名を <社内> に合わせるか"]))
         self.assertEqual(r.returncode, 0, r.stderr)
-        self.assertIn("まだ決めていないこと", html)
-        self.assertIn("呼び名を &lt;社内&gt; に合わせるか", html)
+        self.assertNotIn("まだ決めていないこと", html)   # ページには出さない（進行役が会話で伝える）
+        self.assertNotIn("呼び名を", html)
 
     def test_open_absent(self):
         for items in ([], None):
@@ -266,15 +335,17 @@ class BuildSheetTest(unittest.TestCase):
     def test_note_estimate(self):
         self.assertEqual(load(os.path.join(self.frames_pair, "frames.json")).get("timed"), "estimate")
         r, html = self.build(PAIR_SB, self.frames_pair)
-        self.assertIn("時刻は見積もり", html)
+        self.assertNotIn("見積もり", html)   # 時刻の出どころの注記は出さない
+        self.assertRegex(html, r"<title>[^<]* スライドコンテ</title>")
+        self.assertNotIn("絵コンテ", html)
 
     def test_note_voice(self):
         d = self.frames(PAIR_SB, "--timeline", self.voice_timeline())
         self.assertEqual(load(os.path.join(d, "frames.json")).get("timed"), "voice")
         r, html = self.build(PAIR_SB, d)
         self.assertEqual(r.returncode, 0, r.stderr)
-        self.assertIn("時刻は合成した声に合わせたもの", html)
-        self.assertNotIn("時刻は見積もり", html)
+        self.assertNotIn("合成した声", html)
+        self.assertRegex(html, r"s1 / l1 @0:01")   # 時刻は、渡した時刻表のもの
 
     def test_note_old_frames(self):
         # timed のない古い frames.json でも止まらず、見積もりとして出す
@@ -285,7 +356,6 @@ class BuildSheetTest(unittest.TestCase):
             json.dump(fr, f, ensure_ascii=False)
         r, html = self.build(PAIR_SB, d)
         self.assertEqual(r.returncode, 0, r.stderr)
-        self.assertIn("時刻は見積もり", html)
 
 
 if __name__ == "__main__":
