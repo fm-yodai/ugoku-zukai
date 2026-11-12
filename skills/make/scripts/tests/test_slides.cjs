@@ -270,6 +270,34 @@ const tests = {
     assert.strictEqual(fr.figs.pts.opacity, 0, "完成形に含めない部品の図は出さない");
     assert.strictEqual(fr.figs.other.opacity, 0);
   },
+
+  // ---- Task 6: blur ----
+  async blur_others() {
+    const M = await build(deck(TWO, [SC("s1", "p1", [{ id: "l1", text: "出して、ぼかします。", do: [{ show: "flow", dur: 0.2, stagger: 0 }, { show: "pts" }, { blur: "flow/sys" }] }])], { flow: FLOW }));
+    assert.deepStrictEqual(M.errors, []);
+    const st = UZ.frame(M, M.duration).st;
+    assert.ok(st["flow/sys"].blur < 0.01, "対象はぼかさない");
+    assert.ok(st["flow/app"].blur > 0.99, "同じ図のほかの部品はぼける");
+    assert.ok(st["pts/a"].blur > 0.99, "対象のない図も、全体がぼける");
+    assert.strictEqual(st["flow/app"].dim, 1, "薄くはしない（focus とは別）");
+  },
+  async unblur_restores() {
+    const M = await build(deck(TWO, [SC("s1", "p1", [
+      { id: "l1", text: "出して、ぼかします。", do: [{ show: "flow", dur: 0.2, stagger: 0 }, { show: "pts" }, { blur: "pts" }] },
+      { id: "l2", text: "戻します。", do: [{ unblur: true }] }])], { flow: FLOW }));
+    assert.deepStrictEqual(M.errors, []);
+    assert.ok(UZ.frame(M, lineEnd(M, "l1") + 0.2).st["flow/app"].blur > 0.99);
+    const st = UZ.frame(M, M.duration).st;
+    for (const k of ["flow/app", "flow/sys", "pts/a"]) assert.ok(st[k].blur < 0.01, `${k} が戻る`);
+  },
+  async blur_and_focus_independent() {
+    const M = await build(deck(TWO, [SC("s1", "p1", [{ id: "l1", text: "出して、絞って、ぼかします。", do: [{ show: "flow", dur: 0.2, stagger: 0 }, { show: "pts" }, { focus: "flow/sys" }, { blur: "flow/sys" }] }])], { flow: FLOW }));
+    assert.deepStrictEqual(M.errors, []);
+    const st = UZ.frame(M, M.duration).st;
+    assert.ok(Math.abs(st["flow/app"].dim - 0.2) < 0.01 && st["flow/app"].blur > 0.99);
+    assert.strictEqual(st["pts/a"].dim, 1, "focus は同じ図の中だけ");
+    hasErr(await build(deck(TWO, [SC("s1", "p1", [{ id: "l1", text: "あ。", do: [{ blur: "nai" }] }])], { flow: FLOW })), /「nai」がこの場面の図/);
+  },
 };
 
 (async () => {

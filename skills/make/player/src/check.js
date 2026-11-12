@@ -33,7 +33,7 @@
         for (const it of Object.values(F.items)) {
           if (it.kind === "group" || it.kind === "dot") continue;
           const s = fr.st[it.key];
-          if (!s || s.show < 0.95 || s.dim < 0.5) continue;
+          if (!s || s.show < 0.95 || s.dim < 0.5 || s.blur > 0.5) continue;
           vis.push({ it, pl: ff.place, s });
         }
       }

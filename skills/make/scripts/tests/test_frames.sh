@@ -150,7 +150,7 @@ cat >"$out/slide.json" <<'EOF'
     { "id": "pts", "type": "list", "items": [{ "id": "a", "text": "一つ目の項目" }, { "id": "b", "text": "二つ目の項目" }], "area": { "col": [1, 6], "row": [1, 6] } },
     { "id": "defs", "type": "text", "blocks": [{ "id": "p", "kind": "para", "text": "段落の**強調**の文。" }], "area": { "col": [7, 12], "row": [1, 6] } } ] },
     "p2": { "title": "別", "parts": [{ "id": "o", "type": "list", "items": [{ "id": "x", "text": "別の話" }] }] } },
-  "scenes": [ { "id": "s1", "slide": "p1", "lines": [{ "id": "l1", "text": "一つ目だけ出します。", "do": [{ "show": "a" }] }] },
+  "scenes": [ { "id": "s1", "slide": "p1", "lines": [{ "id": "l1", "text": "一つ目だけ出します。", "do": [{ "show": "a" }, { "show": "defs" }, { "blur": "a" }] }] },
               { "id": "s2", "slide": "p2", "lines": [{ "id": "l2", "text": "別の話です。", "do": [{ "show": "o" }] }] } ] }
 EOF
 node scripts/frames.cjs "$out/slide.json" --theme koo -o "$out/sl" >"$out/sl.log" 2>&1
@@ -168,6 +168,7 @@ ok = ok && JSON.stringify(JSON.parse(fs.readFileSync(legacy + "/frames.json", "u
 process.exit(ok ? 0 : 1);
 ' "$out/sl" "$out/a" 2>/dev/null || ng "スライドの完成形のコマ（svg/slide-<id>.svg と frames.json の slides）が正しくない"
 node scripts/frames.cjs "$out/slide.json" --theme koo -o "$out/sl2" --scenes s2 >/dev/null 2>&1
+grep -q 'filter="url(#uz-bl-' "$out/sl/svg/l1.svg" && grep -q '<feGaussianBlur stdDeviation="4"' "$out/sl/svg/l1.svg" || ng "ぼかした部品のコマの SVG に、ぼかしのフィルタがない"
 [ -f "$out/sl2/svg/slide-p2.svg" ] && [ ! -e "$out/sl2/svg/slide-p1.svg" ] || ng "--scenes のとき、選んだ場面が使うスライドの完成形だけになっていない"
 
 [ $fail = 0 ] && echo "frames の検査: すべて OK" || echo "frames の検査: NG あり"

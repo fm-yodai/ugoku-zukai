@@ -39,6 +39,7 @@
         el("feGaussianBlur", { stdDeviation: 5, result: "b" }, f);
         const mg = el("feMerge", null, f); el("feMergeNode", { in: "b" }, mg); el("feMergeNode", { in: "SourceGraphic" }, mg);
       }
+      this.defs = defs; this.blurN = 0;
       if (th.shape.shadow) {
         const f = el("filter", { id: "uz-shadow", x: "-20%", y: "-20%", width: "140%", height: "160%" }, defs);
         el("feDropShadow", { dx: 0, dy: 2, stdDeviation: 3, "flood-color": "#1d2433", "flood-opacity": 0.12 }, f);
@@ -227,7 +228,25 @@
       }
       for (const [key, E] of Object.entries(this.els)) {
         const it = E.it, s = fr.st[key] || { show: 0, dim: 1, pulse: 0, off: [0, 0] };
-        const show = s.show, dim = s.dim;
+        const show = s.show, blur = s.blur || 0, dim = s.dim * (1 - 0.35 * blur);
+        // ぼかし（blur）: 部品ごとのフィルタを、初めてぼかすときに作る。範囲は部品の外枠から座標で決める
+        // （外枠の割合で取ると、水平な線は高さ 0 で消える。広く取りすぎると PNG にするのが遅い）
+        const bl = blur > 0.02 && E.g && it.bbox ? +(blur * 4).toFixed(2) : 0;
+        if (E.g && E._bl !== bl) {
+          E._bl = bl;
+          const blurEls = E.label && E.label.parentNode !== E.g ? [E.g, E.label] : [E.g];   // 辺のラベルは別の層にある
+          if (bl) {
+            if (!E.blurF) {
+              let x0 = it.bbox.x, y0 = it.bbox.y, x1 = x0 + it.bbox.w, y1 = y0 + it.bbox.h;
+              for (const b of [it.label && it.label.bbox, ...(it.texts || []).map(T => T.bbox)]) if (b) { x0 = Math.min(x0, b.x); y0 = Math.min(y0, b.y); x1 = Math.max(x1, b.x + b.w); y1 = Math.max(y1, b.y + b.h); }
+              const f = el("filter", { id: `uz-bl-${++this.blurN}`, filterUnits: "userSpaceOnUse", x: x0 - 28, y: y0 - 28, width: x1 - x0 + 56, height: y1 - y0 + 56 }, this.defs);
+              E.blurF = el("feGaussianBlur", { stdDeviation: bl }, f);
+              E.blurId = f.getAttribute("id");
+            }
+            E.blurF.setAttribute("stdDeviation", bl);
+            for (const g of blurEls) g.setAttribute("filter", `url(#${E.blurId})`);
+          } else for (const g of blurEls) g.removeAttribute("filter");
+        }
         const op = (x) => (x * dim).toFixed(3);
         const off = s.off || [0, 0];
         if (it.kind === "box") {

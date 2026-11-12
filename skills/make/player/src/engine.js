@@ -5,7 +5,7 @@
 
   UZ.FORMATS = ["ugoku-zukai/2", "ugoku-zukai/3"];   // /2 = 場面が図を指す形だけ。/3 = スライドも使える
   UZ.FORMAT = "ugoku-zukai/3";
-  UZ.VERBS = ["show", "hide", "focus", "unfocus", "pulse", "mark", "unmark", "trace", "reply", "note", "badge", "relabel", "tint", "move", "custom"];
+  UZ.VERBS = ["show", "hide", "focus", "unfocus", "blur", "unblur", "pulse", "mark", "unmark", "trace", "reply", "note", "badge", "relabel", "tint", "move", "custom"];
   const MARK_RE = /\{([A-Za-z0-9_]+)\}/g;
 
   // ---- 字幕の文と印 ----
@@ -62,7 +62,7 @@
 
   // ---- 動作の既定の長さ ----
   const LABEL_HOLD = 2.4;   // 点の札を見せておく秒数
-  const DUR = { show: 0.7, hide: 0.5, focus: 0.6, unfocus: 0.6, pulse: 0.8, mark: 0.5, unmark: 0.4, trace: 2.0, reply: 0.8, note: 0.6, badge: 0.5, relabel: 0.6, tint: 0.6, move: 1.0, custom: 2.0 };
+  const DUR = { show: 0.7, hide: 0.5, focus: 0.6, unfocus: 0.6, blur: 0.6, unblur: 0.6, pulse: 0.8, mark: 0.5, unmark: 0.4, trace: 2.0, reply: 0.8, note: 0.6, badge: 0.5, relabel: 0.6, tint: 0.6, move: 1.0, custom: 2.0 };
   const STAGGER = 0.22;
 
   const verbOf = a => UZ.VERBS.find(v => Object.prototype.hasOwnProperty.call(a, v));
@@ -203,7 +203,7 @@
           const act = { verb, start, line: ln.id, scene: sc.id, a };
           let dur = a.dur ?? DUR[verb];
           const val = a[verb];
-          if (verb === "show" || verb === "hide" || verb === "pulse" || verb === "focus") {
+          if (verb === "show" || verb === "hide" || verb === "pulse" || verb === "focus" || verb === "blur") {
             const keys = [];
             for (const ref of asList(val)) {
               const x = extraKey(sc, ref, where);   // 点（dot:<名前>）と注記（note:<id>）
@@ -221,6 +221,9 @@
               dur = act.each + act.stagger * Math.max(0, keys.length - 1);
             }
             if (verb === "focus") act.figsOf = [...new Set(keys.map(k => k.split("/")[0]))];
+            if (verb === "blur") act.figsOf = sc.figs;   // ぼかしは、対象のない図も含めて場面の全部の図に及ぶ
+          } else if (verb === "unblur") {
+            act.figsOf = val === true || val == null ? sc.figs : asList(val);
           } else if (verb === "unfocus") {
             act.figsOf = val === true || val == null ? sc.figs : asList(val);
           } else if (verb === "mark" || verb === "unmark") {
@@ -470,7 +473,7 @@
   // ================= 時刻 t のコマ =================
   UZ.frame = function (M, t) {
     const st = {};
-    const get = k => st[k] || (st[k] = { show: 0, dim: 1, pulse: 0, tint: null, tintP: 0, text: null, textFrom: null, textP: 1, mark: null, pos: null, off: [0, 0], labelText: null });
+    const get = k => st[k] || (st[k] = { show: 0, dim: 1, blur: 0, pulse: 0, tint: null, tintP: 0, text: null, textFrom: null, textP: 1, mark: null, pos: null, off: [0, 0], labelText: null });
     let badge = { text: "", show: 0, from: "" };
     const customs = {};
     for (const a of M.acts) {
@@ -488,6 +491,15 @@
           }
           break;
         }
+        case "blur": {
+          const set = new Set(a.keys);
+          for (const fid of a.figsOf) for (const it of Object.values(M.figs[fid].items)) {
+            const s = get(it.key); const target = set.has(it.key) || set.has(`${fid}/${it.target}`) || it.kind === "dot" || it.kind === "note" || it.isReply ? 0 : 1;
+            s.blur = mix(s.blur, target, smooth(p));
+          }
+          break;
+        }
+        case "unblur": for (const fid of a.figsOf) for (const it of Object.values(M.figs[fid] ? M.figs[fid].items : {})) { const s = get(it.key); s.blur = mix(s.blur, 0, smooth(p)); } break;
         case "unfocus": for (const fid of a.figsOf) for (const it of Object.values(M.figs[fid] ? M.figs[fid].items : {})) { const s = get(it.key); s.dim = mix(s.dim, 1, smooth(p)); } break;
         case "mark": { const s = get(a.key); if (s.mark && s.mark !== a.kind && s.show > 0) { s.mark = a.kind; s.show = Math.max(0.6, ease(p)); } else { s.mark = a.kind; s.show = Math.max(s.show, ease(p)); } s.markPop = p < 1 ? Math.sin(Math.PI * p) : 0; break; }
         case "unmark": { const s = get(a.key); s.show = Math.min(s.show, 1 - p); break; }
@@ -563,7 +575,7 @@
       figsF[fid] = { opacity: 1, place: sc.place[fid] };
       for (const it of Object.values(M.figs[fid].items)) {
         if (it.kind === "mark" || it.kind === "note" || it.kind === "dot" || it.isReply) continue;
-        st[it.key] = { show: 1, dim: 1, pulse: 0, tint: null, tintP: 0, text: null, textFrom: null, textP: 1, mark: null, pos: null, off: [0, 0], labelText: null };
+        st[it.key] = { show: 1, dim: 1, blur: 0, pulse: 0, tint: null, tintP: 0, text: null, textFrom: null, textP: 1, mark: null, pos: null, off: [0, 0], labelText: null };
       }
     }
     return { t: sc.start, st, figs: figsF, scene: sc, statement: { lines: sc.statement, opacity: 1, prev: null }, captions: [],
