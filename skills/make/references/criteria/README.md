@@ -21,7 +21,7 @@
 | 呼ぶ場面 | `target` | 評価役と担当の基準 |
 |---|---|---|
 | 章の意図が固まったとき | `outline` | director: O-D1〜O-D9。fact-checker: O-F1・O-F2（資料のある題材か、`by` が `source` の基本の項目があるとき） |
-| 最初のスライドコンテを見せる前（スライド） | `script` | director: A-1〜A-5、G-D1〜G-D7、G-D9・G-D10、G-D11〜G-D15、S-D1・S-D2・S-D4。見るのはスライドの宣言と完成形のコマ。原稿は、意図に書かれたことの在りかを探すときだけ読む |
+| 最初のスライドコンテを見せる前（スライド） | `script` | director: A-1〜A-5、G-D1〜G-D7、G-D9・G-D10、G-D11〜G-D16、S-D1・S-D2・S-D4。見るのはスライドの宣言と完成形のコマ。原稿は、意図に書かれたことの在りかを探すときだけ読む |
 | 最初のスライドコンテを見せる前（コマ） | `screen` | director: V-1〜V-6、G-D5、G-D8 |
 | スライドが固まった後（原稿） | `script` | fact-checker: S-F1・S-F2・S-F4・S-F5。writing-reviewer: S-W1〜S-W7、S-W10・S-W11、S-W12・S-W13。スライドを変えていたら、director に変えたスライドだけを見てもらう |
 | 合成の前 | `voice` | writing-reviewer（読みモード）: S-W8・S-W9 |

@@ -1,0 +1,35 @@
+# スライドのデザインの原則
+
+スライドを組むときと、スライドを見るときに思い出す原則。どれも広く知られた考え方なので、ここでは名前と、このプレーヤーの区画（12 列 × 6 行）に当てはめたときの要点だけを書く。決まりではない。利用者の好みやデザインの指定があれば、そちらに従う。
+
+## 4 つの基本（Williams の近接・整列・反復・対比）
+
+- **近接**: 関係の強いものは近く、別の話は離す。見出しと中身の間は、組と組の間より狭く。区画の間隔は 24px で一定なので、組の間で差をつけるには空の列・行を挟むか、フレームで囲む
+- **整列**: 何かの線に揃える。文章が複数行続くものは左揃え。中央揃えは、1〜2 行の題や図の中の短いラベル向き。隣り合う部品は、上端か中央をそろえる（`valign`）
+- **反復**: 同じ役割のものは、どのスライドでも同じ置き方・色・大きさにする。並べ方の型を途中で変えない
+- **対比**: 違うものは、はっきり違えて見せる。大きさの差は 3 段階くらいまで。強調の色は、説明の主役に置く（比べる図では主役の側だけ）
+
+## 余白と大きさ
+
+- 空きを恐れない。埋めるために部品や飾りを足さない
+- ただし、空きは部品の間に半端に挟まず、組の外側の 1 か所にまとめる。左上に小さく寄って右下が大きく空く形は、量が偏って見える
+- 主な図は広く取る。見た目の重さは面積で決まるので、図を大きくするのがいちばん効く（表・箇条・循環図は、スライドでは区画に合わせて組まれる）
+- 区画は中身の量に合わせて取る。テキストは区画の上に寄るので、行数より大きく取ると下に空きが残る
+- 文字は小さくしすぎない。文が入らないときは、文字を小さくするより文を短くする
+- 端の列（1 列目・12 列目）に文字をぎりぎりまで置かない。枠の中の文字は、枠から 1 文字分ほど離す
+
+## 声と一緒に見せるスライド（Mayer のマルチメディア学習の原則）
+
+- **一貫性**: 言いたいことに効かないものは載せない
+- **信号**: 今どこを見るかを、矢印・強調・色で示す（このプレーヤーでは `focus`・`trace`・`mark`）
+- **空間的近接**: 説明の言葉は、それが指す図のすぐそばに置く。凡例や離れた説明文で対応させない
+- **冗長**: 声で言う文を、そのまま画面にも長文で載せない。画面は要点と図、文は声で
+
+## 出どころ
+
+- Robin Williams『The Non-Designer's Design Book』（近接・整列・反復・対比）。https://presentationzen.com/blog/design-fundamentals-contrast-repetition-alignment-proximity
+- R. E. Mayer, *Multimedia Learning*（3rd ed., 2020）。要約: https://www.unh.edu/teaching-learning-resource-hub/sites/default/files/media/2023-06/itow-research-based-principles-for-designing-multimedia-instruction-mayer.pdf
+- NN/g「5 Principles of Visual Design in UX」（大きさは 3 段階まで、バランスは面積で決まる）https://www.nngroup.com/articles/principles-visual-design/ 、「Proximity Principle in Visual Design」https://www.nngroup.com/articles/gestalt-proximity/
+- Garr Reynolds「Design Tips」（余白を残し、埋めない）https://garrreynolds.com/design-tips 、Duarte（余白が要素を孤立させて焦点を絞る）
+- 伝わるデザイン「レイアウト」（外側の余白は本文の 1〜2 文字分、関係の強いものを近くに）https://tsutawarudesign.com/miyasuku4.html
+- Friesens（要素の間に挟まった半端な空きを避け、余白は囲むために使う）

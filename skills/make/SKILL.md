@@ -75,7 +75,7 @@ metadata:
 |---|---|---|
 | 構成メモ | `outline.json`（`references/outline.md`。3 段の意図）、`scripts/check_outline.py`（`--ready`・`--agree-all`） | 決めるたびに書き、書いたら検査する。スライドを作る前に `--ready` |
 | 調べる | 渡された資料、Web 検索。Claude Code では researcher（取材メモ `brief.md`） | 調べれば分かる話題が出たとき |
-| 台本（スライドと原稿） | `storyboard.json`（`references/storyboard.md`。スライドは 8 章）、`scripts/check_storyboard.cjs`（`--outline`。書き終えたら `--complete`）、`scripts/check_text.py` | 章の意図が固まった章から。Claude Code では初稿と章単位の書き直しを writer に任せる |
+| 台本（スライドと原稿） | `storyboard.json`（`references/storyboard.md`。スライドは 8 章。見た目の原則は `references/layout.md`）、`scripts/check_storyboard.cjs`（`--outline`。書き終えたら `--complete`）、`scripts/check_text.py` | 章の意図が固まった章から。Claude Code では初稿と章単位の書き直しを writer に任せる |
 | スライドコンテ | `scripts/frames.cjs`（`--scenes`・`--lines`）、`scripts/build_sheet.py`（`--outline`・`--alts`） | スライドの案ができたら。任されたときの最初の確認 |
 | 案の見比べ | `scripts/alts.py`（`new`・`frames`・`pick`・`drop`） | 迷ったスライドと、利用者が気に入らないと言ったスライド |
 | 粗い再生ページ | `scripts/build_player.py`（声なし） | 動きと間を見たいとき。合成の前の最終確認 |

@@ -24,12 +24,12 @@ tools: Read, Glob, Write
 2. `${CLAUDE_PLUGIN_ROOT}/skills/make/references/review-protocol.md` の「評価役の独立」「評価役の約束」
 3. `${CLAUDE_PLUGIN_ROOT}/skills/make/references/writing/review-format.md`（出力の形、`where` の書き方、レベル）
 4. `${CLAUDE_PLUGIN_ROOT}/skills/make/references/outline.md`（構成メモの形。3 段の意図）と `<workdir>/outline.json`
-5. `script` と `screen` では `${CLAUDE_PLUGIN_ROOT}/skills/make/references/storyboard.md`（8 章のスライド、2 章の図の種類、5 章の動作）と `${CLAUDE_PLUGIN_ROOT}/skills/make/references/visual-grammar.md`（VG-1〜VG-8。基準が番号で参照している）
+5. `script` と `screen` では `${CLAUDE_PLUGIN_ROOT}/skills/make/references/storyboard.md`（8 章のスライド、2 章の図の種類、5 章の動作）と `${CLAUDE_PLUGIN_ROOT}/skills/make/references/visual-grammar.md`（VG-1〜VG-8。基準が番号で参照している）と `${CLAUDE_PLUGIN_ROOT}/skills/make/references/layout.md`（デザインの原則。G-D16）
 
 | `target` | 基準ファイル | 担当の基準 | 見るもの |
 |---|---|---|---|
 | `outline` | `criteria/outline.md` | O-D1〜O-D9 | `outline.json` |
-| `script` | `criteria/agreement.md`・`criteria/structure.md`・`criteria/script.md` | A-1〜A-5、G-D1〜G-D7、G-D9・G-D10、G-D11〜G-D15、S-D1・S-D2・S-D4 | `storyboard.json` のスライド（`slides`・`figures`）と動作、完成形のコマ `frames/svg/slide-<スライドの id>.svg`、`outline.json` |
+| `script` | `criteria/agreement.md`・`criteria/structure.md`・`criteria/script.md` | A-1〜A-5、G-D1〜G-D7、G-D9・G-D10、G-D11〜G-D16、S-D1・S-D2・S-D4 | `storyboard.json` のスライド（`slides`・`figures`）と動作、完成形のコマ `frames/svg/slide-<スライドの id>.svg`、`outline.json` |
 | `screen` | `criteria/screen.md`・`criteria/structure.md` | V-1〜V-6、G-D5、G-D8 | `frames/frames.json` と、その `sheets` に載ったシート、`storyboard.json`、`outline.json`。コマの場所を渡されたら、`frames/` の代わりにそこ |
 
 担当の基準はすべて PASS / FAIL / UNKNOWN で判定し（`checks`）、FAIL を `findings` に出す。機械が判定する基準（O-M・A-M・S-M・G-M・V-M）は判定せず、機械の結果に出ている問題を重ねて指摘しない。
@@ -68,6 +68,7 @@ tools: Read, Glob, Write
    - G-D13: 1 枚で 1 つのことを言っているか。分ける案は `suggestion` に、どこで分けるかまで書く
    - G-D14: テキストの量が、そのスライドが出ている間に読み切れるか
    - G-D15: 図と文章が、同じことを 2 度言っていないか
+   - G-D16: 完成形の PNG を見て、デザインの原則（`layout.md`）に照らして読みやすいか。原則は決まりではない。利用者の指定や意図から読める理由があれば、それに従う
    - G-D2: 図の種類が、言いたいことと意図に合っているか
    - G-D9: 表・比較・As-Is/To-Be で、隣り合う列や左右を読み比べる。言葉を変えて同じ内容を並べているだけなら FAIL（列を 1 つにするか、図の種類を変える案を `suggestion` に書く）
    - G-D10: `roadmap`・`swimlane` などの表の形の図で、箱が期間の長さや受け渡しの順を見せていないなら FAIL（`table` にする案を書く）
@@ -107,7 +108,7 @@ tools: Read, Glob, Write
 
 **最後の手順として、必ず出力先のファイルに Write する。** 本文で JSON を返したり、「JSON にしてください」と進行役に頼んだりしない（進行役は出力ファイルを `ledger.py ingest` で取り込む）。Write した後の返事は、出力先のパスと件数（must・should・nits）だけでよい
 
-- `level` は基準の表に従う。重さが must だけの基準（O-D1〜O-D4・O-D6・O-D8、A-1〜A-3・A-5、S-D1・S-D2、G-D1・G-D2・G-D11・G-D12、V-1〜V-4）の指摘は must。must と should を分けている基準（O-D7、A-4、G-D7・G-D13・G-D14、V-6）では、基準の表の定義どおりに付ける。should の基準（O-D5・O-D9、S-D4、G-D3〜G-D6、G-D8〜G-D10、G-D15、V-5）では、伝わりやすさに効くものを should、直さなくても伝わり方が変わらない好みの範囲を nits にする
+- `level` は基準の表に従う。重さが must だけの基準（O-D1〜O-D4・O-D6・O-D8、A-1〜A-3・A-5、S-D1・S-D2、G-D1・G-D2・G-D11・G-D12、V-1〜V-4）の指摘は must。must と should を分けている基準（O-D7、A-4、G-D7・G-D13・G-D14、V-6）では、基準の表の定義どおりに付ける。should の基準（O-D5・O-D9、S-D4、G-D3〜G-D6、G-D8〜G-D10、G-D15・G-D16、V-5）では、伝わりやすさに効くものを should、直さなくても伝わり方が変わらない好みの範囲を nits にする
 - 根拠の無い判定は無効になる
 
 ## してはいけないこと

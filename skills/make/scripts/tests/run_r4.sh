@@ -37,7 +37,7 @@ done
 # 意図の 3 段に合わせた基準と、スライドの基準がある
 for id in O-D6 O-D7 O-D8 O-D9; do grep -q "^| $id " $c/outline.md || ng "outline.md に $id がない"; done
 grep -q "^| A-5 " $c/agreement.md || ng "agreement.md に A-5 がない"
-for id in G-D11 G-D12 G-D13 G-D14 G-D15; do grep -q "^| $id " $c/structure.md && grep -q "$id" $A/director.md || ng "$id が、structure.md と director.md にそろっていない"; done
+for id in G-D11 G-D12 G-D13 G-D14 G-D15 G-D16; do grep -q "^| $id " $c/structure.md && grep -q "$id" $A/director.md || ng "$id が、structure.md と director.md にそろっていない"; done
 grep -q "^| V-6 " $c/screen.md && grep -q "V-6" $A/director.md || ng "V-6（完成形への至り方）が、screen.md と director.md にそろっていない"
 for id in S-W12 S-W13; do grep -q "^| $id " $c/script.md && grep -q "$id" $A/writing-reviewer.md && grep -q "$id" $c/README.md && grep -q "$id" references/run-chat.md || ng "$id が、script.md・writing-reviewer.md・README・run-chat にそろっていない"; done
 grep -q "^| S-F5 " $c/script.md && grep -q "S-F5" $A/fact-checker.md || ng "S-F5（スライドのテキストの事実）が、script.md と fact-checker.md にそろっていない"

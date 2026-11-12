@@ -30,7 +30,7 @@ tools: Read, Write, Edit, Glob, Grep, Bash(node ${CLAUDE_PLUGIN_ROOT}/skills/mak
 2. `${CLAUDE_PLUGIN_ROOT}/skills/make/references/criteria/` の `README.md`・`agreement.md`・`structure.md`・`script.md`・`screen.md`
 3. `${CLAUDE_PLUGIN_ROOT}/skills/make/references/review-protocol.md`（「作り手の約束」）
 4. `${CLAUDE_PLUGIN_ROOT}/skills/make/references/storyboard.md`（台本の形式の正。8 章のスライド・部品・区画・完成形、図の種類、場面と行、文中の印、動作の一覧、検査が見ること）と、`${CLAUDE_PLUGIN_ROOT}/skills/make/examples/slide-forms.json`（スライドの形の見本。対になる構成メモは `examples/outlines/slide-forms.json`）。使う図の種類に近い見本も読む
-5. `${CLAUDE_PLUGIN_ROOT}/skills/make/references/visual-grammar.md`（演出の約束 VG-1〜VG-8）
+5. `${CLAUDE_PLUGIN_ROOT}/skills/make/references/visual-grammar.md`（演出の約束 VG-1〜VG-8）と `${CLAUDE_PLUGIN_ROOT}/skills/make/references/layout.md`（スライドのデザインの原則。区画を決める前に読む）
 6. `${CLAUDE_PLUGIN_ROOT}/skills/make/references/writing/rules.md`（TW-1〜TW-9）と `${CLAUDE_PLUGIN_ROOT}/skills/make/references/writing/spoken.md`（聞いて分かる文の規則 SP-1〜SP-10 と SP-15〜SP-17、話の流れ SP-11〜SP-14、章扉。書く前に読み、書いた後に見直す）
 
 ## 台本の書き方
@@ -44,7 +44,7 @@ tools: Read, Write, Edit, Glob, Grep, Bash(node ${CLAUDE_PLUGIN_ROOT}/skills/mak
 - **スライドの切り方**: 1 枚で 1 つのことを言う（G-D13）。章の意図に書かれた「聴衆が分かること」と、利用者が入れたいと言って意図に書き込まれた内容が、どれかのスライドに入るように切る（A-1）。意図にないことを足さない（A-2）。章ごとの長さは、構成メモの `seconds` に合わせる
 - **見出し**（`title`）: 資料の見出しとして書く（「ユーザビリティと UX の違い」）。字幕の言い回しや問いかけに合わせない（G-D7）
 - **言いたいこと**（`statement`）: この 1 枚で伝えたいことを、1 文で言い切る（G-D11）。見出しの言い直しや「〜について」にしない。図だけで足りる 1 枚と章扉では省いてよいが、省く理由がスライドの意図から読めるようにする
-- **部品**（`parts`）: 図・テキスト・画像・フレームを、区画（`area`。12 列 × 6 行）に置く。「左に図、右に文章」「上に定義の囲み、下に小さな図」のように、内容に合わせて決める。決まった型はない
+- **部品**（`parts`）: 図・テキスト・画像・フレームを、区画（`area`。12 列 × 6 行）に置く。「左に図、右に文章」「上に定義の囲み、下に小さな図」のように、内容に合わせて決める。決まった型はない。区画を決めるときは `layout.md` の原則（近接・整列・余白の寄せ方など）を思い出し、完成形の PNG（`frames/slide-<id>.png`）で見た目を確かめる。部品が区画より小さいときの寄せ方は `valign`・`halign` で決める（G-D16）
   - 図: 図の種類は、言いたいことと意図に合うものを選ぶ（G-D2）。文章で言うほうが伝わることを、無理に図にしない。`graph` の辺にはすべて具体的な動詞句の label（「公開鍵を取得」。「使う」「呼ぶ」の 1 語にしない）を付ける。区分（`groups` の `band` / `frame`、`swimlane` の担当、`sequence` の参加者）は実際の配置・責務の境界で切る。応答の戻りに `reply` を使うなら、区間ごとに逆向きの辺も宣言する。表や比較では、隣り合う列や左右に同じ内容を言葉を変えて並べない（G-D9）。行と列に言葉を置くだけなら `table` を使い、`roadmap` や `swimlane` のセルに箱を並べない（G-D10）。4 象限（`matrix`）では、当てはまる象限だけでなく該当しない象限も原稿で言い、象限を塗り分ける（当てはまる象限に `role`、該当しない象限に `"off": true`）。含む関係は `venn` の `inside` で描く。色は役割（`role`）で付け、同じ意味には動画を通して同じ役割を使う（VG-2）。多対多の関係（3 つ → 3 つなど）は `graph` にすると辺が増えて文字が小さくなるので、`table` か `list` にする
   - テキスト: 小見出し・段落・箇条・定義や引用の囲み（`quote`）。**書き言葉で書く**（TW-1〜TW-9。話し言葉の規則 SP- はかけない）。図から読み取れないこと（定義、理由、条件、出どころ）を書き、図が言えていることを言葉を変えて繰り返さない（G-D15）。量は、そのスライドが出ている間に聴衆が読み切れるだけにする（G-D14）。比喩・造語・スキル内部の用語（`${CLAUDE_PLUGIN_ROOT}/skills/make/assets/banned_terms.json`）を使わない
   - **事実を書いたブロックには `source` を付ける。** 取材メモの事実を使ったら、その出どころを写す。定義や引用の囲みは、原文と合わせ、出どころを書く（規格の番号と条項、URL と引用）。評価役が照合する（S-F5）
