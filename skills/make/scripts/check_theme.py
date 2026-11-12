@@ -4,13 +4,15 @@
 使い方: python3 check_theme.py theme.json [--json] [--design design-report.json]
   --design  extract_design.py の報告を渡すと、テーマがそのデザインから外れていないかも見る。
             背景・本文はデザインの色そのまま、強調はデザインの色相（明るさは動かしてよい）、字体の先頭はデザインの字体、
-            デザインが影を使わないなら影なし、が不合格の条件。役割の色がデザインにないときは注意に留める
+            デザインが影を使わないなら影なし、が不合格の条件。役割の色・意味の色（good / bad / warn）・箱の面と枠（colors.boxes）・
+            字幕の帯・章扉の地がデザインにないときは注意に留める
 終了コード: 0 = 合格（注意は出る）、1 = 不合格、2 = 使い方の誤りかファイルを読めない
 基準:
   - 本文の色（ink）と背景: 4.5 以上（WCAG 1.4.3）。字幕の文字と字幕の帯も同じ
   - 補足の色（muted）・強調（accent）と背景: 4.5 以上（ラベルや注記の文字に使うため）
   - 役割の色・good / bad / warn と背景: 3 以上（図形の線。WCAG 1.4.11）
-  - 箱の塗りの上の本文: 4.5 以上
+  - 箱の塗りの上の本文: 4.5 以上（colors.boxes に面と文字の色を書いた役割は、その面とその文字で見る）
+  - 章扉（chapter）の文字と章扉の地: 4.5 以上
   - 役割の色どうし（actor / process / store / external）、good と bad: 色差 ΔE 20 以上
 """
 import json
@@ -68,8 +70,9 @@ def check(th):
         if r in roles:
             need(f"roles.{r} / bg", UC.parse(roles[r]), bg, 3, "箱の線")
     sh = th.get("shape", {})
+    boxes = col.get("boxes") or {}
     for r in ("actor", "process", "store", "external"):
-        if r not in roles:
+        if r not in roles or (boxes.get(r) or {}).get("fill"):
             continue
         rc = UC.parse(roles[r])
         if sh.get("fill") == "solid":
@@ -79,6 +82,23 @@ def check(th):
         else:
             fill = UC.mix(bg, rc, sh.get("fillAlpha", 0.14))
         need(f"ink / {r} の塗り", UC.parse(col["ink"]), fill, 4.5, "箱の中の文字")
+    for r, b in boxes.items():   # 面と文字の色を役割ごとに書いたテーマ（デザインの色をそのまま当てる）
+        if not isinstance(b, dict) or not b.get("fill"):
+            continue
+        fill = rgba_over(b["fill"], bg)
+        if not fill:
+            fails.append(f"colors.boxes.{r}.fill を色として読めない")
+            continue
+        need(f"{'label' if b.get('label') else 'ink'} / {r} の面", UC.parse(b.get("label") or col["ink"]), fill, 4.5, "箱の中の文字")
+    chap = th.get("chapter")
+    if chap:
+        cbg = UC.parse(chap.get("bg", ""))
+        if not cbg or not chap.get("ink"):
+            fails.append("chapter には bg と ink が要る")
+        else:
+            need("章扉の文字 / 章扉の地", rgba_over(chap["ink"], cbg), cbg, 4.5, "題の札")
+            if chap.get("sub"):
+                need("章扉の添え字 / 章扉の地", rgba_over(chap["sub"], cbg), cbg, 4.5, "題の札の sub")
     sub = th.get("subtitle", {})
     if sub:
         need("字幕の文字 / 字幕の帯", UC.parse(sub.get("ink", col["ink"])), rgba_over(sub.get("bg", col["bg"]), bg), 4.5, "字幕")
@@ -139,6 +159,14 @@ def check_design(th, report):
     one("accent", col.get("accent"), True, "強調は、デザインの主色の色相を保つ。コントラストが足りなければ明るさだけを動かす")
     for r in ("actor", "process", "store", "external"):
         one(f"roles.{r}", (col.get("roles") or {}).get(r), False, "デザインの有彩色が足りずに、色相を回して作った色なら、このままでよい")
+    for k in ("good", "bad", "warn"):
+        one(k, col.get(k), False, "意味の色も、デザインにある色で作る。赤や緑がないデザインなら、強調の色とグレーアウトで言い分ける")
+    for r, b in (col.get("boxes") or {}).items():
+        for k in ("fill", "border", "label"):
+            if isinstance(b, dict) and b.get(k):
+                one(f"boxes.{r}.{k}", b[k], False, "箱の面・枠・文字は、デザインの色をそのまま当てる")
+    one("subtitle.bg", (th.get("subtitle") or {}).get("bg"), False, "字幕の帯は、デザインの色から決める")
+    one("chapter.bg", (th.get("chapter") or {}).get("bg"), False, "章扉の地は、デザインの色から決める")
     fonts = [f["family"].lower() for f in report.get("fonts", [])]
     first = (th.get("font", {}).get("family") or "").split(",")[0].strip().strip("'\"")
     if fonts and first.lower() not in fonts:

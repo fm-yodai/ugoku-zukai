@@ -14,14 +14,18 @@ claude.ai では 1 回のコマンドが長いと止められるので、終了�
 
 合成の前に、半角スペースと全角スペース（U+3000）を消す（スペースがあると 0.3〜0.7 秒の間が空くため）。
 ただし半角スペースの左右が両方とも英数字（[A-Za-z0-9]）なら残す。印の位置は消した分だけ前へずらす。
-間を入れたいときは、台本の read に読点（、）を書く。時刻表の text は整える前の文のまま（player の「音声が古い」検査と合わせる）。
+間を入れたいときは、台本の read に読点（、）を書く。読点の間は 1 つ約 0.6 秒ある。
+数字を 1 桁ずつ読ませるときのように、語を切りたいが間は要らないところは、中黒（・）で書く（例: アイエスオー・きゅう・に・よん・いち・の・にひゃくじゅう）。
+中黒の間は SHORT_PAUSE 秒（話速 1 のとき）に縮める。字幕の中黒も同じ。縮められるのは、文の区切りの記号の数と VOICEVOX が入れた間の数が合う行だけ
+（合わない行は VOICEVOX の間のまま。読みの一覧の「間」の列で分かる）。時刻表の text は整える前の文のまま（player の「音声が古い」検査と合わせる）。
 
 --dict PATH: スキルの辞書（assets/voicevox_user_dict.json）に重ねる辞書。形は同じ { words: [...] }。
 既定は WORKDIR の親の voice_dict.json（あれば）。同じ surface は --dict の方を採る。
 
 --readings: 合成はせず、各行の VOICEVOX の読み（かな）を WORKDIR/readings.md に表で書く（誤読を音にする前に見つけるため）。
   行ごとの結果は WORKDIR/readings/<id>.<鍵>.json に残す。--budget を超えたら終了コード 3（同じコマンドで続きから）。
-  読みはアクセント句ごとのかなを「/」でつなぎ、間は前後の「/」なしの「、」で出す（例: テジュンワ/ゼロジュンビカラ、キュウダンデ）。
+  読みはアクセント句ごとのかなを「/」でつなぎ、間は前後の「/」なしの「、」で出す（例: テジュンワ/ゼロジュンビカラ、キュウダンデ）。縮めた短い間は「・」。
+  「間」の列は、その行の間の数（、= 約 0.6 秒、・= 短い間）。「、」が 4 つ以上の行は、区切りすぎて遅くないかを見る。
   audio/・timeline.json・narration は作らない。
 
 --audition 8,2,3: 声の試聴。合成はせず（audio/・timeline.json・narration は作らない）、同じ 1 文を話者ごとに読ませて、
@@ -159,10 +163,22 @@ class Voice:
                     return
         sys.exit(f"話者 {speaker} の音声モデルが入っていない（setup_voice.py の一覧にある id を使う。別の vvm なら --models で入れる）")
 
+    def query(self, text, speaker):
+        """合成の指示（AudioQuery）を作り、中黒（・）のところの間を SHORT_PAUSE 秒に縮める。返すのは (指示, 縮めた間の番号の集合)"""
+        q = self.synth.create_audio_query(text, speaker)
+        pauses = [ap.pause_mora for ap in q.accent_phrases if ap.pause_mora]
+        short = short_pause_indexes(text, len(pauses))
+        for i in short:
+            if isinstance(pauses[i], dict):
+                pauses[i]["vowel_length"] = SHORT_PAUSE
+            else:
+                pauses[i].vowel_length = SHORT_PAUSE
+        return q, short
+
     def line(self, text, speaker, speed):
         """1 行を合成し、(wav のバイト列, 長さ秒, モーラの列 [(かな, 始まり秒)]) を返す"""
         self.ensure(speaker)
-        q = self.synth.create_audio_query(text, speaker)
+        q, _ = self.query(text, speaker)
         q.speed_scale = speed
         wav = self.synth.synthesis(q, speaker)
         with wave.open(io.BytesIO(wav)) as w:
@@ -190,12 +206,13 @@ class Voice:
         if not text.strip():
             return []
         self.ensure(speaker)
-        q = self.synth.create_audio_query(text, speaker)
-        out = []
+        q, short = self.query(text, speaker)
+        out, n = [], 0
         for ap in q.accent_phrases:
             out.append("".join(g(m, "text") for m in ap.moras))
             if ap.pause_mora:
-                out.append("、")
+                out.append("・" if n in short else "、")   # 縮めた短い間は「・」
+                n += 1
         return out
 
     def kana(self, text, speaker):
@@ -209,6 +226,19 @@ class Voice:
             if ap.pause_mora:
                 out.append("、")
         return out
+
+
+SHORT_PAUSE = 0.12   # 中黒（・）の間の長さ（秒。話速 1 のとき）。読点の間は VOICEVOX が決める（約 0.6 秒）
+PAUSE_RE = re.compile(r"[、，,・。．？！?!]+")
+
+
+def short_pause_indexes(text, n_pauses):
+    """文の中の区切り（読点・中黒・文の途中の句点など）のうち、中黒だけでできた区切りの番号（0 始まり）を返す。
+    区切りの数が、VOICEVOX が入れた間の数（n_pauses）と合わないときは、どれがどの間か分からないので空の集合を返す（何も縮めない）"""
+    groups = [m.group(0) for m in PAUSE_RE.finditer(text) if m.end() < len(text.rstrip())]
+    if len(groups) != n_pauses:
+        return set()
+    return {i for i, grp in enumerate(groups) if set(grp) == {"・"}}
 
 
 def mark_times(voice, text, marks, moras, speaker):
@@ -229,6 +259,11 @@ def mark_times(voice, text, marks, moras, speaker):
             n += 1
         res[name] = round(moras[n][1], 3)
     return res
+
+
+def pause_key(spoken):
+    """使い回しの鍵に足すもの。中黒のある行だけ、間の長さを鍵に入れる（中黒のない行は、前に作った声をそのまま使える）"""
+    return [f"short-pause:{SHORT_PAUSE}"] if "・" in spoken else []
 
 
 def collect(sb):
@@ -256,10 +291,17 @@ def md_cell(s):
 
 def readings_md(rows, got, speaker, speed):
     """読みの一覧（表）。字幕の列には read ではなく字幕を出す。got は行の id → { spoken, kana }"""
-    md = [f"# 読みの一覧（話者 {speaker}、話速 {speed}）", "", "| 行 | 字幕 | 読む文 | VOICEVOX の読み |", "|---|---|---|---|"]
+    md = [f"# 読みの一覧（話者 {speaker}、話速 {speed}）", "", "| 行 | 字幕 | 読む文 | VOICEVOX の読み | 間 |", "|---|---|---|---|---|"]
     for r in rows:
         i = got[r["id"]]
-        md.append(f"| {r['id']} | {md_cell(r['caption'])} | {md_cell(i['spoken'])} | {md_cell('/'.join(i['kana']).replace('/、/', '、').replace('/、', '、'))} |")
+        kana = "/".join(i["kana"])
+        for p in "、・":
+            kana = kana.replace(f"/{p}/", p).replace(f"/{p}", p)
+        n_long, n_short = i["kana"].count("、"), i["kana"].count("・")
+        gaps = " ".join(x for x in (f"、×{n_long}" if n_long else "", f"・×{n_short}" if n_short else "") if x)
+        if n_long >= 4:
+            gaps += "（区切りが多い。遅くないか）"
+        md.append(f"| {r['id']} | {md_cell(r['caption'])} | {md_cell(i['spoken'])} | {md_cell(kana)} | {gaps} |")
     return "\n".join(md) + "\n"
 
 
@@ -269,7 +311,7 @@ def write_readings(voice, rows, out, speaker, speed, ver, t0, budget):
     os.makedirs(rdir, exist_ok=True)
     got, made = {}, 0
     for r in rows:
-        key = hashlib.sha1(json.dumps(["phrases", r["spoken"], speaker, voice.dict_key, ver], ensure_ascii=False).encode()).hexdigest()[:12]
+        key = hashlib.sha1(json.dumps(["phrases", r["spoken"], speaker, voice.dict_key, ver] + pause_key(r["spoken"]), ensure_ascii=False).encode()).hexdigest()[:12]
         path = os.path.join(rdir, f"{r['id']}.{key}.json")
         if os.path.exists(path):
             got[r["id"]] = json.load(open(path, encoding="utf-8"))
@@ -478,7 +520,7 @@ def main():
         return
     done, made = {}, 0
     for r in rows:
-        key = hashlib.sha1(json.dumps([r["spoken"], sorted(r["marks"].items()), speaker, speed, voice.dict_key, ver], ensure_ascii=False).encode()).hexdigest()[:12]
+        key = hashlib.sha1(json.dumps([r["spoken"], sorted(r["marks"].items()), speaker, speed, voice.dict_key, ver] + pause_key(r["spoken"]), ensure_ascii=False).encode()).hexdigest()[:12]
         base = os.path.join(adir, f"{r['id']}.{key}")
         if os.path.exists(base + ".json") and os.path.exists(base + ".wav"):
             done[r["id"]] = (base, json.load(open(base + ".json", encoding="utf-8")))

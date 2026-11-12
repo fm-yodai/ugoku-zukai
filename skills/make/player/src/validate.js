@@ -31,6 +31,7 @@
         if (ids.has(id)) E(`${where}: id「${id}」が重複している`);
         ids.add(id);
       };
+      if (f.type === "title" && f.tone != null && !["dark", "light"].includes(f.tone)) E(`${where}: tone は dark か light`);
       const role = (r, what) => { if (r != null && !ROLES.includes(r)) E(`${where}: ${what} の role「${r}」は ${ROLES.join(" / ")} のどれか`); };
       if (f.type === "graph") {
         for (const n of f.nodes || []) { addId(n.id, "ノード"); role(n.role, n.id); if (!n.label) E(`${where}: ノード ${n.id} に label がない`); }

@@ -43,27 +43,27 @@ class FollowOutlineTest(unittest.TestCase):
         return run("node", CHECK, self.sb, "--json", *extra)
 
     def test_no_outline_keeps_default(self):
-        self.assertEqual(json.loads(self.check().stdout)["theme"], "3b1b")
-        self.assertEqual(json.loads(self.check("--theme", "flat").stdout)["theme"], "flat")
+        self.assertEqual(json.loads(self.check().stdout)["theme"], "koo")
+        self.assertEqual(json.loads(self.check("--theme", KUMO).stdout)["theme"], "kumo")
 
     def test_uses_decided_theme_when_omitted(self):
-        self.look("flat")
-        self.assertEqual(json.loads(self.check().stdout)["theme"], "flat")
+        self.look("koo")
+        self.assertEqual(json.loads(self.check().stdout)["theme"], "koo")
 
     def test_refuses_other_theme(self):
-        self.look("flat")
-        r = self.check("--theme", "3b1b")
+        self.look("koo")
+        r = self.check("--theme", KUMO)
         self.assertEqual(r.returncode, 2, r.stdout)
         self.assertIn("構成メモ", r.stderr)
-        self.assertIn("flat", r.stderr)
-        self.assertEqual(self.check("--theme", "flat").returncode, 0)
+        self.assertIn("koo", r.stderr)
+        self.assertEqual(self.check("--theme", "koo").returncode, 0)
 
     def test_decided_theme_file_in_workdir(self):
         shutil.copy(KUMO, os.path.join(self.wd, "theme.json"))
         self.look("theme.json")
         self.assertEqual(json.loads(self.check().stdout)["theme"], "kumo")
         self.assertEqual(self.check("--theme", os.path.join(self.wd, "theme.json")).returncode, 0)
-        r = self.check("--theme", "flat")     # 見本のコマンドの --theme flat を写しても、決めたテーマから外れない
+        r = self.check("--theme", "koo")     # 見本のコマンドの --theme koo を写しても、決めたテーマから外れない
         self.assertEqual(r.returncode, 2)
         self.assertIn("theme.json", r.stderr)
 
@@ -74,9 +74,9 @@ class FollowOutlineTest(unittest.TestCase):
         self.assertIn("theme.json", r.stderr)
 
     def test_frames_follow(self):
-        self.look("flat")
+        self.look("koo")
         out = os.path.join(self.wd, "frames")
-        r = run("node", FRAMES, self.sb, "--theme", "3b1b", "-o", out)
+        r = run("node", FRAMES, self.sb, "--theme", KUMO, "-o", out)
         self.assertEqual(r.returncode, 2, r.stdout + r.stderr)
         self.assertIn("構成メモ", r.stderr)
         self.assertFalse(os.path.exists(out))
@@ -84,20 +84,20 @@ class FollowOutlineTest(unittest.TestCase):
         self.assertIn(r.returncode, (0, 4), r.stderr)
         with open(os.path.join(out, "svg", "l1.svg"), encoding="utf-8") as f:
             svg = f.read()
-        with open(os.path.join(SKILL, "player", "themes", "flat.json"), encoding="utf-8") as f:
+        with open(os.path.join(SKILL, "player", "themes", "koo.json"), encoding="utf-8") as f:
             self.assertIn(json.load(f)["colors"]["bg"], svg)
 
     def test_build_follows(self):
-        self.look("flat")
+        self.look("koo")
         out = os.path.join(self.wd, "p.html")
-        r = run(sys.executable, BUILD, self.sb, "--theme", "3b1b", "-o", out)
+        r = run(sys.executable, BUILD, self.sb, "--theme", KUMO, "-o", out)
         self.assertEqual(r.returncode, 2, r.stdout + r.stderr)
         self.assertIn("構成メモ", r.stderr)
         self.assertFalse(os.path.exists(out))
         r = run(sys.executable, BUILD, self.sb, "-o", out)
         self.assertEqual(r.returncode, 0, r.stderr)
         with open(out, encoding="utf-8") as f:
-            self.assertIn('"name": "flat"', f.read())
+            self.assertIn('"name": "koo"', f.read())
 
 
 class FollowDesignTest(unittest.TestCase):

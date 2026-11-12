@@ -20,3 +20,6 @@ dist/
 
 # 抽出の検査に使う画像は管理する
 !skills/make/scripts/tests/design/*.png
+
+docs/superpowers/
+.superpowers/

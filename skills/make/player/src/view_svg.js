@@ -29,6 +29,10 @@
       const S = this.S, th = M.theme;
       this.font = S.font;
       el("rect", { x: 0, y: 0, width: 1280, height: 720, fill: S.bg }, svg);
+      // 章扉の地（テーマの chapter）。題の札だけの場面で重ねる
+      this.chap = th.chapter || null;
+      this.bgDark = this.chap ? el("rect", { x: 0, y: 0, width: 1280, height: 720, fill: this.chap.bg }, svg) : null;
+      if (this.bgDark) this.bgDark.style.opacity = 0;
       const defs = el("defs", null, svg);
       if (th.shape.glow) {
         const f = el("filter", { id: "uz-glow", x: "-40%", y: "-40%", width: "180%", height: "180%" }, defs);
@@ -66,7 +70,7 @@
       this.subR = el("rect", { rx: 10, fill: sub.bg || "rgba(0,0,0,0.6)" }, this.sub);
       this.subT = this.text(this.sub, [""], 640, 0, 27, { color: sub.ink || S.ink, weight: 500 });
       // クレジット（常に出す）
-      this.text(svg, [M.credit], 1262, 711, 13, { color: S.muted, anchor: "end" });
+      this.creditT = this.text(svg, [M.credit], 1262, 711, 13, { color: S.muted, anchor: "end" });
       // 終わりの札
       this.endG = el("g", null, svg);
       this.text(this.endG, UZ.wrap(M.title, 40, 1000, S.bold, 2), 640, 320, 40, { weight: S.bold, color: S.ink });
@@ -279,6 +283,17 @@
           // 札は、点が何を表すかを最初に 1 回だけ見せる（engine.js の labelShow。箱の文字に重ならないよう、点の下に出す）
           E.pill.style.opacity = label ? op(s.labelShow || 0) : 0;
           E.pill.setAttribute("transform", `translate(0,30) scale(${(1 + 0.14 * (s.labelPop || 0)).toFixed(3)})`);
+        }
+      }
+      // 地（章扉は暗い地）。暗い地の上に残る文字（章の題・クレジット）と字幕の帯の枠は、章扉の色に替える
+      if (this.bgDark) {
+        const d = fr.dark || 0, on = d > 0.5, ch = this.chap;
+        this.bgDark.style.opacity = d.toFixed(3);
+        if (this._dark !== on) {
+          this._dark = on;
+          this.creditT.setAttribute("fill", on ? (ch.muted || ch.ink) : S.muted);
+          for (const tx of [this.headerT, this.headerT2]) tx.setAttribute("fill", on ? ch.ink : S.ink);
+          if (on && ch.line) { this.subR.setAttribute("stroke", ch.line); this.subR.setAttribute("stroke-width", 1); } else this.subR.setAttribute("stroke", "none");
         }
       }
       // 章の題

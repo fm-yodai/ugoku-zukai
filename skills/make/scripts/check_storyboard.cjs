@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // 台本の検査（形・id の解決・経路・配置）。プレーヤーと同じ JS で配置を計算して調べる。
 // テーマ: 台本と同じフォルダの構成メモ（outline.json）が見た目を決めていたら（basics.look.theme）、--theme を省くとそのテーマを使う。違うテーマを渡すと終了コード 2
-// 使い方: node check_storyboard.cjs storyboard.json [--theme 3b1b|flat|theme.json] [--timeline timeline.json] [--outline outline.json] [--complete] [--json]
+// 使い方: node check_storyboard.cjs storyboard.json [--theme koo|theme.json] [--timeline timeline.json] [--outline outline.json] [--complete] [--json]
 //   --outline   構成メモ（references/outline.md）と突き合わせる。場面の chapter が構成メモの章にあるか、章ごとの見積もりの長さが尺の目安に合うかを見る
 //   --complete  台本を書き終えたものとして見る。場面のない章を誤りにし、全体の長さも構成メモと比べる
 // 終了コード: 0 = 誤りなし（警告は出る）、1 = 誤りか配置の問題がある、2 = 使い方の誤りかファイルを読めない
@@ -12,7 +12,7 @@ const args = process.argv.slice(2);
 const VAL = ["--theme", "--timeline", "--outline"];   // 値を取る引数
 const opt = k => { const i = args.indexOf(k); return i >= 0 ? args[i + 1] : null; };
 const file = args.find((a, i) => !a.startsWith("--") && !VAL.includes(args[i - 1]));
-if (!file) { console.error("使い方: node check_storyboard.cjs storyboard.json [--theme 3b1b] [--timeline timeline.json] [--outline outline.json] [--complete] [--json]"); process.exit(2); }
+if (!file) { console.error("使い方: node check_storyboard.cjs storyboard.json [--theme koo] [--timeline timeline.json] [--outline outline.json] [--complete] [--json]"); process.exit(2); }
 if (args.includes("--complete") && !args.includes("--outline")) { console.error("--complete は --outline と一緒に使う"); process.exit(2); }
 let outline = null;
 if (args.includes("--outline")) {

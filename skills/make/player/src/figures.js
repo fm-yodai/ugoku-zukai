@@ -9,14 +9,20 @@
   UZ.styleOf = function (theme) {
     const col = theme.colors, sh = theme.shape;
     const role = r => (col.roles && col.roles[r]) || (r && col[r]) || col.accent;
+    // 箱の面・枠・中の文字は、テーマの colors.boxes に役割ごとに書ければそれを使う（デザインにある色をそのまま当てる）。
+    // 書いていない役割は、役割の色を背景に混ぜた面・役割の色の枠・本文の色の文字になる
+    const boxes = col.boxes || {};
+    const border = r => (boxes[r] && boxes[r].border) || role(r);
+    const label = r => (boxes[r] && boxes[r].label) || col.ink;
     const fill = r => {
       const c = role(r);
+      if (boxes[r] && boxes[r].fill) return boxes[r].fill;
       if (sh.fill === "none") return "none";
       if (sh.fill === "solid") return C.mix(col.bg, c, sh.fillMix ?? 0.16);
       return C.rgba(c, sh.fillAlpha ?? 0.14);
     };
     return {
-      role, fill, theme,
+      role, fill, border, label, theme, chapter: theme.chapter || null,
       ink: col.ink, muted: col.muted, line: col.line, bg: col.bg, surface: col.surface || C.mix(col.bg, col.ink, 0.06),
       accent: col.accent, good: col.good, bad: col.bad, warn: col.warn,
       font: theme.font.family, weight: theme.font.weight || 400, bold: theme.font.bold || 700,
@@ -37,15 +43,20 @@
 
   const FIG = UZ.FIG = {};
 
+  // 題の札の地: テーマに chapter があれば "dark"（章扉の色）。図に tone: "light" と書けば通常の地
+  UZ.titleTone = (f, theme) => (f && f.type === "title" && theme && theme.chapter && f.tone !== "light" ? "dark" : "light");
+
   // ======== 題の札（title）========
   FIG.title = {
     async layout(f, S) {
       const W = 1184, H = 470;
+      // 題の札は、テーマに chapter（章扉の色）があれば暗い地に出す。tone: "light" で通常の地に戻せる
+      const dark = UZ.titleTone(f, S.theme) === "dark" ? S.chapter : null;
       const main = UZ.wrap(f.text, 46, 1000, S.bold, 3);
-      const t = UZ.mkText(main, W / 2, H / 2 - (f.sub ? 30 : 0), 46, { weight: S.bold, color: S.ink, lineH: 64 });
+      const t = UZ.mkText(main, W / 2, H / 2 - (f.sub ? 30 : 0), 46, { weight: S.bold, color: dark ? dark.ink : S.ink, lineH: 64 });
       const items = [{ id: "text", kind: "text", texts: [t], bbox: { ...t.bbox } }];
       if (f.sub) {
-        const s = UZ.mkText(UZ.wrap(f.sub, 28, 1000), W / 2, t.bbox.y + t.bbox.h + 40, 28, { color: S.accent });
+        const s = UZ.mkText(UZ.wrap(f.sub, 28, 1000), W / 2, t.bbox.y + t.bbox.h + 40, 28, { color: dark ? (dark.sub || dark.ink) : S.accent });
         items.push({ id: "sub", kind: "text", texts: [s], bbox: { ...s.bbox } });
       }
       return { w: W, h: H, items, order: items.map(i => i.id), autoShow: true };
@@ -108,7 +119,7 @@
       for (const { it, x, placed } of cards) {
         const color = S.role(it.role || "process");
         const label = UZ.mkText(UZ.wrap(it.label, 26, cw - 40, S.bold, 1), x + cw / 2, headH / 2, 26, { weight: S.bold, color: S.ink });
-        items.push({ id: it.id, kind: "box", x, y: 0, w: cw, h: maxH, r: S.radius, stroke: color, fill: S.fill(it.role || "process"),
+        items.push({ id: it.id, kind: "box", x, y: 0, w: cw, h: maxH, r: S.radius, stroke: S.border(it.role || "process"), fill: S.fill(it.role || "process"),
           header: { h: headH, fill: C.rgba(color, 0.22) }, texts: [label], bbox: { x, y: 0, w: cw, h: maxH }, members: placed.map(p => p.id) });
         order.push(it.id);
         for (const p of placed) {
@@ -200,8 +211,8 @@
       const rows = msgs.map(m => { const r = row; row += m.from === m.to ? 1.6 : 1; return r; });
       const bottom = top + row * rowH + 10;
       P.forEach((p, i) => {
-        const color = S.role(p.role || "process");
-        const t = UZ.mkText(p.label, xs[i], boxH / 2, size, { weight: 500, color: S.ink });
+        const color = S.border(p.role || "process");
+        const t = UZ.mkText(p.label, xs[i], boxH / 2, size, { weight: 500, color: S.label(p.role || "process") });
         items.push({ id: p.id, kind: "box", x: xs[i] - boxW[i] / 2, y: 0, w: boxW[i], h: boxH, r: S.radius, stroke: color, fill: S.fill(p.role || "process"), texts: [t], bbox: { x: xs[i] - boxW[i] / 2, y: 0, w: boxW[i], h: boxH },
           life: { pts: [[xs[i], boxH], [xs[i], bottom]] } });
         order.push(p.id);
@@ -356,10 +367,10 @@
     }
     for (const n of f.nodes) {
       const a = abs[n.id], sp = nodeSpec[n.id];
-      const color = S.role(n.role || "process");
+      const color = S.border(n.role || "process");
       const cx = a.x + a.w / 2;
       const labelCy = a.y + 32 + (sp.lines.length - 1) * 16 - 2;
-      const texts = [UZ.mkText(sp.lines, cx, labelCy, nsize, { weight: 500, color: S.ink, lineH: 32 })];
+      const texts = [UZ.mkText(sp.lines, cx, labelCy, nsize, { weight: 500, color: S.label(n.role || "process"), lineH: 32 })];
       if (sp.subLines.length) texts.push(UZ.mkText(sp.subLines, cx, labelCy + sp.lines.length * 16 + 4 + sp.subLines.length * 11, 17, { color: S.muted, lineH: 22 }));
       const shape = n.shape || (n.role === "store" ? "store" : "box");
       items.push({ id: n.id, kind: "box", x: a.x, y: a.y, w: a.w, h: a.h, r: shape === "round" ? a.h / 2 : S.radius, shape,
@@ -403,9 +414,9 @@
     async layout(f, S) {
       const W = f.width || 1184, H = f.height || 470, items = [], order = [];
       for (const s of f.shapes) {
-        const color = s.color || S.role(s.role || "process");
+        const color = s.color || S.border(s.role || "process");
         if (s.shape === "rect" || s.shape === "ellipse") {
-          const texts = s.text ? [UZ.mkText(UZ.wrap(s.text, s.size || 22, s.w - 16, 500, 3), s.x + s.w / 2, s.y + s.h / 2, s.size || 22, { weight: 500, color: S.ink })] : [];
+          const texts = s.text ? [UZ.mkText(UZ.wrap(s.text, s.size || 22, s.w - 16, 500, 3), s.x + s.w / 2, s.y + s.h / 2, s.size || 22, { weight: 500, color: s.fill === "none" ? S.ink : S.label(s.role || "process") })] : [];
           items.push({ id: s.id, kind: "box", shape: s.shape === "ellipse" ? "ellipse" : "box", x: s.x, y: s.y, w: s.w, h: s.h, r: s.r ?? S.radius,
             stroke: color, fill: s.fill === "none" ? "none" : S.fill(s.role || "process"), texts, bbox: { x: s.x, y: s.y, w: s.w, h: s.h } });
         } else if (s.shape === "line" || s.shape === "arrow") {

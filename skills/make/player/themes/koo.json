@@ -1,0 +1,53 @@
+{
+  "name": "koo",
+  "label": "空 提案書デザイン",
+  "mode": "light",
+  "colors": {
+    "bg": "#edf0f5",
+    "surface": "#ffffff",
+    "ink": "#1f1f1f",
+    "muted": "#4f5762",
+    "line": "#c9cfd9",
+    "accent": "#286cb9",
+    "good": "#8c5e0a",
+    "bad": "#4f5762",
+    "warn": "#286cb9",
+    "roles": {
+      "process": "#0c1b32",
+      "actor": "#286cb9",
+      "store": "#8c5e0a",
+      "external": "#4f5762",
+      "muted": "#4f5762",
+      "added": "#8c5e0a",
+      "removed": "#4f5762"
+    },
+    "boxes": {
+      "process": { "fill": "#ffffff" },
+      "actor": { "fill": "#e4eef9", "border": "#5090d9" },
+      "store": { "fill": "#fbefd3" },
+      "external": { "fill": "#e2e6ec" },
+      "muted": { "fill": "#c9cfd9", "border": "#c9cfd9", "label": "#4f5762" },
+      "added": { "fill": "#fbefd3", "border": "#f2b53c" },
+      "removed": { "fill": "#c9cfd9", "border": "#c9cfd9", "label": "#4f5762" },
+      "accent": { "fill": "#e4eef9", "border": "#5090d9" },
+      "good": { "fill": "#fbefd3", "border": "#f2b53c" },
+      "bad": { "fill": "#c9cfd9", "border": "#c9cfd9", "label": "#4f5762" },
+      "warn": { "fill": "#e4eef9", "border": "#5090d9" }
+    }
+  },
+  "font": {
+    "family": "\"Noto Sans JP\", \"Hiragino Kaku Gothic ProN\", \"Yu Gothic\", sans-serif",
+    "weight": 400,
+    "bold": 700,
+    "css": "https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap"
+  },
+  "shape": { "radius": 12, "stroke": 2, "fill": "solid", "fillMix": 0.12, "edgeWidth": 2, "glow": false, "shadow": false },
+  "subtitle": { "bg": "#0c1b32", "ink": "#ffffff" },
+  "chapter": { "bg": "#0c1b32", "ink": "#ffffff", "sub": "rgba(255,255,255,.7)", "muted": "rgba(255,255,255,.5)", "line": "rgba(255,255,255,.2)" },
+  "derived_from": ["空 提案書デザインシステム（project/tokens.json）"],
+  "tokens": {
+    "#edf0f5": "c-base", "#ffffff": "c-white", "#1f1f1f": "c-ink", "#0c1b32": "c-navy", "#4f5762": "c-gray-600", "#c9cfd9": "c-gray-300",
+    "#5090d9": "c-blue", "#f2b53c": "c-gold", "#8c5e0a": "c-gold-deep", "#e4eef9": "c-blue-soft", "#e2e6ec": "c-gray-soft", "#fbefd3": "c-gold-soft",
+    "#286cb9": "c-blue を、Base の上で線と文字に使えるように暗くした色（トークンにない唯一の色）"
+  }
+}

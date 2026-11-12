@@ -362,17 +362,24 @@ def draft_theme(bag, name):
         return min(alts, key=lambda d: UC.delta_e(d, made)) if alts else made
     accent = fit(accent, 4.6)   # 注記やラベルの文字に使うので、check_theme.py の 4.5 を満たすところまで寄せる
 
-    def semantic(role, hue, default):
+    # 意味の色（good / bad / warn）も、デザインにある色だけで作る。名前（success・error など）か、近い色相（緑・赤・橙）の色がデザインにあればそれ。
+    # なければ緑や赤を足さず、good = 強調色と別の有彩色（なければ強調色）、bad = 補足の色（グレーアウト）、warn = 強調色、で言い分ける
+    own_semantic = set()   # デザインが意味の色として持っていたもの（役割の色には回さない）
+
+    def semantic(role, hue, fallback):
         named = [cv for cv in chroma if hint_score(cv[1]["names"], role) > 0]
-        if named:
-            return fit(pick(named, role))
         near = [cv for cv in chroma if abs(((UC.hls(cv[0])[0] - hue + 0.5) % 1) - 0.5) < 0.05]
-        if near:
-            return fit(max(near, key=lambda cv: cv[1]["count"])[0])
-        return UC.ensure_contrast(default, bg, 3.2)
-    good = semantic("good", 0.36, (30, 138, 76))
-    bad = semantic("bad", 0.01, (201, 54, 43))
-    warn = semantic("warn", 0.1, (230, 160, 0))
+        if named or (near and role != "warn"):
+            c = fit(pick(named, role) if named else max(near, key=lambda cv: cv[1]["count"])[0])
+            own_semantic.add(c)
+            return c
+        return fallback()
+    second = sorted((cv for cv in chroma if UC.delta_e(fit(cv[0]), accent) > 28), key=lambda cv: -cv[1]["count"])
+    good = semantic("good", 0.36, lambda: fit(second[0][0]) if second else accent)
+    bad = semantic("bad", 0.01, lambda: muted)
+    if UC.delta_e(good, bad) < 20:   # 見分けられないときは、bad を本文寄りの灰色にする
+        bad = UC.ensure_contrast(UC.mix(muted, ink, 0.5), bg, 4.5)
+    warn = semantic("warn", 0.1, lambda: accent)
     # 役割の色（図の箱の色）は、デザインにある色だけで作る。強調色から始め、デザインの有彩色、次に無彩色を、色差の大きい順に足す。
     # それでも 4 色に足りないときだけ、色相を回して作る（check_theme.py --design が「デザインにない色」と知らせる）。
     # 何も書かない箱は process になるので、process にデザインの主色（強調色）を当てる
@@ -382,7 +389,7 @@ def draft_theme(bag, name):
 
     def usable(c, v):
         return (not semantic_names(v["names"]) and UC.delta_e(c, bg) > 18 and UC.delta_e(fit(c), ink) > 8
-                and min(UC.delta_e(c, x) for x in (good, bad)) > 20)
+                and all(UC.delta_e(c, x) > 20 for x in own_semantic))
     for pool, gap in ((chroma, 28), (neutral, 20)):
         for c, v in sorted(pool, key=lambda cv: -cv[1]["count"]):
             if len(chosen) >= 4:
@@ -432,9 +439,31 @@ def draft_theme(bag, name):
         "shape": {"radius": max(0, min(18, radius)), "stroke": 2.2 if not dark else 2.6, "fill": "tint" if dark else "solid",
                   "fillAlpha": 0.14, "fillMix": 0.12, "edgeWidth": 2.1, "glow": False, "shadow": not dark and not no_shadow},
         "subtitle": {"bg": "rgba(0,0,0,0.62)" if dark else UC.hexs(UC.mix(bg, (255, 255, 255), 0.6)) + "f0", "ink": UC.hexs(ink)},
+        **inverse_parts(cols, bg, dark),
         "derived_from": sorted({s for v in bag.colors.values() for s in v["sources"]}),
     }
     return theme
+
+
+INVERSE_HINTS = ["inverse", "inverted", "navy", "dark", "cover", "chapter", "primary-dark", "footer", "header"]
+
+
+def inverse_parts(cols, bg, dark):
+    """字幕の帯と章扉（題の札の場面の地）の下書き。明るいデザインに、反転面に使う暗い色（紺や黒に近い色）があれば、その色を当てる。
+    なければ何も足さない（字幕は薄い帯のまま、章扉は通常の地）。決めるのは Claude（references/themes.md）"""
+    if dark:
+        return {}
+    pool = [(c, v) for c, v in cols if UC.contrast(c, (255, 255, 255)) >= 10 and UC.contrast(c, bg) >= 7]
+
+    def score(cv):
+        names = [n.lower() for n in cv[1]["names"]]
+        hint = max((len(INVERSE_HINTS) - i for i, h in enumerate(INVERSE_HINTS) if any(h in n for n in names)), default=0)
+        return (hint, UC.saturation(cv[0]) >= 0.18, cv[1]["count"])
+    named = [cv for cv in pool if score(cv)[0] > 0]
+    if not named:
+        return {}
+    inv = UC.hexs(max(named, key=score)[0])
+    return {"subtitle": {"bg": inv, "ink": "#ffffff"}, "chapter": {"bg": inv, "ink": "#ffffff"}}
 
 
 def main():

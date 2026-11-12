@@ -30,7 +30,7 @@ tools: Read, Glob, Write
 | `target` | 基準ファイル | 担当の基準 | 見るもの |
 |---|---|---|---|
 | `outline` | `criteria/outline.md` | O-D1〜O-D5 | `outline.json` |
-| `script` | `criteria/agreement.md`・`criteria/script.md`・`criteria/structure.md` | A-1〜A-4、S-D1・S-D2・S-D4、G-D1〜G-D7 | `storyboard.json` と `outline.json` |
+| `script` | `criteria/agreement.md`・`criteria/script.md`・`criteria/structure.md` | A-1〜A-4、S-D1・S-D2・S-D4、G-D1〜G-D7・G-D9・G-D10 | `storyboard.json` と `outline.json` |
 | `screen` | `criteria/screen.md`・`criteria/structure.md` | V-1〜V-5、G-D5、G-D8 | `frames/frames.json` と、その `sheets` に載ったシート・`storyboard.json`。コマの場所を渡されたら、`frames/` の代わりにそこ |
 
 担当の基準はすべて PASS / FAIL / UNKNOWN で判定し（`checks`）、FAIL を `findings` に出す。機械が判定する基準（O-M・A-M・S-M・G-M・V-M）は判定せず、機械の結果に出ている問題を重ねて指摘しない。
@@ -39,11 +39,14 @@ tools: Read, Glob, Write
 
 - O-D1: 視聴者と持ち帰ってほしいことが 1 文で書かれ、どれかの章の言うことと結びついているか
 - O-D2: 各章の見せるもの（`shows`）を読み、**その章で見せたいことに一番合う図の種類か**を自分で判断する。往復の順序が主題なのに `graph` を選んでいる、担当ごとの受け渡しが主題なのに `sequence` を選んでいる、などは FAIL。もっと合う種類があれば `suggestion` に書く。`figure` が書かれていない `shows` は、言葉の説明から描けるかだけを見る
-- O-D3・O-D4: `basics.knows`（と、あれば `basics.can_do`）に照らして、言うことと `takeaway` の言葉を判定する
+- O-D3・O-D4: `basics.knows`（と、あれば `basics.can_do`）に照らして、言うことと `takeaway` の言葉を判定する。規格・原典・業界で決まっている用語は、意味を説明する言うことがあれば PASS。なければ FAIL にし、`suggestion` には「意味を説明する言うことを足す」と書く。やさしい言葉への言い換えは勧めない（SP-16）
 - O-D5: `by` が `claude` か `source` の項目だけを見る。`by` が `user` の項目は、利用者の言葉なので指摘しない
 - `where` は、言うことの id（`c3.1`）、`c3.shows`、`basics.takeaway` のように書く。`where` はキーの頭と同じにする（キーが `pw:G-D3` なら `where` は `pw`。別の語を書かない）
 
 ## `script`（台本）
+
+- G-D9: 表・比較・As-Is/To-Be で、隣り合う列や左右を読み比べる。言葉を変えて同じ内容を並べているだけなら FAIL（列を 1 つにするか、図の種類を変える案を `suggestion` に書く）
+- G-D10: `roadmap`・`swimlane` などの表の形の図で、箱が期間の長さや受け渡しの順を見せていないなら FAIL（`table` にする案を書く）
 
 - **G-D1 復元テスト（最初に行う）**: 字幕（`text`）を読む前に、図の宣言（`figures`）と各行の動作（`do`）だけを見て「何がどこからどこへ、どの順で流れるか」（流れのない図では「何と何がどういう関係か」）を、場面ごとに 1〜3 文で書き出す。それを `evidence` に残してから、その場面の章の言うこと（構成メモの `says`）と照らす。食い違えば FAIL
 - **合意との照合（A-1〜A-3）**: 構成メモの章ごとに、言うこと（`says`）を 1 つずつ取り上げ、その章の場面（`chapter` が同じ場面）の字幕で言われているかを確かめる（A-1。`where` は言うことの id）。字幕が、構成メモにない主張を足していないかを見る（A-2。`where` は行の id）。つなぎの文と、言うことを説明するための具体例は主張に数えない。見せるもの（`shows`）と、その章の場面の図が合っているかを見る（A-3。`where` は `<章の id>.shows`）。直し方が 2 つあるとき（台本を構成メモに合わせる / 構成メモを台本に合わせる）は、`suggestion` に両方を書く
@@ -75,7 +78,7 @@ tools: Read, Glob, Write
 
 受け取った出力先のパスに、`review-format.md` の形で Write する。`reviewer` は `director`、`target` は受け取ったもの。`rule` には VG の約束番号を書いてよい。
 
-- `level` は基準の表に従う。重さが must だけの基準（O-D1〜O-D4、A-1〜A-3、S-D1・S-D2、G-D1・G-D2・G-D7、V-1〜V-4）の指摘は must。should の基準（O-D5、A-4、S-D4、G-D3〜G-D6、G-D8、V-5）では、伝わりやすさに効くものを should、直さなくても伝わり方が変わらない好みの範囲を nits にする
+- `level` は基準の表に従う。重さが must だけの基準（O-D1〜O-D4、A-1〜A-3、S-D1・S-D2、G-D1・G-D2・G-D7、V-1〜V-4）の指摘は must。should の基準（O-D5、A-4、S-D4、G-D3〜G-D6、G-D8〜G-D10、V-5）では、伝わりやすさに効くものを should、直さなくても伝わり方が変わらない好みの範囲を nits にする
 - 根拠の無い判定は無効になる
 
 ## してはいけないこと

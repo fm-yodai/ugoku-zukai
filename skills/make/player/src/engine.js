@@ -100,7 +100,10 @@
           areas[i] = { ...areas[i], y: areas[i].y + 36, h: areas[i].h - 36 };
         }
       });
-      return { id: sc.id, figs, header, areas, captions, lines: sc.lines };
+      // 場面の地: 題の札だけの場面は、テーマに chapter があれば暗い地（章扉）。それ以外は通常の地
+      const tones = figs.map(fid => UZ.titleTone(sb.figures[fid], theme));
+      if (figs.length > 1 && tones.includes("dark")) err(`場面 ${sc.id}: 題の札を他の図と並べるときは、題の札に tone: "light" と書く（暗い地は題の札だけの場面で使う）`);
+      return { id: sc.id, figs, header, areas, captions, lines: sc.lines, tone: figs.length === 1 ? tones[0] : "light" };
     });
 
     // ---- 図の配置（最初に出る場面の区画で 1 回だけ）----
@@ -519,8 +522,11 @@
         sub = { id: ln.id, text: UZ.parseText(line.text).text, opacity: o };
       }
     }
+    // 地の暗さ（0 = 通常の地、1 = 章扉の地）。場面の変わり目でなめらかに切り替え、終わりの札では通常の地に戻す
+    const toneOf = s => (s && s.tone === "dark" ? 1 : 0);
+    const dark = mix(prev ? toneOf(prev) : toneOf(sc), toneOf(sc), k) * (1 - endP);
     const header = { text: sc.header, opacity: (prev && prev.header !== sc.header ? k : 1) * (1 - endP), prev: prev && prev.header !== sc.header ? { text: prev.header, opacity: 1 - k } : null };
-    return { t, st, figs: figsF, scene: sc, captions: sc.captions.map(c => ({ ...c, opacity: (prev && prev.figs.includes(c.fig) && prev.captions.some(x => x.text === c.text) ? 1 : k) * (1 - endP) })), header, sub, badge, customs, end: endP };
+    return { t, st, figs: figsF, scene: sc, captions: sc.captions.map(c => ({ ...c, opacity: (prev && prev.figs.includes(c.fig) && prev.captions.some(x => x.text === c.text) ? 1 : k) * (1 - endP) })), header, sub, badge, customs, end: endP, dark };
   };
   const lineCache = new WeakMap();
   function findLine(sb, id) {

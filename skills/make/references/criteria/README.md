@@ -17,7 +17,7 @@
 | 呼ぶ場面 | `target` | 評価役と担当の基準 |
 |---|---|---|
 | 章立てが固まったとき | `outline` | director: O-D1〜O-D5。fact-checker: O-F1〜O-F3（資料のある題材か、`by` が `source` か `claude` の言うことがあるとき） |
-| 台本の初稿ができたとき | `script` | fact-checker: S-F1・S-F2・S-F4。director: A-1〜A-4・S-D1・S-D2・S-D4・G-D1〜G-D7。writing-reviewer: S-W1〜S-W7・S-W10・S-W11 |
+| 台本の初稿ができたとき | `script` | fact-checker: S-F1・S-F2・S-F4。director: A-1〜A-4・S-D1・S-D2・S-D4・G-D1〜G-D7・G-D9・G-D10。writing-reviewer: S-W1〜S-W7・S-W10・S-W11 |
 | 絵コンテを見せる前 | `screen` | director: V-1〜V-5・G-D5・G-D8 |
 | 合成の前 | `voice` | writing-reviewer（読みモード）: S-W8・S-W9 |
 | 直した後 | 元と同じ | 直した項目の再確認（`rechecks`）と、変えた章と行に限った判定 |

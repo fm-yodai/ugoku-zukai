@@ -27,6 +27,7 @@
 
 - **事実（O-F1・S-F1・S-F2）は、出どころを開き直して確かめる。** `source` に書かれたファイルや URL を、評価役の番でもう一度開く（Web ページは取り直す）。作り手の番で `sources/` や `brief.md` に写した引用だけで PASS にしない。開き直せないときは UNKNOWN にする
 - **漏れ（O-F2）は、構成メモの章を読み直す前に要点を書き出す。** 利用者が渡した資料から、視聴者が持ち帰るべき要点を 3〜7 項書き出して `evidence` に残し、それから構成メモと比べる
+- **「視聴者が知らない語」（O-D3・S-W5）の直し方に、言い換えを書かない。** 規格・原典・業界で決まっている用語はそのまま残し、意味を説明する文を足す案を書く（SP-16）
 - **図（G-D1）は、字幕を読む前に復元する。** 図の宣言と動作だけから流れ（か関係）を書き出して `evidence` に残し、それから構成メモの言うことと比べる
 
 ## 作業フォルダ
@@ -79,7 +80,8 @@ python3 <skill>/scripts/check_theme.py <workdir>/theme.json --design <workdir>/d
 ```
 
 - `theme.json` は下書きを直して作る。同梱のテーマや文書の例から値を写さない。`--design` が、テーマがデザインから外れていないか（背景・本文・強調・字体・影）を見る
-- 見た目が決まったら、構成メモの `basics.look.theme` に書く（`flat`・`3b1b`・`theme.json`）。検査・コマ・組み立ては、`--theme` を省くとこのテーマを使い、違うテーマを渡すと止まる。下のコマンドの `--theme <テーマ>` は省いてよい
+- 意味の色（良い・悪い）、字幕の帯、章扉の地も、デザインにある色から決める（`themes.md` の手順 2）。緑や赤がデザインになければ足さない。字幕の帯と章扉の色は、デザインの反転面の色（表紙や章扉に使う暗い色）があればそれを当て、決めた色と理由を、図の色の見本と一緒に利用者に伝える
+- 見た目が決まったら、構成メモの `basics.look.theme` に書く（`koo`・`theme.json`）。検査・コマ・組み立ては、`--theme` を省くとこのテーマを使い、違うテーマを渡すと止まる。下のコマンドの `--theme <テーマ>` は省いてよい
 
 ## 調べる
 
@@ -138,7 +140,7 @@ python3 <skill>/scripts/build_player.py <workdir>/storyboard.json --theme <テ�
 | 場面 | `target` | まとめて判定する基準 |
 |---|---|---|
 | 章立てが固まったとき | `outline` | O-D1〜O-D5、O-F1〜O-F3（`criteria/outline.md`） |
-| 台本の初稿ができたとき | `script` | S-F1・S-F2・S-F4、A-1〜A-4、S-D1・S-D2・S-D4、G-D1〜G-D7、S-W1〜S-W7・S-W10・S-W11（`criteria/agreement.md`・`script.md`・`structure.md`） |
+| 台本の初稿ができたとき | `script` | S-F1・S-F2・S-F4、A-1〜A-4、S-D1・S-D2・S-D4、G-D1〜G-D7・G-D9・G-D10、S-W1〜S-W7・S-W10・S-W11（`criteria/agreement.md`・`script.md`・`structure.md`） |
 | 絵コンテを見せる前 | `screen` | V-1〜V-5、G-D5、G-D8（`criteria/screen.md`・`structure.md`） |
 | 合成の前 | `voice` | S-W8・S-W9（`criteria/script.md`） |
 | 直した後 | 元と同じ | 直した項目の再確認（`rechecks`）と、変えた章と行だけ |
@@ -216,7 +218,7 @@ python3 <skill>/scripts/tts.py -o <workdir>/voice --audition 8,2,3 --sample "<�
 python3 <skill>/scripts/tts.py <workdir>/storyboard.json -o <workdir>/voice --readings
 ```
 
-`tts.py` が終了コード 3 で終わったら、0 になるまで同じコマンドを繰り返す（100 秒ずつ区切って進む）。`<workdir>/voice/readings.md` ができたら、評価役の番を宣言して、読みの一覧を S-W8・S-W9 で判定し（`target` は `voice`）、`combined.json` に書いて `ingest` する。
+`tts.py` が終了コード 3 で終わったら、0 になるまで同じコマンドを繰り返す（100 秒ずつ区切って進む）。`<workdir>/voice/readings.md` ができたら、評価役の番を宣言して、読みの一覧を S-W8・S-W9 で判定し（`target` は `voice`）、`combined.json` に書いて `ingest` する。一覧の「間」の列に「区切りが多い」と出た行は、1 桁ずつ読ませる区切りなら `read` の読点を中黒（・）に替える（中黒の間は短い）。
 
 読みの指摘は合意した内容を変えないので、`decide --by lead --fix` で記録して、行の `read`（と `<workdir>/voice_dict.json`）だけを直す。字幕 `text` は変えない。直したら `--readings` を回し直し、直したキーの再確認を 1 回だけ行う。通らなかった読みは、最後の報告に書く。
 

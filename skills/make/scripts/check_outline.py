@@ -20,7 +20,7 @@
   "basics": {                       キーは自由。値は「項目」。台本に進む前に要るのは audience・knows・takeaway
     "audience": 項目, "knows": 項目, "takeaway": 項目,
     "length": 項目 + {"seconds": 300},          正の数（任意）
-    "look":   項目 + {"theme": "flat"},         テーマの名前かパス（任意）
+    "look":   項目 + {"theme": "koo"},         テーマの名前かパス（任意）
     "voice":  項目 + {"speaker": 8, "speed": 1.1}   整数・正の数（任意）
   },
   "chapters": [                     空でもよい

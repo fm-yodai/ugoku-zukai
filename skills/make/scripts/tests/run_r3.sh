@@ -5,7 +5,7 @@ cd "$(dirname "$0")/../.."
 fail=0
 ng() { echo "NG: $1"; fail=1; }
 bash scripts/tests/run_r2.sh || fail=1
-for t in test_voice_consent test_player_pos test_workdir test_tts_audition test_stale_voice test_extract_design test_theme_follow; do
+for t in test_voice_consent test_player_pos test_workdir test_tts_audition test_stale_voice test_extract_design test_theme_follow test_theme_koo; do
   python3 scripts/tests/$t.py >/dev/null 2>&1 || { ng "$t.py"; python3 scripts/tests/$t.py; }
 done
 # 通し（第 2 部）で見つかったこと
@@ -32,6 +32,17 @@ done
 grep -q "エージェントを呼べないとき" references/run-code.md || ng "run-code.md に、エージェントを呼べないときの代わり方がない"
 grep -q "manim-web で描きます" ../../README.md && ng "README.md が、まだない manim-web を使えるように書いている"
 grep -q '区間数 × 2.0' references/storyboard.md || ng "storyboard.md の trace の既定の長さが、エンジン（区間 1 つに 2 秒）と合っていない"
+# 通し 3 で見つかったこと（言い換えない・並べた項目の説明・章扉の sub・同じことを二度言う図・セルの箱・既定のテーマ）
+grep -q "^| SP-16 .*言い換えない" references/writing/spoken.md && grep -q "^| SP-17 " references/writing/spoken.md || ng "spoken.md に SP-16（用語を言い換えない）と SP-17（並べた項目の説明）がない"
+for f in ../../agents/writer.md ../../agents/writing-reviewer.md ../../agents/director.md references/criteria/script.md references/criteria/outline.md references/outline.md references/run-chat.md; do grep -q "SP-16" $f || ng "$f に SP-16 がない"; done
+grep -q "言い換えておく" references/outline.md && ng "outline.md が、知らない語の言い換えを勧めている"
+grep -q "題をなぞるだけ" references/writing/spoken.md && grep -q "題をなぞるだけ" references/storyboard.md && grep -q "題をなぞるだけ" ../../agents/writer.md || ng "章扉の sub を必須にしない約束が、spoken.md・storyboard.md・writer.md にそろっていない"
+for id in G-D9 G-D10; do grep -q "^| $id " references/criteria/structure.md && grep -q "$id" ../../agents/director.md && grep -q "$id" ../../agents/writer.md && grep -q "$id" references/criteria/README.md && grep -q "$id" references/run-chat.md || ng "$id が、基準・director・writer・README・run-chat にそろっていない"; done
+grep -q "^## 既定のテーマ（koo）" references/themes.md && grep -q "字幕の帯と章扉の色も、デザインから決める" references/themes.md && grep -q "colors.boxes" references/themes.md || ng "themes.md に、既定のテーマ・字幕の帯と章扉の決め方・colors.boxes がない"
+for f in references/run-code.md references/run-chat.md SKILL.md; do grep -q "章扉" $f && grep -q "字幕の帯" $f || ng "$f に、字幕の帯と章扉の色をデザインから決めることがない"; done
+grep -rq "3b1b\|--theme flat" SKILL.md references ../../agents ../../CLAUDE.md && ng "なくしたテーマ（3b1b・flat）が文書に残っている"
+grep -q '"tone": "light"' references/storyboard.md || ng "storyboard.md に、題の札の tone がない"
+grep -q "中黒" references/storyboard.md && grep -q "中黒" references/criteria/script.md && grep -q "中黒" ../../agents/writing-reviewer.md && grep -q "中黒" ../../agents/writer.md && grep -q "中黒" references/run-code.md && grep -q "中黒" references/run-chat.md || ng "1 桁ずつ読ませる所を中黒で区切る書き方が、仕様・基準・writer・writing-reviewer・環境ごとの文書にそろっていない"
 # 見送っていた軽い指摘（指摘の一覧の検査は run_r2.sh の test_ledger.py が回す）
 grep -q "agents/" references/writing/review-format.md && ng "review-format.md が agents/ を指している（チャットの zip には入っていない）"
 grep -q "scripts/tests/outlines/ok_ux.json" ../../CLAUDE.md && ng "CLAUDE.md の構成メモの見本が、検査用のファイルを指している"

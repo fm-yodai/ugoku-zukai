@@ -69,12 +69,12 @@ class StaleVoiceTest(unittest.TestCase):
 
     def build(self, sb_path, tl_path):
         out = os.path.join(self.dir, "p.html")
-        r = subprocess.run([sys.executable, BUILD, sb_path, "--theme", "flat", "--timeline", tl_path, "-o", out], capture_output=True, text=True)
+        r = subprocess.run([sys.executable, BUILD, sb_path, "--theme", "koo", "--timeline", tl_path, "-o", out], capture_output=True, text=True)
         return r, os.path.exists(out)
 
     # ---- 検査とコマ: 例外ではなく、誤りとして知らせる ----
     def test_check_reports_removed_line(self):
-        r = subprocess.run(["node", CHECK, self.changed(self.drop_last), "--theme", "flat", "--timeline", self.tl], capture_output=True, text=True)
+        r = subprocess.run(["node", CHECK, self.changed(self.drop_last), "--theme", "koo", "--timeline", self.tl], capture_output=True, text=True)
         out = r.stdout + r.stderr
         self.assertEqual(r.returncode, 1, out)
         self.assertIn("l7", out)
@@ -85,7 +85,7 @@ class StaleVoiceTest(unittest.TestCase):
         # 場面の頭に行を足したときも、例外ではなく誤りとして知らせる
         def change(sb):
             sb["scenes"][-1]["lines"].insert(0, {"id": "l8", "text": "足した行です。"})
-        r = subprocess.run(["node", CHECK, self.changed(change), "--theme", "flat", "--timeline", self.tl], capture_output=True, text=True)
+        r = subprocess.run(["node", CHECK, self.changed(change), "--theme", "koo", "--timeline", self.tl], capture_output=True, text=True)
         out = r.stdout + r.stderr
         self.assertEqual(r.returncode, 1, out)
         self.assertIn("l8", out)
@@ -94,7 +94,7 @@ class StaleVoiceTest(unittest.TestCase):
 
     def test_frames_reports_removed_line(self):
         d = os.path.join(self.dir, "frames")
-        r = subprocess.run(["node", FRAMES, self.changed(self.drop_last), "--theme", "flat", "-o", d, "--timeline", self.tl], capture_output=True, text=True)
+        r = subprocess.run(["node", FRAMES, self.changed(self.drop_last), "--theme", "koo", "-o", d, "--timeline", self.tl], capture_output=True, text=True)
         out = r.stdout + r.stderr
         self.assertEqual(r.returncode, 1, out)
         self.assertIn("時刻表にあるが台本にない", out)

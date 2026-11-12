@@ -70,7 +70,7 @@ class BuildChaptersTest(unittest.TestCase):
             f.pop("title", None)
         p = os.path.join(self.dir, "u.json")
         json.dump(sb, open(p, "w", encoding="utf-8"), ensure_ascii=False)
-        r = subprocess.run(["node", CHECK, p, "--theme", "flat"], capture_output=True, text=True)
+        r = subprocess.run(["node", CHECK, p, "--theme", "koo"], capture_output=True, text=True)
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertIn("題の無い場面が続く", r.stdout)
 

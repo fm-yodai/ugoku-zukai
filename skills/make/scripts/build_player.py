@@ -2,7 +2,7 @@
 """台本・テーマ・（あれば）時刻表と音声を、再生ページの HTML 1 枚にまとめる。
 
 使い方:
-  python3 build_player.py storyboard.json -o out.html [--theme 3b1b|flat|theme.json]
+  python3 build_player.py storyboard.json -o out.html [--theme koo|theme.json]
                           [--timeline timeline.json] [--audio narration.mp3] [--voice WORKDIR] [--artifact]
 
 - 時刻表がなければ、プレーヤーが文字数から時刻を見積もる（音声なしの下見）
@@ -82,7 +82,7 @@ def pick_theme(storyboard_path, given):
     except (OSError, ValueError, KeyError, TypeError):
         look = None
     if not isinstance(look, str) or not look.strip():
-        return given or "3b1b"
+        return given or "koo"
     path = os.path.join(wd, look) if os.path.exists(os.path.join(wd, look)) else look
     want = theme_id(path)
     msg = None
@@ -119,7 +119,7 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("storyboard")
     ap.add_argument("-o", "--out", required=True)
-    ap.add_argument("--theme", help="省くと、構成メモが決めたテーマ（なければ 3b1b）")
+    ap.add_argument("--theme", help="省くと、構成メモが決めたテーマ（なければ koo）")
     ap.add_argument("--timeline")
     ap.add_argument("--audio")
     ap.add_argument("--voice", help="tts.py の出力先。timeline.json と narration.mp3（か .wav）をまとめて読む")

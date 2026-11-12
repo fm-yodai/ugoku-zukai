@@ -24,7 +24,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 bash skills/make/scripts/tests/run_r3.sh
 
 # 台本 1 本の検査（形・id の解決・配置）。--timeline で実際の声の長さでも検査する
-node skills/make/scripts/check_storyboard.cjs skills/make/examples/sequence.json --theme flat [--timeline work/voice/timeline.json] [--json]
+node skills/make/scripts/check_storyboard.cjs skills/make/examples/sequence.json --theme koo [--timeline work/voice/timeline.json] [--json]
 
 # 構成メモの検査（<workdir>/outline.json か、ファイルを直接渡す。形式は references/outline.md、見本は examples/outlines/）。--ready は台本に進める状態かも見る
 python3 skills/make/scripts/check_outline.py skills/make/examples/outlines/ux.json [--ready] [--json]
@@ -34,7 +34,7 @@ python3 skills/make/scripts/check_outline.py <workdir> --agree-all   # 利用者
 node skills/make/scripts/check_storyboard.cjs skills/make/scripts/tests/outlines/pair/storyboard.json --outline skills/make/scripts/tests/outlines/pair/outline.json [--complete]
 
 # テーマの検査（コントラストなど）。--design で、取り込んだデザイン（extract_design.py の報告）から外れていないかも見る
-python3 skills/make/scripts/check_theme.py skills/make/player/themes/3b1b.json
+python3 skills/make/scripts/check_theme.py skills/make/player/themes/koo.json
 python3 skills/make/scripts/extract_design.py <デザインの資料…> --report <workdir>/design-report.json --theme <workdir>/theme.json --name <名前>
 python3 skills/make/scripts/check_theme.py <workdir>/theme.json --design <workdir>/design-report.json
 
@@ -52,13 +52,13 @@ python3 skills/make/scripts/ledger.py residual <workdir>   # must で直って�
 # 作業フォルダを題材の外に作る（${CLAUDE_PLUGIN_DATA}/runs/<日時>-<名前>。パスを 1 行で出す）
 python3 skills/make/scripts/workdir.py new this-repo
 # 公開先を作業フォルダに記録する（published.json）。過去の作業フォルダを新しい順に出す（別のセッションから直すときに使う）
-python3 skills/make/scripts/workdir.py publish <workdir> --url <Artifact の URL> [--theme flat] [--source <題材の場所>]
+python3 skills/make/scripts/workdir.py publish <workdir> --url <Artifact の URL> [--theme koo] [--source <題材の場所>]
 python3 skills/make/scripts/workdir.py list [--json]
 
 # 各行の落ち着いたコマ（SVG と PNG のシート）。PNG には初回だけ resvg を入れる。終了コード 4 = PNG なし（SVG と frames.json だけ）
 python3 skills/make/scripts/setup_render.py
-node skills/make/scripts/frames.cjs skills/make/examples/sequence.json --theme flat -o work/frames
-node skills/make/scripts/frames.cjs skills/make/examples/mixed.json --theme flat -o work/frames-s2 --scenes s2   # 一部の場面のコマだけ書く（カンマ区切り。出力先の前の回のコマは消えるので、全体とは分ける。--lines l8,l33 なら、その行のある場面）
+node skills/make/scripts/frames.cjs skills/make/examples/sequence.json --theme koo -o work/frames
+node skills/make/scripts/frames.cjs skills/make/examples/mixed.json --theme koo -o work/frames-s2 --scenes s2   # 一部の場面のコマだけ書く（カンマ区切り。出力先の前の回のコマは消えるので、全体とは分ける。--lines l8,l33 なら、その行のある場面）
 
 # 利用者向けの絵コンテのページ（コマの横に「s2 / l2 @0:14」と字幕の全文。PNG は要らない。--outline で章の見出しと「Claude が決めたこと」が付く。台本を直したら frames.cjs を回し直す。コマが古いと終了コード 2 で止まる）
 python3 skills/make/scripts/build_sheet.py skills/make/examples/sequence.json --frames work/frames -o work/sheet.html [--outline outline.json] [--artifact]
@@ -71,7 +71,7 @@ python3 skills/make/scripts/tts.py <storyboard.json> -o work/voice   # 終了コ
 python3 skills/make/scripts/tts.py -o work/voice --audition 8,2,3 --sample "聞き比べる文です。" [--artifact]   # 声の試聴。同じ 1 文を話者ごとに読ませたページ work/voice/audition.html を書く（--sample を省くと台本の最初の行）
 
 # 組み立て（--artifact は Artifact 用に <html>/<head>/<body> を外した断片を書く）
-python3 skills/make/scripts/build_player.py <storyboard.json> --theme 3b1b --voice work/voice -o player.html [--artifact]
+python3 skills/make/scripts/build_player.py <storyboard.json> --theme koo --voice work/voice -o player.html [--artifact]
 
 # 見本帳（全見本 × 全テーマ）、claude.ai 用 zip、claude.ai での声の検証用 zip（出力は dist/）
 python3 tools/build_gallery.py
@@ -92,7 +92,7 @@ python3 tools/build_voice_check.py
 
 **台本の形式**（`ugoku-zukai/2`、仕様は `references/storyboard.md`、見本は `examples/`）: 意味で書く層（図の宣言・`show` `trace` `focus` などの動作）が基本で、足りないところだけ下の層で直接書く。動作は字幕の文中の印（`{a}`）に結ぶ。時刻表がなければ文字数から見積もり、あれば `tts.py` がモーラ単位で出した印の時刻を使う。合成した後に台本の文を変えたり、行を足したり消したりすると、組み立て（`build_player.py`）と検査（`check_storyboard.cjs --timeline`）が「音声が古い」「時刻表にない」で止まる。
 
-**テーマ**（`player/themes/*.json`、`references/themes.md`）: 色・文字・線の定義。決めたテーマは構成メモの `basics.look.theme` に書く。台本と同じフォルダに構成メモがあれば、`check_storyboard.cjs`・`frames.cjs`・`build_player.py` は `--theme` を省くとそのテーマを使い、違うテーマを渡すと終了コード 2 で止まる（`uz_node.cjs` の `pickTheme` と `build_player.py` の `pick_theme`。2 か所を同じ約束に保つ）。`extract_design.py` が手持ちのデザイン（トークン・CSS・HTML・Tailwind・Office・画像・PDF）からテーマを作り、`check_theme.py` で検査する。
+**テーマ**（`player/themes/*.json`、`references/themes.md`）: 色・文字・線の定義。同梱は `koo` の 1 つで、「空 提案書デザインシステム」（テーマの `derived_from` の Artifact）のトークンから作ってある。そこにない色を足さない（例外は、線と文字に使う暗くした Blue だけ。テーマの `tokens` に対応がある）。緑と赤はなく、良い・悪いは Gold とグレーアウトで言い分ける。`colors.boxes` が役割ごとの箱の面・枠・文字、`chapter` が章扉（`title` 図だけの場面）の地と文字を決める。字幕の帯と章扉は Navy。別のデザインを渡されたときは、進行役がそのデザインの色から決める。決めたテーマは構成メモの `basics.look.theme` に書く。台本と同じフォルダに構成メモがあれば、`check_storyboard.cjs`・`frames.cjs`・`build_player.py` は `--theme` を省くとそのテーマを使い、違うテーマを渡すと終了コード 2 で止まる（`uz_node.cjs` の `pickTheme` と `build_player.py` の `pick_theme`。2 か所を同じ約束に保つ）。`extract_design.py` が手持ちのデザイン（トークン・CSS・HTML・Tailwind・Office・画像・PDF）からテーマを作り、`check_theme.py` で検査する。
 
 **作り手と評価役**: Claude Code では `agents/` のサブエージェントを使う（作り手は researcher = 調べる、writer = 台本の初稿と章単位の書き直し。評価役は fact-checker / writing-reviewer / director。animator は保留中で呼ばない）。チャットでは 1 会話で役を順に演じる。評価役は決まった関門ではなく、章立てが固まったとき・台本の初稿・絵コンテを見せる前・直した後・合成の前に呼ぶ。成功基準は `references/criteria/`（構成メモ O-、合意との照合 A-、台本 S-、図 G-、画面 V-。文章の規則は `references/writing/` の TW- と SP-。SP-11〜SP-14 は行と章のつながり）、評価役の約束と指摘の扱いは `references/review-protocol.md`、評価役の出力の形は `references/writing/review-format.md`。指摘にはレベル（must / should / nits）が付き、`scripts/ledger.py` の指摘の一覧に入る。どれを直すかは利用者が選ぶ（台本の初稿に限り、合意した内容を変えない指摘は進行役が 1 回だけ先に直す）。自動で合格まで回すことはしない。
 

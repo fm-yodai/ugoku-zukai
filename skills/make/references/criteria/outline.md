@@ -12,7 +12,7 @@
 | O-F3 | 出どころのない事実の記述がない。`by` が `claude` で `source` がなく、事実を述べている言うこと（Claude の知識で書いたもの）を挙げる。`by` が `user` の項目は見ない（利用者の考えには、突き合わせる相手がない） | fact-checker | should | 新設 |
 | O-D1 | 視聴者（`basics.audience`）と持ち帰ってほしいこと（`basics.takeaway`）が 1 文で書かれ、どれかの章の言うことと結びついている | director | must | C-D1 |
 | O-D2 | 見せるもの（`shows`）の図の種類が、その章で見せたいことに合っている（たとえば `graph`＝部品がどこにあり何が何に渡るか / `sequence`＝誰が誰に何をどの順で渡すか / `swimlane`＝担当ごとの手順と受け渡し / `table`・`compare`＝軸ごとの違い / `venn`＝含む・重なる） | director | must | C-D2 |
-| O-D3 | 言うことと `takeaway` が、`basics.knows` の視聴者に分かる言葉で書かれている。ファイル名・関数名・状態の名前は、視聴者が自分で打つか画面で探すものだけ | director | must | C-D5 |
+| O-D3 | 言うことと `takeaway` が、`basics.knows` の視聴者に分かる言葉で書かれている。ファイル名・関数名・状態の名前は、視聴者が自分で打つか画面で探すものだけ。規格・原典の用語は、意味を説明する言うことがあれば合格（言い換えを求めない。SP-16） | director | must | C-D5 |
 | O-D4 | `basics.can_do`（見終わったらできること）があるとき、それに要らない内部の仕組みを言うことにしていない。`can_do` がなければ対象外 | director | must | C-D6 |
 | O-D5 | `by` が `claude` か `source` の項目に、比喩・造語・スキル内部の用語（`../../assets/banned_terms.json`）がない。`by` が `user` の項目は見ない | director | should | C-D4 |
 

@@ -6,7 +6,7 @@
     "knows": { "text": "いまの経費精算の手順は知っている。クラウドの精算サービスは使ったことがない", "by": "claude", "state": "agreed" },
     "takeaway": { "text": "費用はかかるが、クラウドの精算サービスのほうが課題の多くを解消できる", "by": "user", "state": "agreed" },
     "length": { "text": "1 分くらい", "seconds": 60, "by": "user", "state": "agreed" },
-    "look": { "text": "フラットな図解", "theme": "flat", "by": "claude", "state": "proposed" }
+    "look": { "text": "空 提案書デザイン（既定）", "theme": "koo", "by": "claude", "state": "proposed" }
   },
   "chapters": [
     {

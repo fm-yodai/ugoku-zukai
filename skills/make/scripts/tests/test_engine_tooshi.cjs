@@ -5,7 +5,7 @@
 const fs = require("fs"), path = require("path"), assert = require("assert");
 const { load, theme } = require("../uz_node.cjs");
 const UZ = load();
-const TH = theme("flat");
+const TH = theme("koo");
 const base = () => JSON.parse(fs.readFileSync(path.join(__dirname, "..", "..", "examples", "graph-flow.json"), "utf8"));
 // 図 flow（app → sys → kacho …）だけを使う 1 場面の台本
 function sb(lines) {
@@ -80,6 +80,53 @@ const tests = {
     b.figures[fid].participants[0].sub = "補足";
     const M = await UZ.build(b, TH, null);
     assert.ok(M.warnings.some(w => w.includes("sub") && w.includes("描かれない")), JSON.stringify(M.warnings));
+  },
+  // 章扉: テーマに chapter があれば、題の札だけの場面は暗い地になる
+  async title_scene_is_dark() {
+    const b = base();
+    const M = await UZ.build({ format: b.format, title: "検査", voice: b.voice, figures: { t: { type: "title", text: "題" }, flow: b.figures.flow }, scenes: [
+      { id: "s1", figure: "t", lines: [{ id: "l1", text: "題を言います。" }] },
+      { id: "s2", figure: "flow", lines: [{ id: "l2", text: "図を出します。", do: [{ show: "flow" }] }] }] }, TH, null);
+    assert.deepStrictEqual(M.errors, []);
+    assert.deepStrictEqual(M.scenes.map(s => s.tone), ["dark", "light"]);
+    assert.strictEqual(M.figs.t.items.text.texts[0].color, TH.chapter.ink, "題の文字は章扉の色");
+    const mid = sc => (sc.start + sc.end) / 2;
+    assert.ok(UZ.frame(M, mid(M.scenes[0])).dark > 0.99, "題の場面は暗い地");
+    assert.ok(UZ.frame(M, mid(M.scenes[1])).dark < 0.01, "図の場面は通常の地");
+    assert.ok(UZ.frame(M, M.duration - 0.1).dark < 0.01, "終わりの札は通常の地");
+  },
+  async title_tone_light() {
+    const b = base();
+    const one = fig => ({ format: b.format, title: "検査", voice: b.voice, figures: { t: fig }, scenes: [{ id: "s1", figure: "t", lines: [{ id: "l1", text: "題を言います。" }] }] });
+    const M = await UZ.build(one({ type: "title", text: "題", tone: "light" }), TH, null);
+    assert.deepStrictEqual(M.errors, []);
+    assert.strictEqual(M.scenes[0].tone, "light");
+    assert.strictEqual(M.figs.t.items.text.texts[0].color, TH.colors.ink);
+    const bad = await UZ.build(one({ type: "title", text: "題", tone: "navy" }), TH, null);
+    assert.ok(bad.errors.some(e => e.includes("tone")), JSON.stringify(bad.errors));
+    const th2 = JSON.parse(JSON.stringify(TH)); delete th2.chapter;   // chapter のないテーマでは、題の場面も通常の地
+    const M2 = await UZ.build(one({ type: "title", text: "題" }), th2, null);
+    assert.strictEqual(M2.scenes[0].tone, "light");
+  },
+  async dark_title_beside_figure_is_error() {
+    const b = base();
+    const mk = t => ({ format: b.format, title: "検査", voice: b.voice, figures: { t, flow: b.figures.flow }, scenes: [{ id: "s1", figure: ["t", "flow"], lines: [{ id: "l1", text: "並べます。", do: [{ show: "flow" }] }] }] });
+    const M = await UZ.build(mk({ type: "title", text: "題" }), TH, null);
+    assert.ok(M.errors.some(e => e.includes('tone: "light"')), JSON.stringify(M.errors));
+    const ok = await UZ.build(mk({ type: "title", text: "題", tone: "light" }), TH, null);
+    assert.deepStrictEqual(ok.errors, []);
+  },
+  // 箱の面・枠・文字は、テーマの colors.boxes に書いた色をそのまま使う
+  async boxes_from_theme() {
+    const b = base();
+    b.figures.flow.nodes[0].role = "removed";
+    const M = await UZ.build({ format: b.format, title: "検査", voice: b.voice, figures: { flow: b.figures.flow }, scenes: [{ id: "s1", figure: "flow", lines: [{ id: "l1", text: "出します。", do: [{ show: "flow" }] }] }] }, TH, null);
+    const it = M.figs.flow.items[b.figures.flow.nodes[0].id], bx = TH.colors.boxes.removed;
+    assert.deepStrictEqual([it.fill, it.stroke, it.texts[0].color], [bx.fill, bx.border, bx.label]);
+    const th2 = JSON.parse(JSON.stringify(TH)); delete th2.colors.boxes;   // boxes のないテーマでは、役割の色の枠と本文の色の文字
+    const M2 = await UZ.build({ format: b.format, title: "検査", voice: b.voice, figures: { flow: b.figures.flow }, scenes: [{ id: "s1", figure: "flow", lines: [{ id: "l1", text: "出します。", do: [{ show: "flow" }] }] }] }, th2, null);
+    const it2 = M2.figs.flow.items[b.figures.flow.nodes[0].id];
+    assert.deepStrictEqual([it2.stroke, it2.texts[0].color], [TH.colors.roles.removed, TH.colors.ink]);
   },
 };
 

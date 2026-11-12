@@ -19,8 +19,8 @@
       "state": "agreed"
     },
     "look": {
-      "text": "フラットな図解",
-      "theme": "flat",
+      "text": "空 提案書デザイン（既定）",
+      "theme": "koo",
       "by": "claude",
       "state": "proposed"
     },

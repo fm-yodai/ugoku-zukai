@@ -42,19 +42,19 @@ class WorkdirTest(unittest.TestCase):
     # ---- publish ----
     def test_publish_writes_record(self):
         wd = self.new("a")
-        r = self.run_wd("publish", wd, "--url", URL, "--theme", "flat", "--source", "なし", "--now", "2026-11-10T16:02:00")
+        r = self.run_wd("publish", wd, "--url", URL, "--theme", "koo", "--source", "なし", "--now", "2026-11-10T16:02:00")
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertEqual(self.record(wd), {
-            "format": "ugoku-zukai-published/1", "title": "題", "url": URL, "theme": "flat", "source": "なし",
+            "format": "ugoku-zukai-published/1", "title": "題", "url": URL, "theme": "koo", "source": "なし",
             "first": "2026-11-10T16:02:00", "last": "2026-11-10T16:02:00", "count": 1})
 
     def test_publish_again_keeps_theme(self):
         wd = self.new("a")
-        self.run_wd("publish", wd, "--url", URL, "--theme", "flat", "--source", "なし", "--now", "2026-11-10T16:02:00")
+        self.run_wd("publish", wd, "--url", URL, "--theme", "koo", "--source", "なし", "--now", "2026-11-10T16:02:00")
         r = self.run_wd("publish", wd, "--url", URL, "--now", "2026-11-10T17:40:00")
         self.assertEqual(r.returncode, 0, r.stderr)
         rec = self.record(wd)
-        self.assertEqual((rec["theme"], rec["source"], rec["count"]), ("flat", "なし", 2))
+        self.assertEqual((rec["theme"], rec["source"], rec["count"]), ("koo", "なし", 2))
         self.assertEqual((rec["first"], rec["last"]), ("2026-11-10T16:02:00", "2026-11-10T17:40:00"))
 
     def test_publish_first_time_without_theme(self):
@@ -102,7 +102,7 @@ class WorkdirTest(unittest.TestCase):
         os.makedirs(os.path.join(b, "voice"))
         for f in ("outline.json", "player.html", os.path.join("voice", "timeline.json")):
             open(os.path.join(b, f), "w").close()
-        self.run_wd("publish", b, "--url", URL, "--theme", "flat", "--source", "/src/x", "--now", "2026-11-10T16:02:00")
+        self.run_wd("publish", b, "--url", URL, "--theme", "koo", "--source", "/src/x", "--now", "2026-11-10T16:02:00")
         return a, b
 
     def test_list_json(self):
@@ -132,7 +132,7 @@ class WorkdirTest(unittest.TestCase):
         self.assertIn("2026-11-10 16:02", lb)
         for p in (a, b):
             self.assertIn(p, r.stdout)
-        self.assertIn("flat", r.stdout)
+        self.assertIn("koo", r.stdout)
         self.assertIn("/src/x", r.stdout)
 
     def test_list_broken_files(self):

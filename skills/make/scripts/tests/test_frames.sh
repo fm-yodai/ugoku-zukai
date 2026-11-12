@@ -12,7 +12,7 @@ sb=examples/sequence.json
 # 前の回の残り（sheet-*.png・svg/）は消え、ほかのファイルは残る
 mkdir -p "$out/a/svg"
 echo x >"$out/a/sheet-99.png"; echo x >"$out/a/svg/zz.svg"; echo x >"$out/a/keep.txt"
-node scripts/frames.cjs "$sb" --theme flat -o "$out/a" >"$out/a.log" 2>&1
+node scripts/frames.cjs "$sb" --theme koo -o "$out/a" >"$out/a.log" 2>&1
 code=$?
 [ -f "$out/a/frames.json" ] || { ng "frames.json ができない（終了コード $code）"; cat "$out/a.log"; echo "frames の検査: NG あり"; exit 1; }
 
@@ -51,7 +51,7 @@ const [sbf, dir] = process.argv.slice(1);
 const { load, theme } = require(path.resolve("scripts/uz_node.cjs"));
 (async () => {
   const UZ = load();
-  const M = await UZ.build(JSON.parse(fs.readFileSync(sbf, "utf8")), theme("flat"), null);
+  const M = await UZ.build(JSON.parse(fs.readFileSync(sbf, "utf8")), theme("koo"), null);
   const fr = JSON.parse(fs.readFileSync(path.join(dir, "frames.json"), "utf8"));
   const L = M.timeline.lines;
   let bad = 0;
@@ -83,7 +83,7 @@ fi
 
 # resvg を読めないとき: 終了コード 4、png: false、SVG はそろう
 mkdir -p "$out/empty"
-UZ_RENDER_HOME="$out/empty" node scripts/frames.cjs "$sb" --theme flat -o "$out/b" >"$out/b.log" 2>&1
+UZ_RENDER_HOME="$out/empty" node scripts/frames.cjs "$sb" --theme koo -o "$out/b" >"$out/b.log" 2>&1
 code=$?
 [ $code = 4 ] || ng "resvg がないのに終了コードが $code（4 のはず）"
 grep -q "setup_render.py" "$out/b.log" || ng "resvg がないときに setup_render.py の案内が出ない"
@@ -107,7 +107,7 @@ process.exit(fr.lines.every(l => typeof l.start === "number" && l.start <= l.t) 
 
 # --lines: 行の id から、その行のある場面を選ぶ（直しは行の id で来るため）
 ln=$(node -e 'const sb = JSON.parse(require("fs").readFileSync("examples/mixed.json", "utf8")); console.log(sb.scenes[1].lines[0].id)')
-node scripts/frames.cjs examples/mixed.json --theme flat -o "$out/bylines" --lines "$ln" >/dev/null 2>&1
+node scripts/frames.cjs examples/mixed.json --theme koo -o "$out/bylines" --lines "$ln" >/dev/null 2>&1
 code=$?
 [ $code = 0 ] || [ $code = 4 ] || ng "--lines の終了コードが $code"
 node -e '
@@ -115,14 +115,14 @@ const fs = require("fs"), sb = JSON.parse(fs.readFileSync("examples/mixed.json",
 const got = JSON.parse(fs.readFileSync(process.argv[1] + "/frames.json", "utf8")).lines.map(l => l.id).join(",");
 if (got !== sb.scenes[1].lines.map(l => l.id).join(",")) process.exit(1);
 ' "$out/bylines" 2>/dev/null || ng "--lines の出力が、その行のある場面の行になっていない"
-node scripts/frames.cjs examples/mixed.json --theme flat -o "$out/nolines" --lines "$ln,l999" >"$out/nolines.log" 2>&1
+node scripts/frames.cjs examples/mixed.json --theme koo -o "$out/nolines" --lines "$ln,l999" >"$out/nolines.log" 2>&1
 [ $? = 2 ] && grep -q "l999" "$out/nolines.log" && [ ! -e "$out/nolines" ] || ng "--lines に台本にない行を渡したとき、終了コード 2 で止まらない"
-node scripts/frames.cjs examples/mixed.json --theme flat -o "$out/both" --lines "$ln" --scenes s1 >/dev/null 2>&1
+node scripts/frames.cjs examples/mixed.json --theme koo -o "$out/both" --lines "$ln" --scenes s1 >/dev/null 2>&1
 [ $? = 2 ] || ng "--lines と --scenes を両方渡したとき、終了コード 2 で止まらない"
 # --scenes: その場面の行だけを書き、コマの中身は全体のときと同じ
-node scripts/frames.cjs examples/mixed.json --theme flat -o "$out/all" >/dev/null 2>&1
+node scripts/frames.cjs examples/mixed.json --theme koo -o "$out/all" >/dev/null 2>&1
 sc=$(node -e 'const sb = JSON.parse(require("fs").readFileSync("examples/mixed.json", "utf8")); console.log(sb.scenes[1].id)')
-node scripts/frames.cjs examples/mixed.json --theme flat -o "$out/part" --scenes "$sc" >/dev/null 2>&1
+node scripts/frames.cjs examples/mixed.json --theme koo -o "$out/part" --scenes "$sc" >/dev/null 2>&1
 code=$?
 [ $code = 0 ] || [ $code = 4 ] || ng "--scenes の終了コードが $code"
 node -e '
@@ -138,7 +138,7 @@ process.exit(ok ? 0 : 1);
 
 # 台本にない場面: 何も書かずに終了コード 2
 mkdir -p "$out/none"; echo x >"$out/none/frames.json"
-node scripts/frames.cjs examples/mixed.json --theme flat -o "$out/none" --scenes "$sc,s999" >"$out/none.log" 2>&1
+node scripts/frames.cjs examples/mixed.json --theme koo -o "$out/none" --scenes "$sc,s999" >"$out/none.log" 2>&1
 [ $? = 2 ] || ng "台本にない場面で終了コード 2 にならない"
 grep -q "s999" "$out/none.log" || ng "台本にない場面の id が表示されない"
 [ "$(cat "$out/none/frames.json")" = x ] || ng "台本にない場面なのに出力先を書き換えた"

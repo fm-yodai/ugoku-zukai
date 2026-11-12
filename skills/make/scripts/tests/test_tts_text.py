@@ -59,8 +59,29 @@ class TtsTextTest(unittest.TestCase):
                "l2": {"text": "次|です。", "spoken": "次|です。", "kana": ["ツギ", "、", "デス"]}}
         md = tts.readings_md(rows, got, 8, 1.1).splitlines()
         self.assertEqual(md[0], "# 読みの一覧（話者 8、話速 1.1）")
-        self.assertIn("| l1 | A案は 安い。 | エーあんは安い。 | エーアンワ/ヤスイ |", md)
-        self.assertIn("| l2 | 次\\|です。 | 次\\|です。 | ツギ、デス |", md)
+        self.assertIn("| l1 | A案は 安い。 | エーあんは安い。 | エーアンワ/ヤスイ |  |", md)
+        self.assertIn("| l2 | 次\\|です。 | 次\\|です。 | ツギ、デス | 、×1 |", md)
+
+    def test_readings_md_counts_pauses(self):
+        # 「間」の列: 読点の間（、）と短い間（・）の数。読点の間が 4 つ以上なら、遅くないかを見るよう知らせる
+        rows = [{"id": "l1", "caption": "ISO 9241", "spoken": "x"}, {"id": "l2", "caption": "ISO 9241", "spoken": "x"}]
+        got = {"l1": {"spoken": "x", "kana": ["アイエスオオ", "・", "キュウ", "・", "ニ", "、", "デス"]},
+               "l2": {"spoken": "x", "kana": ["ア", "、", "キュウ", "、", "ニ", "、", "ヨン", "、", "デス"]}}
+        md = tts.readings_md(rows, got, 8, 1.1).splitlines()
+        self.assertIn("| l1 | ISO 9241 | x | アイエスオオ・キュウ・ニ、デス | 、×1 ・×2 |", md)
+        self.assertTrue(any(ln.startswith("| l2 ") and "、×4（区切りが多い" in ln for ln in md), md)
+
+    def test_short_pause_indexes(self):
+        # 中黒だけの区切りを短い間にする。区切りの数と VOICEVOX の間の数が合わなければ、何も縮めない
+        t = "規格のアイエスオー・きゅう・に、よんは、次です。"
+        self.assertEqual(tts.short_pause_indexes(t, 4), {0, 1})
+        self.assertEqual(tts.short_pause_indexes(t, 3), set())
+        self.assertEqual(tts.short_pause_indexes("読点だけ、です。", 1), set())
+
+    def test_pause_key_only_for_nakaguro(self):
+        # 中黒のない行は、使い回しの鍵が前と変わらない（前に作った声を作り直さない）
+        self.assertEqual(tts.pause_key("読点だけ、です。"), [])
+        self.assertEqual(tts.pause_key("きゅう・に"), [f"short-pause:{tts.SHORT_PAUSE}"])
 
     def test_dict_key_changes_with_extra(self):
         with tempfile.TemporaryDirectory() as d:

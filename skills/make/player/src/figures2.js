@@ -19,9 +19,9 @@
     const cx = x + nb.w / 2, lh = nb.size + 8;
     const blockH = nb.lines.length * lh + nb.subLines.length * 21;
     const top = y + nb.h / 2 - blockH / 2;
-    const texts = [T(nb.lines, cx, top + nb.lines.length * lh / 2, nb.size, { weight: 500, color: S.ink, lineH: lh })];
+    const texts = [T(nb.lines, cx, top + nb.lines.length * lh / 2, nb.size, { weight: 500, color: S.label(nb.role), lineH: lh })];
     if (nb.subLines.length) texts.push(T(nb.subLines, cx, top + nb.lines.length * lh + nb.subLines.length * 21 / 2, 16, { color: S.muted, lineH: 21 }));
-    const color = S.role(nb.role);
+    const color = S.border(nb.role);
     return { id: nb.id, kind: "box", x, y, w: nb.w, h: nb.h, r: nb.shape === "round" ? nb.h / 2 : S.radius, shape: nb.shape,
       stroke: color, fill: S.fill(nb.role), texts, bbox: { x, y, w: nb.w, h: nb.h }, dotAt: [cx, y + nb.h - 12], ...extra };
   }
@@ -232,7 +232,7 @@
       }
       for (const { it, a, b, r, tr } of bars) {
         const row = trackRows.find(x => x.tr === tr);
-        const top = row.y + 15 + r * (barH + rowGap), color = S.role(it.role || "process");
+        const top = row.y + 15 + r * (barH + rowGap), color = S.border(it.at != null ? it.role || "accent" : it.role || "process");
         if (it.at != null) {
           const cx = X(a) + colW * (it.pos ?? 0.5), cy = top + barH / 2, d = 17;
           const lab = T(UZ.wrap(it.label, 18, colW - 10, 700, 2), cx + d + 8, cy, 18, { anchor: "start", weight: 700, color: S.ink });
@@ -242,7 +242,7 @@
           const x = X(a) + 8, w = X(b + 1) - X(a) - 16;
           const lines = UZ.wrap(it.label, 19, w - 24, 500, 2);
           const fs = lines.length > 1 ? 17 : 19;
-          const t = T(UZ.wrap(it.label, fs, w - 20, 500, 2), x + 14, top + barH / 2, fs, { anchor: "start", weight: 500, color: S.ink, lineH: fs + 3 });
+          const t = T(UZ.wrap(it.label, fs, w - 20, 500, 2), x + 14, top + barH / 2, fs, { anchor: "start", weight: 500, color: S.label(it.role || "process"), lineH: fs + 3 });
           items.push({ id: it.id, kind: "bar", x, y: top, w, h: barH, r: 8, grow: "right", stroke: color, fill: S.fill(it.role || "process"), texts: [t], bbox: { x, y: top, w, h: barH } });
         }
       }
@@ -357,7 +357,9 @@
       });
       const n = series.length;
       series.forEach((s, si) => {
-        const color = S.role(s.role || ["actor", "process", "store", "external"][si % 4]);
+        const srole = s.role || ["actor", "process", "store", "external"][si % 4];
+        // 線は役割の色（背景の上で読める色）。棒と凡例は面なので、箱の枠と同じ色（テーマの boxes にあればデザインの色そのまま）
+        const color = kind === "line" ? S.role(srole) : S.border(srole);
         const members = [];
         if (kind === "line") {
           const pts = [];
@@ -402,7 +404,7 @@
     async layout(f, S) {
       const k = f.items.length, gap = 30, cw = Math.min(360, (1150 - gap * (k - 1)) / k), ch = 230, items = [], order = [];
       f.items.forEach((it, i) => {
-        const x = i * (cw + gap), color = S.role(it.role || "accent");
+        const x = i * (cw + gap), color = S.border(it.role || "accent");
         const lab = T(UZ.wrap(it.label, 21, cw - 40, 500, 2), x + cw / 2, 44, 21, { weight: 500, color: S.muted });
         const valStr = (it.prefix || "") + fmtNum(it.value, it.decimals);
         const vsize = Math.min(64, (cw - 40) / Math.max(1, UZ.textW(valStr + (it.unit || ""), 1, 700)) );
@@ -514,8 +516,8 @@
         const y = i * (lh + gap), w0 = topW(i), w1 = botW(i);
         const poly = [[cx - w0 / 2, y], [cx + w0 / 2, y], [cx + w1 / 2, y + lh], [cx - w1 / 2, y + lh]];
         const role = l.role || ["actor", "process", "store", "external"][i % 4];
-        const color = S.role(role);
-        const texts = [T(l.label, cx, y + lh / 2 - (l.sub || l.value != null ? 10 : 0), size, { weight: 700, color: S.ink })];
+        const color = S.border(role);
+        const texts = [T(l.label, cx, y + lh / 2 - (l.sub || l.value != null ? 10 : 0), size, { weight: 700, color: S.label(role) })];
         const subTxt = [l.value != null ? fmtNum(l.value) + (f.unit || "") : null, l.sub].filter(Boolean).join("  ");
         if (subTxt) texts.push(T(subTxt, cx, y + lh / 2 + 16, 16, { color: S.muted }));
         const bx = Math.min(...poly.map(p => p[0])), bw = Math.max(...poly.map(p => p[0])) - bx;

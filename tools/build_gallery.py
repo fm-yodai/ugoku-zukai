@@ -25,8 +25,7 @@ SAMPLES = [
     ("proposal-concept", "サイクル・ベン図・ピラミッド"),
 ]
 THEMES = [
-    ("3b1b", os.path.join(MAKE, "player", "themes", "3b1b.json")),
-    ("flat", os.path.join(MAKE, "player", "themes", "flat.json")),
+    ("koo", os.path.join(MAKE, "player", "themes", "koo.json")),
     ("kumo", os.path.join(MAKE, "examples", "themes", "kumo.json")),
 ]
 

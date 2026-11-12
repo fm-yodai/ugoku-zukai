@@ -5,8 +5,8 @@
 見本は `examples/`（業務の流れ・状態遷移・シーケンス図・箇条/比較/表・2 つの図と下の層、提案資料の図 `proposal-*.json`）。書いたら必ず検査する:
 
 ```bash
-node scripts/check_storyboard.cjs storyboard.json --theme 3b1b     # 形・id・経路・配置
-node scripts/check_storyboard.cjs storyboard.json --theme 3b1b --outline outline.json   # 構成メモの章とも突き合わせる（書き終えたら --complete も付ける）
+node scripts/check_storyboard.cjs storyboard.json --theme koo     # 形・id・経路・配置
+node scripts/check_storyboard.cjs storyboard.json --theme koo --outline outline.json   # 構成メモの章とも突き合わせる（書き終えたら --complete も付ける）
 python3 scripts/build_player.py storyboard.json -o preview.html     # 音声なしの下見
 ```
 
@@ -72,6 +72,10 @@ python3 scripts/build_player.py storyboard.json -o preview.html     # 音声な�
 ```json
 { "type": "title", "text": "動画作成プラグイン ugoku-zukai について\n説明します", "sub": "資料を渡してから動画のページができるまで" }
 ```
+
+`sub` は任意。題に足す情報があるときだけ書き、題をなぞるだけなら付けない（章扉は題だけでよい。まとめの章扉は「まとめ」）。
+
+テーマに `chapter`（章扉の色）があれば、`title` 図だけの場面は暗い地（章扉の地）で出る。同梱のテーマ `koo` では Navy の地に白い文字になる。通常の地に出したいときは、図に `"tone": "light"` と書く。`title` 図を他の図と並べる場面では、`"tone": "light"` が要る。
 
 ### list
 
@@ -241,6 +245,7 @@ python3 scripts/build_player.py storyboard.json -o preview.html     # 音声な�
 - `figure` は図 1 つか、2 つの配列（左右に並べる。`split` で左の幅の割合、既定 0.56）
 - 場面が変わると、次の場面で使わない図は消え、使い続ける図は新しい区画へ動く
 - `text` は字幕。2 行（1 行およそ全角 38 字）に収まらなければ文を分ける
+- `read` は読み（任意）。英字の語や読みの分かれる漢字を、意図した読みで読ませる。間を入れたい所には読点（、）を書く。読点の間は 1 つ約 0.6 秒ある。**規格番号のように 1 桁ずつ読ませる所は、中黒（・）で区切る**（`ISO 9241-210` → `アイエスオー・きゅう・に・よん・いち・の・にひゃくじゅう`）。中黒は語を切るが、間は短い（約 0.1 秒）。読点で区切ると、読みは合うが、区切りの数だけ遅くなる
 - `chapter` は構成メモ（`outline.md`）の章の id。合意した章と台本の場面を結び、章ごとの検査と直しの単位になる。1 つの章に場面をいくつ書いてもよい。書くなら全場面に書く（`--outline` を付けて検査するときは全場面に要る）
 - `role` は使わなくなった（前に作った台本に残っていても、検査もプレーヤーも読み飛ばす）。新しく書く台本には書かない
 - `source` は根拠（構成メモの `source` と同じ書き方）。文字列の配列で書く（1 つだけなら文字列でもよい。それ以外の形は `check_storyboard.cjs` が警告し、一覧に出ない）。評価役が照合し、再生ページのチャプター一覧で、行の根拠として吹き出しにも出る。読んだ人がたどれるように、`"src/expense/check.ts:42"`・`"PR #12"`・`"https://example.com/guide 「承認は 2 段まで」"` のように場所か引用まで書く

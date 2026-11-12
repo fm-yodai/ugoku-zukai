@@ -53,7 +53,7 @@ class BuildSheetTest(unittest.TestCase):
     def frames(cls, sb, *extra):
         """frames.cjs を一時フォルダに回し、出力先を返す（resvg がない環境の終了コード 4 も許す）"""
         out = cls.newdir()
-        r = subprocess.run(["node", FRAMES, sb, "--theme", "flat", "-o", out, *extra], capture_output=True, text=True)
+        r = subprocess.run(["node", FRAMES, sb, "--theme", "koo", "-o", out, *extra], capture_output=True, text=True)
         assert r.returncode in (0, 4), r.stderr
         return out
 

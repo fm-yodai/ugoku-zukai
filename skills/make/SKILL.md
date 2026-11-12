@@ -68,7 +68,7 @@ metadata:
 | 台本 | `storyboard.json`（`references/storyboard.md`）、`scripts/check_storyboard.cjs`（`--outline`。書き終えたら `--complete`）、`scripts/check_text.py` | 章立てが固まった章から。Claude Code では初稿と章単位の書き直しを writer に任せる |
 | 絵コンテ | `scripts/frames.cjs`（`--scenes`・`--lines`）、`scripts/build_sheet.py`（`--outline`） | 場面が固まってきたら。任されたときの最初の確認 |
 | 粗い再生ページ | `scripts/build_player.py`（声なし） | 動きと間を見たいとき。合成の前の最終確認 |
-| テーマ | `references/themes.md`、`scripts/extract_design.py`、`scripts/check_theme.py`（`--design`） | 手持ちのデザインに合わせるとき。決めたテーマは構成メモの `basics.look.theme` に書く（道具はそのテーマに従う） |
+| テーマ | `references/themes.md`、`scripts/extract_design.py`、`scripts/check_theme.py`（`--design`） | 既定は同梱の `koo`（空 提案書デザイン。字幕の帯と章扉は Navy）。手持ちのデザインに合わせるときは、図の色に加えて、意味の色・字幕の帯・章扉の色もそのデザインにある色から決める。決めたテーマは構成メモの `basics.look.theme` に書く（道具はそのテーマに従う） |
 | 評価役 | `references/criteria/`、`references/review-protocol.md` | 下の「検査」の場面 |
 | 指摘の一覧 | `scripts/ledger.py`（`ingest`・`list`・`decide`・`status`・`residual`） | 評価役の出力を取り込み、利用者に見せ、選択を記録する |
 | 声 | `scripts/setup_voice.py`、`scripts/tts.py`（`--readings`） | 利用者が絵コンテを見た後 |

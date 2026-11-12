@@ -16,7 +16,7 @@
 | エージェント | 仕事 | 足して渡すもの | 出力 |
 |---|---|---|---|
 | `ugoku-zukai:researcher` | 調べる | 題材の場所（手元のファイル・フォルダ・リポジトリは絶対パス。リポジトリの URL なら URL と clone 先 `<workdir>/repo`。PR 番号、Web ページの URL）、**調べてほしいこと** | `<workdir>/brief.md`（出どころ付きの取材メモ）と `<workdir>/sources/` |
-| `ugoku-zukai:writer` | 台本の初稿、章単位の書き直し、指摘の直し | テーマ（`3b1b`・`flat`・`<workdir>/theme.json`）、書く範囲（「全部」か章の id）、直す指摘のキー（あれば） | `<workdir>/storyboard.json` |
+| `ugoku-zukai:writer` | 台本の初稿、章単位の書き直し、指摘の直し | テーマ（`koo`・`<workdir>/theme.json`）、書く範囲（「全部」か章の id）、直す指摘のキー（あれば） | `<workdir>/storyboard.json` |
 | `ugoku-zukai:fact-checker` | 事実（`outline`・`script`） | `target`、題材の場所（researcher に渡したのと同じ絶対パス。資料のない題材なら「資料なし」）、出力先、再確認するキー、見る範囲。`brief.md` は渡さない | 出力先の JSON |
 | `ugoku-zukai:director` | 構成メモ・合意との照合・演出・画面（`outline`・`script`・`screen`） | `target`、出力先、再確認するキー、見る範囲。`script` では `check_storyboard.cjs --outline` の出力。`screen` で一部の場面だけを見てもらうときは、コマの場所（`<workdir>/frames-part`） | 出力先の JSON |
 | `ugoku-zukai:writing-reviewer` | 文章と読み（`script`・`voice`） | `target`、出力先、再確認するキー、見る範囲 | 出力先の JSON |
@@ -40,7 +40,7 @@
 ```text
 （writer に章を書き直してもらう）
 作業フォルダ: /home/u/.claude/plugins/data/ugoku-zukai/runs/20261110-1530-ux
-テーマ: flat
+テーマ: koo
 書く範囲: c3
 直す指摘のキー: c3.1:A-1 l14:S-W5
 ```
@@ -59,7 +59,7 @@ target: script
 ```text
 機械検査の差し戻し
 作業フォルダ: /home/u/.claude/plugins/data/ugoku-zukai/runs/20261110-1530-ux
-テーマ: flat
+テーマ: koo
 検査の出力:
 （check_storyboard.cjs・check_text.py の出力をそのまま貼る）
 ```
@@ -95,7 +95,8 @@ python3 ${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/check_theme.py <workdir>/theme
 ```
 
 - `theme.json` は下書きを直して作る。同梱のテーマや文書の例から値を写さない。`--design` が、テーマがデザインから外れていないか（背景・本文・強調・字体・影）を見る
-- 見た目が決まったら、構成メモの `basics.look.theme` に書く（`flat`・`3b1b`・`theme.json`）。検査・コマ・組み立ては、`--theme` を省くとこのテーマを使い、違うテーマを渡すと止まる。下のコマンドの `--theme <テーマ>` は省いてよい
+- 意味の色（良い・悪い）、字幕の帯、章扉の地も、デザインにある色から決める（`themes.md` の手順 2）。緑や赤がデザインになければ足さない。字幕の帯と章扉の色は、デザインの反転面の色（表紙や章扉に使う暗い色）があればそれを当て、決めた色と理由を、図の色の見本と一緒に利用者に伝える
+- 見た目が決まったら、構成メモの `basics.look.theme` に書く（`koo`・`theme.json`）。検査・コマ・組み立ては、`--theme` を省くとこのテーマを使い、違うテーマを渡すと止まる。下のコマンドの `--theme <テーマ>` は省いてよい
 
 ## 調べる
 
@@ -236,7 +237,7 @@ python3 ${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/tts.py -o <workdir>/voice --au
 python3 ${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/tts.py <workdir>/storyboard.json -o <workdir>/voice --readings
 ```
 
-`tts.py` の終了コード 3 は時間で区切っただけ。0 になるまで同じコマンドを繰り返す。一覧ができたら、writing-reviewer を `target: voice`（読みモード）で呼び、出力を `ingest` する。
+`tts.py` の終了コード 3 は時間で区切っただけ。0 になるまで同じコマンドを繰り返す。一覧ができたら、writing-reviewer を `target: voice`（読みモード）で呼び、出力を `ingest` する。一覧の「間」の列に「区切りが多い」と出た行は、1 桁ずつ読ませる区切りなら `read` の読点を中黒（・）に替える（中黒の間は短い）。
 
 読みの指摘は合意した内容を変えないので、`decide --by lead --fix` で記録して、行の `read`（と `<workdir>/voice_dict.json`）だけを直す。字幕 `text` は変えない。直したら `--readings` を回し直し、writing-reviewer に直したキーの再確認を 1 回だけ頼む。通らなかった読みは、最後の報告に書く。
 
