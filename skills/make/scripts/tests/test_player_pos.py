@@ -108,6 +108,53 @@ class PlayerPosTest(unittest.TestCase):
         html = open(TEMPLATE, encoding="utf-8").read()
         self.assertTrue(re.search(r"try \{ buildPoint\(\); \} catch \(e\) \{ console\.error", html))
 
+    # ---- 「直したい箇所を指定する」は、編集できる人にだけ見せる ----
+    CAN_JS = r"""
+const fs = require("fs");
+const html = fs.readFileSync(process.argv[1], "utf8");
+const m = html.match(/  function canPoint\([^)]*\) \{[\s\S]*?\n  \}\n/);
+if (!m) { console.log("NOFUNC"); process.exit(1); }
+eval(m[0]);
+const use = v => ({ claude: { use: name => name === "user" ? v() : Promise.resolve(null) } });
+const ok = b => () => Promise.resolve({ canEdit: () => b });
+const cases = {
+  local_file: [{ artifact: false }, {}],                               // 手元の HTML: 出す
+  artifact_no_runtime: [{ artifact: true }, {}],                       // Artifact 用の断片だが、聞く仕組みがない: 出さない
+  editor: [{ artifact: true }, use(ok(true))],
+  viewer: [{ artifact: true }, use(ok(false))],
+  editor_full_html: [{ artifact: false }, use(ok(true))],              // 丸ごとの HTML を Artifact にしても、編集者には出す
+  viewer_full_html: [{ artifact: false }, use(ok(false))],             // 聞く仕組みがあるなら、その答えに従う
+  async_can_edit: [{ artifact: true }, use(() => Promise.resolve({ canEdit: () => Promise.resolve(true) }))],
+  null_namespace: [{ artifact: true }, use(() => Promise.resolve(null))],
+  rejects: [{ artifact: true }, use(() => Promise.reject(new Error("x")))],
+  throws: [{ artifact: true }, { claude: { use() { throw new Error("x"); } } }],
+  never: [{ artifact: true }, use(() => new Promise(() => {}))],        // 答えが返らない: 時間切れで出さない
+  no_can_edit: [{ artifact: true }, use(() => Promise.resolve({}))],
+};
+(async () => {
+  const out = {};
+  for (const [k, [data, win]] of Object.entries(cases)) out[k] = await canPoint(data, win, 30);
+  console.log(JSON.stringify(out));
+})();
+"""
+
+    def test_can_point_cases(self):
+        r = subprocess.run(["node", "-e", self.CAN_JS, TEMPLATE], capture_output=True, text=True)
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertEqual(json.loads(r.stdout), {
+            "local_file": True, "artifact_no_runtime": False, "editor": True, "viewer": False, "editor_full_html": True, "viewer_full_html": False,
+            "async_can_edit": True, "null_namespace": False, "rejects": False, "throws": False, "never": False, "no_can_edit": False})
+
+    def test_point_hidden_until_allowed(self):
+        html = open(TEMPLATE, encoding="utf-8").read()
+        self.assertIn('<details class="uz-point" id="uz-point" hidden>', html)   # 初めは出さない。編集できると分かってから出す
+        self.assertRegex(html, r"canPoint\(UZ_DATA, window\)\.then\(")       # 答えを待たずにページを出す
+        self.assertNotRegex(html, r"await canPoint")
+
+    def test_artifact_flag_in_data(self):
+        self.assertRegex(self.build("--artifact"), r'"artifact": true')
+        self.assertRegex(self.build(), r'"artifact": false')
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -94,6 +94,18 @@ class BuildChaptersTest(unittest.TestCase):
             if i not in titled:
                 self.assertIn(f"「{i}」", warns[0])
 
+    def test_chapters_below_stage(self):
+        # チャプターは動画の下。章の題を横に並べ、行は 1 つの章のぶんだけ出す（右側に置く 2 列の配置はやめた）
+        html = open(TEMPLATE, encoding="utf-8").read()
+        self.assertNotIn("300px", html)
+        self.assertNotIn("grid-column: 2", html)
+        self.assertIn('<ol id="uz-chapter-tabs">', html)
+        self.assertIn('<div id="uz-chapter-lines">', html)
+        self.assertRegex(html, r"#uz-chapter-tabs \{[^}]*display: flex[^}]*flex-wrap: wrap")
+        self.assertRegex(html, r"panel\.hidden = ")   # 今の章の行だけを出す
+        order = [html.index(x) for x in ('id="uz-stage"', 'class="uz-bar"', 'id="uz-chapters"', 'id="uz-point"')]
+        self.assertEqual(order, sorted(order))   # 図 → 再生バー → チャプター → 直したい箇所
+
     def test_chapter_lists_contained(self):
         # 一覧の失敗で「準備に失敗」にしない（buildChapters の呼び出しを別の try で包む）
         html = open(TEMPLATE, encoding="utf-8").read()

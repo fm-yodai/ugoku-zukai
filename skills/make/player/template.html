@@ -40,17 +40,19 @@ __FONT_LINK__
   .uz-seek input[type=range] { flex: 1; min-width: 0; margin: 0; }
   #uz-ticks { position: absolute; left: 8px; right: 8px; top: 0; bottom: 0; pointer-events: none; }
   #uz-ticks span { position: absolute; top: 50%; width: 2px; height: 12px; margin-left: -1px; transform: translateY(-50%); background: var(--muted); opacity: .6; border-radius: 1px; }
-  /* チャプター一覧。広い画面では図の右、狭い画面では再生バーの下 */
-  #uz-chapters { border-top: 1px solid var(--line); padding-top: 6px; max-height: 60vh; overflow-y: auto; overscroll-behavior: contain; }
-  #uz-chapters h2 { font-size: 12px; font-weight: 700; color: var(--muted); margin: 0 0 4px; letter-spacing: .05em; }
+  /* チャプター一覧。動画の下に、章の題を横に並べ（多ければ折り返す）、その下に今の章の行だけを出す */
+  #uz-chapters { border-top: 1px solid var(--line); padding-top: 8px; }
   #uz-chapters ol { list-style: none; margin: 0; padding: 0; }
-  #uz-chapters > ol > li { margin: 0 0 6px; }
-  #uz-chapters ol ol { padding-left: 10px; border-left: 2px solid var(--line); margin-left: 6px; }
+  #uz-chapter-tabs { display: flex; flex-wrap: wrap; gap: 6px; }
+  #uz-chapter-tabs .uz-chapter { border: 1px solid var(--line); border-radius: 999px; }
+  #uz-chapter-tabs .uz-chapter[aria-current="true"] { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, transparent); }
+  #uz-chapter-lines { margin-top: 8px; }
+  #uz-chapter-lines ol { padding-left: 10px; border-left: 2px solid var(--line); margin-left: 6px; }
   #uz-chapters button { font: inherit; color: var(--ink); background: none; border: 0; border-radius: 4px; text-align: left; cursor: pointer; }
   #uz-chapters button:hover, #uz-chapters button:focus-visible { color: var(--accent); outline: none; }
   #uz-chapters button:focus-visible { box-shadow: 0 0 0 2px var(--accent); }
   #uz-chapters time { font-variant-numeric: tabular-nums; color: var(--muted); margin-right: 8px; font-size: 12px; }
-  #uz-chapters .uz-chapter { display: block; width: 100%; padding: 4px 6px; font-weight: 700; overflow-wrap: anywhere; }
+  #uz-chapters .uz-chapter { display: block; padding: 4px 12px; font-weight: 700; overflow-wrap: anywhere; }
   .uz-row { display: flex; align-items: flex-start; gap: 2px; }
   #uz-chapters .uz-line { flex: 1; min-width: 0; padding: 2px 6px; font-size: 13px; overflow-wrap: anywhere; }
   #uz-chapters .uz-src-btn { flex: none; padding: 2px 6px; color: var(--muted); font-size: 12px; }
@@ -61,13 +63,6 @@ __FONT_LINK__
   .uz-tip { position: fixed; z-index: 10; max-width: min(320px, calc(100vw - 32px)); padding: 6px 10px; font-size: 12px; line-height: 1.5;
             color: var(--ink); background: var(--page); border: 1px solid var(--line); border-radius: 6px; box-shadow: 0 4px 12px rgba(0, 0, 0, .18); overflow-wrap: anywhere; }
   .uz-tip div { white-space: pre-wrap; }
-  /* 2 列にするのは一覧が出ているときだけ（:has を知らないブラウザでは 1 列のまま、一覧は下に出る） */
-  @media (min-width: 960px) {
-    .uz-wrap:has(> #uz-chapters:not([hidden])) { grid-template-columns: minmax(0, 1fr) 300px; align-items: start; }
-    .uz-wrap:has(> #uz-chapters:not([hidden])) > * { grid-column: 1; }
-    /* 一覧の高さは図・再生バー・注記・「直したい箇所を指定する」の列に合わせる（contain: size で行の高さを押し広げない） */
-    .uz-wrap:has(> #uz-chapters:not([hidden])) > #uz-chapters { grid-column: 2; grid-row: 1 / span 4; align-self: stretch; contain: size; max-height: none; border-top: 0; border-left: 1px solid var(--line); padding: 0 0 0 10px; }
-  }
   .uz-err { color: var(--err); white-space: pre-wrap; }
 </style>
 <!--UZ:HEAD_END-->
@@ -84,14 +79,14 @@ __FONT_LINK__
     <label><input id="uz-subs" type="checkbox" checked> 字幕</label>
   </div>
   <div class="uz-note" id="uz-note"></div>
-  <details class="uz-point" id="uz-point">
+  <nav id="uz-chapters" aria-label="チャプター" hidden><ol id="uz-chapter-tabs"></ol><div id="uz-chapter-lines"></div></nav>
+  <details class="uz-point" id="uz-point" hidden>
     <summary>直したい箇所を指定する</summary>
     <div class="uz-point-row"><output id="uz-pos"></output>
       <button id="uz-pos-copy" type="button">コピー</button>
       <button id="uz-pos-from" type="button" aria-pressed="false">範囲指定</button></div>
     <p class="uz-note" id="uz-pos-note">止めた位置の、場面と行の番号と時刻です。コピーして Claude に伝えると、その箇所を直せます。範囲で伝えるときは、始まりの位置で「範囲指定」を押し、終わりの位置まで進めてからコピーします。</p>
   </details>
-  <nav id="uz-chapters" aria-label="チャプター" hidden><h2>チャプター</h2><ol></ol></nav>
   <div class="uz-err" id="uz-err" hidden></div>
 </div>
 <script>/*UZ:ELK*/</script>
@@ -181,26 +176,23 @@ const UZ_DATA = /*UZ:DATA*/null;
     // 最初の行より前（0:00 の直後）は最初のチャプターと行を今とみなす
     const find = arr => { let k = arr.length ? 0 : -1; for (let i = 0; i < arr.length; i++) if (arr[i].start <= t + 0.01) k = i; return k; };
     const c = find(marks.chapters), l = find(marks.lines);
-    if (c !== curCh) { if (curCh >= 0) marks.chapters[curCh].el.removeAttribute("aria-current"); if (c >= 0) marks.chapters[c].el.setAttribute("aria-current", "true"); curCh = c; }
+    if (c !== curCh) {
+      if (curCh >= 0) marks.chapters[curCh].el.removeAttribute("aria-current");
+      if (c >= 0) marks.chapters[c].el.setAttribute("aria-current", "true");
+      marks.chapters.forEach((ch, i) => { const panel = ch.panel; panel.hidden = i !== c; });   // 行は、今の章のぶんだけ出す（章の題を押すと、その章の頭に飛んで切り替わる）
+      curCh = c;
+    }
     if (l !== curLn) {
       if (curLn >= 0) marks.lines[curLn].el.removeAttribute("aria-current");
       if (l >= 0) {
-        const el = marks.lines[l].el, nav = $("uz-chapters");
-        el.setAttribute("aria-current", "true");
-        // 再生中は今の行が一覧の中で見えるように（ページはスクロールしない）。
-        // 根拠の吹き出しが出ている間は動かさない（一覧のスクロールで吹き出しが閉じるため）
-        const tip = $("uz-tip");
-        if (playing && (!tip || tip.hidden) && nav.scrollHeight > nav.clientHeight) {
-          const top = el.offsetTop - nav.offsetTop, bottom = top + el.offsetHeight;
-          if (top < nav.scrollTop || bottom > nav.scrollTop + nav.clientHeight) nav.scrollTop = Math.max(0, top - nav.clientHeight / 3);
-        }
+        marks.lines[l].el.setAttribute("aria-current", "true");
       }
       curLn = l;
     }
   }
   // 一覧の描画。データは textContent だけで入れる
   function buildChapters() {
-    const chapters = chapterData(), nav = $("uz-chapters"), root = nav.querySelector("ol");
+    const chapters = chapterData(), nav = $("uz-chapters"), tabs = $("uz-chapter-tabs"), panels = $("uz-chapter-lines");
     const btn = (cls, start, text) => {
       const b = document.createElement("button"), tm = document.createElement("time");
       b.type = "button"; b.className = cls; tm.textContent = fmt(start);
@@ -233,7 +225,8 @@ const UZ_DATA = /*UZ:DATA*/null;
     const lines = [], chs = [];
     for (const ch of chapters) {
       const li = document.createElement("li"), cb = btn("uz-chapter", ch.start, ch.title), ol = document.createElement("ol");
-      chs.push({ start: ch.start, el: cb });
+      ol.hidden = true;
+      chs.push({ start: ch.start, el: cb, panel: ol });
       ch.lines.forEach((ln, i) => {
         const lli = document.createElement("li"), row = document.createElement("div"), lb = btn("uz-line", ln.start, ln.text);
         row.className = "uz-row"; row.append(lb);
@@ -257,11 +250,10 @@ const UZ_DATA = /*UZ:DATA*/null;
         }
         lli.append(row); ol.append(lli);
       });
-      li.append(cb, ol); root.append(li);
+      li.append(cb); tabs.append(li); panels.append(ol);
     }
     document.addEventListener("click", e => { if (pinned && !tip.contains(e.target)) hide(); });
     document.addEventListener("keydown", e => { if (e.key === "Escape" && !tip.hidden) hide(); });
-    nav.addEventListener("scroll", () => { if (!tip.hidden) hide(); }, { passive: true });
     window.addEventListener("resize", () => { if (!tip.hidden) hide(); });
     // 再生バーの刻み（最初のチャプターは 0:00 なので置かない）
     const ticks = $("uz-ticks");
@@ -290,6 +282,21 @@ const UZ_DATA = /*UZ:DATA*/null;
     const one = p => `${p.scene} / ${p.line} @${fmt(p.t)}`;
     if (!b || one(a) === one(b)) return one(a);
     return a.t <= b.t ? `${one(a)} 〜 ${one(b)}` : `${one(b)} 〜 ${one(a)}`;
+  }
+  // 「直したい箇所を指定する」を出してよいか。Artifact では、開いている人が編集できるか（claude.use("user") の canEdit）を聞く。
+  // 聞く仕組みがなく、Artifact 用に組み立てたページでもなければ、手元で開いた HTML（開いているのは作った本人）なので出す。
+  // 答えが分からない（仕組みが null を返す・誤りになる・ms ミリ秒返らない）ときは出さない
+  function canPoint(data, win, ms = 12000) {
+    const use = win.claude && typeof win.claude.use === "function" ? win.claude.use : null;
+    if (!use) return Promise.resolve(!(data && data.artifact));
+    const ask = new Promise(resolve => {
+      try {
+        Promise.resolve(use.call(win.claude, "user"))
+          .then(u => (u && typeof u.canEdit === "function" ? u.canEdit() : false))
+          .then(ok => resolve(ok === true), () => resolve(false));
+      } catch (e) { resolve(false); }
+    });
+    return Promise.race([ask, new Promise(resolve => setTimeout(() => resolve(false), ms))]);
   }
   let posFrom = null, pointOk = false;
   function showPos(t) {
@@ -342,7 +349,12 @@ const UZ_DATA = /*UZ:DATA*/null;
       // 一覧が壊れても再生は止めない（一覧は出さずにコンソールへ）
       try { buildChapters(); } catch (e) { console.error("チャプター一覧を作れなかった:", e); marks = null; $("uz-chapters").hidden = true; $("uz-ticks").replaceChildren(); }
       // 位置の表示が壊れても再生は止めない
-      try { buildPoint(); } catch (e) { console.error("位置の表示を用意できなかった:", e); pointOk = false; $("uz-point").hidden = true; }
+      // 編集できる人にだけ出す。答えを待たずにページを出し、分かってから現れる
+      canPoint(UZ_DATA, window).then(ok => {
+        if (!ok) return;
+        $("uz-point").hidden = false;
+        try { buildPoint(); } catch (e) { console.error("位置の表示を用意できなかった:", e); pointOk = false; $("uz-point").hidden = true; }
+      });
       document.dispatchEvent(new CustomEvent("uz-ready"));
     } catch (e) { showErr("準備に失敗しました: " + e.message); console.error(e); }
   })();

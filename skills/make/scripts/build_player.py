@@ -104,7 +104,8 @@ def build(storyboard, theme, timeline=None, audio_b64=None, artifact=False, asse
     tpl = open(os.path.join(PLAYER, "template.html"), encoding="utf-8").read()
     title = storyboard.get("title", "動く図解")
     font_link = f'<link rel="stylesheet" href="{theme["font"]["css"]}">' if theme.get("font", {}).get("css") else ""
-    data = {"storyboard": storyboard, "theme": theme, "timeline": timeline, "audio": audio_b64, "assets": assets or {}}
+    data = {"storyboard": storyboard, "theme": theme, "timeline": timeline, "audio": audio_b64, "assets": assets or {},
+            "artifact": bool(artifact)}   # Artifact 用の断片か（再生ページが「直したい箇所を指定する」を出すかどうかの判断に使う）
     esc = title.replace("&", "&amp;").replace("<", "&lt;").replace('"', "&quot;")
     html = tpl.replace("__TITLE__", esc).replace("__FONT_LINK__", font_link)
     # 置換文字列にバックスラッシュが含まれても壊れないよう、関数で置き換える
