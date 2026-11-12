@@ -108,7 +108,7 @@
       // 場面の地: 題の札だけの場面は、テーマに chapter があれば暗い地（章扉）。それ以外は通常の地
       const tones = figs.map(fid => UZ.titleTone(FIGS[fid], theme));
       if (figs.length > 1 && tones.includes("dark")) err(`場面 ${sc.id}: 題の札を他の図と並べるときは、題の札に tone: "light" と書く（暗い地は題の札だけの場面で使う）`);
-      return { id: sc.id, figs, header, areas, captions, lines: sc.lines, tone: figs.length === 1 ? tones[0] : "light", slide: P.slide, statement: P.statement };
+      return { id: sc.id, chapter: sc.chapter, figs, header, areas, captions, lines: sc.lines, tone: figs.length === 1 ? tones[0] : "light", slide: P.slide, statement: P.statement };
     });
 
     if (errors.length) return { errors, warnings };

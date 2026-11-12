@@ -151,23 +151,34 @@ const UZ_DATA = /*UZ:DATA*/null;
   $("uz-subs").onchange = () => { view.subtitles = $("uz-subs").checked; view._sub = null; tick(); };
   document.addEventListener("keydown", e => { if (e.code === "Space" && e.target === document.body) { e.preventDefault(); $("uz-play").click(); } });
   UZ.player = { seek: seekTo, get model() { return M; } };
-  // チャプター一覧。題は場面の title か図の title（engine の header）。題の無い場面は直前のチャプターに入れる
+  // チャプター一覧（build_sheet.py の chapters と同じ決め方）。
+  // 場面の chapter（構成メモの章の id）が構成メモ（UZ_DATA.chapters）にあれば、同じ章の続く場面を 1 つにまとめ、題は構成メモの章の題。
+  // それ以外の場面は、場面の題（engine の header。題の札だけの場面は札の文の 1 行目）が変わるところで区切り、題の無い場面は直前のチャプターに入れる。
+  // 行の字幕は全文を出す（長い行は折り返す）
   function chapterData() {
     const start = {};
     for (const l of M.timeline.lines) start[l.id] = l.start;
+    const names = (typeof UZ_DATA !== "undefined" && UZ_DATA && UZ_DATA.chapters) || {};
+    const sceneTitle = sc => {
+      if (sc.header) return sc.header;
+      const f = sc.figs.length === 1 && M.figs[sc.figs[0]];
+      return f && f.type === "title" ? String(f.text || "").split("\n")[0].trim() : "";
+    };
     const out = [];
     for (const sc of M.scenes) {
-      let title = sc.header || "";
-      if (!title && sc.figs.length === 1 && M.figs[sc.figs[0]] && M.figs[sc.figs[0]].type === "title") title = "はじめに";
+      const title = sceneTitle(sc);
       let ch = out[out.length - 1];
-      if (!ch || (title && title !== ch.title)) { ch = { title: title || "はじめに", start: sc.start, lines: [] }; out.push(ch); }
+      const named = sc.chapter != null && Object.prototype.hasOwnProperty.call(names, sc.chapter) ? names[sc.chapter] : "";
+      if (named) {
+        const key = "c:" + sc.chapter;
+        if (!ch || ch.key !== key) { ch = { key, title: named, start: sc.start, lines: [] }; out.push(ch); }
+      } else if (!ch || (title && title !== ch.title)) { ch = { key: "t:" + title, title: title || "はじめに", start: sc.start, lines: [] }; out.push(ch); }
       for (const ln of sc.lines || []) {
-        const t = UZ.parseText(ln.text).text, cs = Array.from(t);
         const sources = (typeof ln.source === "string" ? [ln.source] : Array.isArray(ln.source) ? ln.source : []).filter(x => typeof x === "string" && x);
-        ch.lines.push({ id: ln.id, start: ln.id in start ? start[ln.id] : sc.start, text: cs.length > 24 ? cs.slice(0, 24).join("") + "…" : t, sources });
+        ch.lines.push({ id: ln.id, start: ln.id in start ? start[ln.id] : sc.start, text: UZ.parseText(ln.text).text, sources });
       }
     }
-    return out;
+    return out.map(({ key, ...ch }) => ch);
   }
   let marks = null, curCh = -1, curLn = -1;
   // 今の時刻に当たるチャプターと行に aria-current を付ける（一覧が無ければ何もしない）

@@ -261,8 +261,9 @@
     // chapter（構成メモの章の id）は、書くなら全場面に書く
     const noChapter = sb.scenes.filter(sc => sc.chapter == null);
     if (noChapter.length && noChapter.length < sb.scenes.length) W(`chapter のない場面がある: ${noChapter.map(sc => `「${sc.id}」`).join("")}`);
-    // 題の無い場面が 2 つ以上続くと、チャプター一覧で 1 つの章にまとまって見出しにならない。
-    // 題があるとみなすのは engine の header と同じ: 場面の title か、図が 1 つでその図の title（title 型の図は「はじめに」）
+    // 題の無い場面が 2 つ以上続くと、構成メモがないとき、チャプター一覧で 1 つの章にまとまって見出しにならない
+    // （chapter のある場面は、構成メモがあれば構成メモの章でまとめるので見ない）。
+    // 題があるとみなすのは engine の header と同じ: 場面の title か、図が 1 つでその図の title（title 型の図は札の文の 1 行目）
     const titled = sc => {
       if (sc.title || sc.slide != null) return true;
       const figs = Array.isArray(sc.figure) ? sc.figure : [sc.figure];
@@ -271,7 +272,7 @@
     };
     let run = [];
     const flush = () => { if (run.length >= 2) W(`場面${run.map(id => `「${id}」`).join("")}: 題の無い場面が続く（チャプターに出ない。場面の title か図の title を付ける）`); run = []; };
-    for (const sc of sb.scenes) { if (titled(sc)) flush(); else run.push(sc.id); }
+    for (const sc of sb.scenes) { if (sc.chapter != null || titled(sc)) flush(); else run.push(sc.id); }
     flush();
     return { errors, warnings };
   };

@@ -5,8 +5,8 @@
 
 ページに出すのは、スライド・原稿・それらの意図・位置の札だけ（進行役が決めたこと、検査の結果、時刻の出どころなどは出さない。会話で伝える）。
 - 章の段: 章の題。構成メモ（--outline）が 3 段の意図の形（/2）なら、章の意図と、前の章からのつながり。最初の章の前に、章の順番の意図
-  章の分け方: --outline があり場面に chapter があれば構成メモの章。なければ再生ページのチャプター一覧と同じ
-  （場面の title、スライドの title、図が 1 つならその図の title、title 型の図は「はじめに」）
+  章の分け方は再生ページのチャプター一覧と同じ: 場面の chapter が構成メモ（--outline）にあれば、その章（題は構成メモの章の題）。
+  それ以外の場面は場面の題（場面の title、スライドの title、図が 1 つならその図の title、title 型の図は札の文の 1 行目）でまとめる
 - スライドの段: スライドを最初に使う場面の位置に 1 回だけ。完成形のコマ（frames.json の slides）、スライドの見出し、
   構成メモ（/2）にあればスライドの意図と、前のスライドからのつながり
 - 行の段: 左にコマ、右に「s2 / l2 @0:14」（場面の id / 行の id @行の始まりの時刻）と字幕の全文
@@ -80,14 +80,16 @@ def _scene_title(storyboard, sc):
     if len(figs) != 1:
         return ""
     fig = (storyboard.get("figures") or {}).get(figs[0]) or {}
-    return "はじめに" if fig.get("type") == "title" else (fig.get("title") or "")
+    if fig.get("type") == "title":   # 題の札（章扉）は、札の文の 1 行目
+        return str(fig.get("text") or "").split("\n")[0].strip()
+    return fig.get("title") or ""
 
 
 def chapters(storyboard, outline=None):
     """場面を章にまとめる。戻り値: [{"id": 構成メモの章の id（なければ None）, "title": 章の見出し, "scenes": [場面の id…]}]
 
-    構成メモがあり場面に chapter があれば構成メモの章、それ以外は場面や図の題でまとめる。
-    同じ章が続けば 1 つにまとめ、題のない場面は直前の章に入れる。"""
+    再生ページ（template.html の chapterData）と同じ決め方。場面の chapter が構成メモにあれば構成メモの章、
+    それ以外は場面や図の題（題の札は札の文の 1 行目）でまとめる。同じ章が続けば 1 つにまとめ、題のない場面は直前の章に入れる。"""
     by_id = {}
     for c in (outline or {}).get("chapters") or []:
         if isinstance(c, dict) and isinstance(c.get("id"), str):

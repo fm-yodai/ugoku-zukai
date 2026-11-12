@@ -97,15 +97,27 @@ def pick_theme(storyboard_path, given):
     return path
 
 
+def chapter_titles(storyboard_path):
+    """台本と同じフォルダの構成メモから、章の id → 章の題（再生ページのチャプター一覧の題）。構成メモがなければ空"""
+    try:
+        with open(os.path.join(os.path.dirname(os.path.abspath(storyboard_path)), "outline.json"), encoding="utf-8") as f:
+            chs = json.load(f).get("chapters") or []
+    except (OSError, ValueError, AttributeError):
+        return {}
+    return {c["id"]: c["title"] for c in chs if isinstance(c, dict)
+            and isinstance(c.get("id"), str) and isinstance(c.get("title"), str) and c["title"].strip()}
+
+
 PAGE_LIMIT = 15 * 1024 * 1024   # Artifact の 1 ページの上限（16MB）より少し手前で止める
 
 
-def build(storyboard, theme, timeline=None, audio_b64=None, artifact=False, assets=None):
+def build(storyboard, theme, timeline=None, audio_b64=None, artifact=False, assets=None, chapters=None):
     tpl = open(os.path.join(PLAYER, "template.html"), encoding="utf-8").read()
     title = storyboard.get("title", "動く図解")
     font_link = f'<link rel="stylesheet" href="{theme["font"]["css"]}">' if theme.get("font", {}).get("css") else ""
     data = {"storyboard": storyboard, "theme": theme, "timeline": timeline, "audio": audio_b64, "assets": assets or {},
-            "artifact": bool(artifact)}   # Artifact 用の断片か（再生ページが「直したい箇所を指定する」を出すかどうかの判断に使う）
+            "artifact": bool(artifact),   # Artifact 用の断片か（再生ページが「直したい箇所を指定する」を出すかどうかの判断に使う）
+            "chapters": chapters or {}}   # 構成メモの章の id → 題（チャプター一覧の題）
     esc = title.replace("&", "&amp;").replace("<", "&lt;").replace('"', "&quot;")
     html = tpl.replace("__TITLE__", esc).replace("__FONT_LINK__", font_link)
     # 置換文字列にバックスラッシュが含まれても壊れないよう、関数で置き換える
@@ -147,7 +159,7 @@ def main():
     except uz_assets.AssetError as e:
         print(f"build_player: {e}", file=sys.stderr)
         sys.exit(1)
-    html = build(sb, load_theme(a.theme), tl, au, a.artifact, assets)
+    html = build(sb, load_theme(a.theme), tl, au, a.artifact, assets, chapter_titles(a.storyboard))
     limit = int(os.environ.get("UZ_PAGE_LIMIT") or PAGE_LIMIT)
     if len(html.encode()) > limit:
         print(f"build_player: 再生ページが 15MB を超える（{len(html.encode()) / 1e6:.1f}MB。画像が大きい）。画像を小さくする", file=sys.stderr)
