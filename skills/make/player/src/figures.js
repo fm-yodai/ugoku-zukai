@@ -426,7 +426,8 @@
             bbox: { x: Math.min(...xs), y: Math.min(...ys), w: Math.max(...xs) - Math.min(...xs) || 1, h: Math.max(...ys) - Math.min(...ys) || 1 } });
         } else if (s.shape === "text") {
           const t = UZ.mkText(UZ.wrap(s.text, s.size || 22, s.maxW || 600, s.bold ? S.bold : 400, 4), s.x, s.y, s.size || 22, { anchor: s.anchor || "middle", weight: s.bold ? S.bold : 400, color: s.color || S.ink });
-          items.push({ id: s.id, kind: "text", texts: [t], bbox: { ...t.bbox } });
+          // over = この文字を上に重ねてよい図形の id（円の中に置く名前など。配置の検査が「箱に重なる」と言わない）
+          items.push({ id: s.id, kind: "text", texts: [t], bbox: { ...t.bbox }, over: s.over ? [].concat(s.over) : undefined });
         }
         order.push(s.id);
       }

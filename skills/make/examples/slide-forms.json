@@ -1,0 +1,78 @@
+{
+  "format": "ugoku-zukai/3",
+  "title": "ユーザビリティと UX の違い",
+  "voice": { "speaker": 8, "speed": 1.1 },
+  "figures": {
+    "cover": { "type": "title", "text": "ユーザビリティと UX の違い" },
+    "rel": { "type": "canvas", "width": 520, "height": 470, "shapes": [
+      { "id": "outer", "shape": "ellipse", "x": 30, "y": 5, "w": 460, "h": 460, "role": "process" },
+      { "id": "ux", "shape": "text", "x": 260, "y": 78, "text": "UX", "size": 30, "anchor": "middle", "bold": true, "over": ["outer"] },
+      { "id": "inner", "shape": "ellipse", "x": 140, "y": 190, "w": 240, "h": 210, "role": "actor", "text": "ユーザビリティ" } ] }
+  },
+  "slides": {
+    "relation": {
+      "title": "二つの言葉の関係",
+      "statement": "UX は、ユーザビリティを含む、より広い概念です。",
+      "parts": [ { "figure": "rel" } ]
+    },
+    "definitions": {
+      "title": "二つの言葉の定義",
+      "statement": "ユーザビリティは使いやすさ、UX は体験の全体を指します。",
+      "start": "complete",
+      "parts": [
+        { "figure": "rel", "area": { "col": [1, 4], "row": [1, 6] } },
+        { "id": "defs", "type": "text", "area": { "col": [5, 12], "row": [1, 6] }, "blocks": [
+          { "id": "u", "kind": "heading", "text": "ユーザビリティ" },
+          { "id": "u1", "kind": "para", "text": "特定の利用者が、特定の状況で、目標を**有効に、効率よく、満足して**達成できる度合い。", "source": ["ISO 9241-11:2018 3.1.1"] },
+          { "id": "x", "kind": "heading", "text": "UX（ユーザーエクスペリエンス）" },
+          { "id": "x1", "kind": "para", "text": "製品やサービスを使うとき、また使うと予想するときに生じる、**利用者の知覚と反応**。", "source": ["ISO 9241-210:2019 3.15"] } ] }
+      ]
+    },
+    "ux-def": {
+      "title": "UX の定義",
+      "statement": "UX は、使う前から使った後までの、体験の全体です。",
+      "parts": [
+        { "id": "quote", "type": "text", "area": { "col": [2, 11], "row": [1, 3] }, "blocks": [
+          { "id": "q", "kind": "quote", "text": "製品、システム、サービスの利用と、利用の予測から生じる、**利用者の知覚と反応**。", "source": ["ISO 9241-210:2019 3.15"] } ] },
+        { "id": "span", "type": "canvas", "width": 900, "height": 120, "area": { "col": [2, 11], "row": [4, 6] }, "shapes": [
+          { "id": "before", "shape": "rect", "x": 0, "y": 20, "w": 270, "h": 80, "role": "process", "text": "使う前" },
+          { "id": "during", "shape": "rect", "x": 315, "y": 20, "w": 270, "h": 80, "role": "actor", "text": "使っている間" },
+          { "id": "after", "shape": "rect", "x": 630, "y": 20, "w": 270, "h": 80, "role": "process", "text": "使った後" } ] }
+      ]
+    },
+    "whose": {
+      "title": "誰の体験か",
+      "statement": "UX の主語は、いつも利用者です。",
+      "parts": [
+        { "id": "person", "type": "image", "src": "assets/person.svg", "alt": "利用者", "source": "同梱（自作）", "area": { "col": [1, 4], "row": [1, 6] } },
+        { "id": "box", "type": "frame", "title": "利用者が体験すること", "area": { "col": [5, 12], "row": [1, 6] } },
+        { "id": "exp", "type": "text", "area": { "col": [5, 12], "row": [1, 6] }, "blocks": [
+          { "id": "e", "kind": "bullets", "items": [
+            "使う前に、**期待**を持つ",
+            "使っている間に、**使いやすさ**を感じる",
+            "使った後に、**また使いたいか**を決める" ] } ] }
+      ]
+    }
+  },
+  "scenes": [
+    { "id": "s1", "figure": "cover", "lines": [
+      { "id": "l1", "text": "ユーザビリティと UX は、よく並べて語られます。", "read": "ユーザビリティとユーエックスは、よく並べて語られます。" } ] },
+    { "id": "s2", "slide": "relation", "lines": [
+      { "id": "l2", "text": "まず、二つの言葉の関係を図で確認します。", "do": [ { "show": ["outer", "ux"] } ] },
+      { "id": "l3", "text": "{a}ユーザビリティは、UX の内側に入ります。", "read": "{a}ユーザビリティは、ユーエックスの内側に入ります。", "do": [ { "at": "a", "show": "inner" } ] } ] },
+    { "id": "s3", "slide": "definitions", "lines": [
+      { "id": "l4", "text": "それぞれの定義を、国際規格から引きます。", "do": [ { "blur": "rel" } ] },
+      { "id": "l5", "text": "{a}ユーザビリティは、目標を達成できる度合いです。", "do": [ { "at": "a", "blur": ["u", "u1", "inner"] } ] },
+      { "id": "l6", "text": "{a}UX は、使うことで生じる知覚と反応の全部です。", "read": "{a}ユーエックスは、使うことで生じる知覚と反応の全部です。", "do": [ { "at": "a", "blur": ["x", "x1", "outer", "ux"] } ] },
+      { "id": "l7", "text": "度合いと、知覚と反応。見ているものが違います。", "do": [ { "unblur": true } ] } ] },
+    { "id": "s4", "slide": "ux-def", "lines": [
+      { "id": "l8", "text": "{a}規格の定義は、利用だけでなく、利用の予測も含みます。", "do": [ { "at": "a", "show": "q" } ] },
+      { "id": "l9", "text": "つまり範囲は、{a}使う前、{b}使っている間、{c}使った後に及びます。", "do": [ { "at": "a", "show": "before" }, { "at": "b", "show": "during" }, { "at": "c", "show": "after" } ] } ] },
+    { "id": "s5", "slide": "whose", "lines": [
+      { "id": "l10", "text": "では、誰の体験でしょうか。{a}主語は利用者です。", "do": [ { "at": "a", "show": "person" } ] },
+      { "id": "l11", "text": "{a}利用者は、使う前から期待を持っています。", "do": [ { "at": "a", "show": ["box", "e.1"] } ] } ] },
+    { "id": "s6", "slide": "whose", "lines": [
+      { "id": "l12", "text": "{a}使っている間の使いやすさは、体験の一部です。", "do": [ { "at": "a", "show": "e.2" } ] },
+      { "id": "l13", "text": "{a}そして使った後に、また使いたいかが決まります。", "do": [ { "at": "a", "show": "e.3" } ] } ] }
+  ]
+}

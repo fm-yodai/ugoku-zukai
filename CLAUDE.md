@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 題材（コード・リポジトリ・PR・Web ページ・文書・題目）を、日本語ナレーション付きの「動く図解」（HTML 1 枚の再生ページ）にする Claude プラグイン `ugoku-zukai`。本体はスキル `skills/make/`。claude.ai / Claude Desktop のチャットと Claude Code の両方で動かすことが前提。
 
 - 設計の正は `docs/design.md`。マイルストーン（M1a / M1b / M2 / M3 済み。進め方の作り直しは R1・R2 と、R3 の道具 = 完成後の直し・声の試聴まで済み。R3 の両環境での通しが残る。M4 以降は未着手）、合意済みの要件、claude.ai のサンドボックスで確かめた事実（通信先・道具・制約）はここにある。仕様を変えたら、ここの「Mn の実装」節に追記する
-- 文書・コメント・コミットメッセージは日本語。コミットは `M2: 〜` のようにマイルストーンを頭に付ける（進め方の作り直しは `R3: 〜`）
+- 文書・コメント・コミットメッセージは日本語。コミットは `M2: 〜` のようにマイルストーンを頭に付ける（進め方の作り直しは `R3: 〜`、スライドを先に作る作り直しは `R4: 〜`）
 - 前身は個人用スキル explain-video-anywhere（v1、Manim＋Docker の VOICEVOX）。`agents/` と `references/criteria/` などは v1 からの移植で、M3 で新しいプレーヤー向けに、R2 で構成メモを物差しにする形に書き換えた（保留中の `agents/animator.md` だけ v1 の Manim 用のまま）
 
 ## コマンド
@@ -15,13 +15,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 依存のインストール手順はない（python3 と node をそのまま使う。elkjs は `player/vendor/` に同梱）。
 
 ```bash
-# まとめての検査。ふだんは run_r3.sh だけ回せば全部走る（r3 → r2 → r1 → m3 → m1 の順に呼ぶ）
+# まとめての検査。ふだんは run_r4.sh だけ回せば全部走る（r4 → r3 → r2 → r1 → m3 → m1 の順に呼ぶ）
 #   run_m1.sh: 見本台本 × テーマ 3 種の配置検査・テーマの検査・デザイン抽出
 #   run_m3.sh: 字幕と読み・コマ・再生ページ・作業フォルダと、文書とスクリプトの食い違い
 #   run_r1.sh: 構成メモ・台本の章・絵コンテのページ
 #   run_r2.sh: 指摘の一覧・成功基準・エージェントの定義・進行役の文書
 #   run_r3.sh: 再生ページの位置の表示・公開先の記録と作業フォルダの一覧・声の試聴・直しの文書（VOICEVOX があれば、試聴と声の使い回しも）
-bash skills/make/scripts/tests/run_r3.sh
+#   run_r4.sh: スライド（区画・テキスト・画像・フレーム・完成形のコマ・blur）と、スライドの文字の検査
+bash skills/make/scripts/tests/run_r4.sh
 
 # 台本 1 本の検査（形・id の解決・配置）。--timeline で実際の声の長さでも検査する
 node skills/make/scripts/check_storyboard.cjs skills/make/examples/sequence.json --theme koo [--timeline work/voice/timeline.json] [--json]
@@ -84,13 +85,14 @@ python3 tools/build_voice_check.py
 **進め方**: 番号の付いた決まった手順はない。進行役（`SKILL.md` を実行しているセッション）が利用者と話して構成を固め、決まったことを構成メモ（`outline.json`。`by` = 誰が言ったか、`state` = 利用者が見たか）に書く。話題ごとに「聞く・案を出す・調べる」を選び、案を出すときは他の選択肢を残す。任されたら、絵コンテまで自分で決めてから見せる。そこから台本（`storyboard.json`。場面の `chapter` で構成メモの章を指す）→ 絵コンテ（`frames.cjs`・`build_sheet.py`）→ 声（`tts.py --readings` で読みを確かめてから合成）→ 組み立て（`build_player.py`）と Artifact での公開、と進む。順番として守るのは 3 つだけ: 声を合成する前に利用者が絵コンテを見ている、公開する前に機械検査が通っている、must を直さずに公開するときは報告に残論点として書く。公開した後は、利用者が再生ページの「直したい箇所を指定する」で出る `s2 / l2 @0:14`（場面 / 行 @時刻）を伝えて直しを頼む。直すのは指された行だけで、変えていない行の声は作り直さない。Claude Code では、`workdir.py list` で作業フォルダを探して、別のセッションからも直せる。原則と道具の一覧は `skills/make/SKILL.md`、環境ごとのコマンドは `references/run-code.md`（Claude Code）と `references/run-chat.md`（チャット）。
 
 **プレーヤー（`skills/make/player/src/`）は、ブラウザと node で同じコードを動かす**のが要。
-- `util → figures → figures2 → validate → engine → check` は DOM に触らない。グローバルの `UZ` に生えていく（`UZ.build(storyboard, theme, timeline)` が配置と時刻を計算する）。DOM に触るのは `view_svg.js` だけ
+- `util → figures → figures2 → figures3 → validate → slides → engine → check` は DOM に触らない。グローバルの `UZ` に生えていく（`UZ.build(storyboard, theme, timeline)` が配置と時刻を計算する）。DOM に触るのは `view_svg.js` だけ
 - node 側は `scripts/uz_node.cjs` が `vm.runInThisContext` で同じファイルを読み込み、`check_storyboard.cjs` が配置を検査する。ブラウザ側は `build_player.py` が `template.html` の `/*UZ:ELK*/` `/*UZ:CORE*/` `/*UZ:DATA*/null` を置き換えて 1 枚に埋め込む
 - ファイルの読み込み順は `uz_node.cjs` の `SRC` と `build_player.py` の `CORE` の 2 か所に書いてある。ソースファイルを足したら両方に足す（`tools/build_voice_check.py` の同梱リストも確認）
 - 文字の幅はフォントを実測せず文字の種類から見積もる（node の検査とブラウザで同じ値にするため）。この前提を崩さない
-- 図の種類: `figures.js`（箱と矢印＝ELK で自動配置、シーケンス、表・比較・箇条）、`figures2.js`（提案資料系 10 種。ELK を使わず図ごとの固定配置）
+- 図の種類: `figures.js`（箱と矢印＝ELK で自動配置、シーケンス、表・比較・箇条）、`figures2.js`（提案資料系 10 種。ELK を使わず図ごとの固定配置）、`figures3.js`（スライドの部品のうち図でないもの = テキスト・画像・フレーム）
+- スライド（`slides.js`）: 場面は、図の代わりにスライド（見出し・言いたいこと・12 列 × 6 行の区画に並べた部品）を指せる。部品は図と同じもの（`M.figs` の 1 件）として扱うので、動作と id の解決は図のときと同じ。画像は、道具が先に読んで渡す（node は `scripts/assets.cjs`、組み立ては `scripts/uz_assets.py`。2 つを同じ約束に保つ）
 
-**台本の形式**（`ugoku-zukai/2`、仕様は `references/storyboard.md`、見本は `examples/`）: 意味で書く層（図の宣言・`show` `trace` `focus` などの動作）が基本で、足りないところだけ下の層で直接書く。動作は字幕の文中の印（`{a}`）に結ぶ。時刻表がなければ文字数から見積もり、あれば `tts.py` がモーラ単位で出した印の時刻を使う。合成した後に台本の文を変えたり、行を足したり消したりすると、組み立て（`build_player.py`）と検査（`check_storyboard.cjs --timeline`）が「音声が古い」「時刻表にない」で止まる。
+**台本の形式**（`ugoku-zukai/3`。前の `/2` = 場面が図だけを指す形も読める。仕様は `references/storyboard.md`、見本は `examples/`）: 意味で書く層（図の宣言・`show` `trace` `focus` などの動作）が基本で、足りないところだけ下の層で直接書く。動作は字幕の文中の印（`{a}`）に結ぶ。時刻表がなければ文字数から見積もり、あれば `tts.py` がモーラ単位で出した印の時刻を使う。合成した後に台本の文を変えたり、行を足したり消したりすると、組み立て（`build_player.py`）と検査（`check_storyboard.cjs --timeline`）が「音声が古い」「時刻表にない」で止まる。
 
 **テーマ**（`player/themes/*.json`、`references/themes.md`）: 色・文字・線の定義。同梱は `koo` の 1 つで、「空 提案書デザインシステム」（テーマの `derived_from` の Artifact）のトークンから作ってある。そこにない色を足さない（例外は、線と文字に使う暗くした Blue だけ。テーマの `tokens` に対応がある）。緑と赤はなく、良い・悪いは Gold とグレーアウトで言い分ける。`colors.boxes` が役割ごとの箱の面・枠・文字、`chapter` が章扉（`title` 図だけの場面）の地と文字を決める。字幕の帯と章扉は Navy。別のデザインを渡されたときは、進行役がそのデザインの色から決める。決めたテーマは構成メモの `basics.look.theme` に書く。台本と同じフォルダに構成メモがあれば、`check_storyboard.cjs`・`frames.cjs`・`build_player.py` は `--theme` を省くとそのテーマを使い、違うテーマを渡すと終了コード 2 で止まる（`uz_node.cjs` の `pickTheme` と `build_player.py` の `pick_theme`。2 か所を同じ約束に保つ）。`extract_design.py` が手持ちのデザイン（トークン・CSS・HTML・Tailwind・Office・画像・PDF）からテーマを作り、`check_theme.py` で検査する。
 

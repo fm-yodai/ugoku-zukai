@@ -168,7 +168,7 @@ ok = ok && JSON.stringify(JSON.parse(fs.readFileSync(legacy + "/frames.json", "u
 process.exit(ok ? 0 : 1);
 ' "$out/sl" "$out/a" 2>/dev/null || ng "スライドの完成形のコマ（svg/slide-<id>.svg と frames.json の slides）が正しくない"
 node scripts/frames.cjs "$out/slide.json" --theme koo -o "$out/sl2" --scenes s2 >/dev/null 2>&1
-grep -q 'filter="url(#uz-bl-' "$out/sl/svg/l1.svg" && grep -q '<feGaussianBlur stdDeviation="4"' "$out/sl/svg/l1.svg" || ng "ぼかした部品のコマの SVG に、ぼかしのフィルタがない"
+grep -Eq 'filter="url\(#uz-bl-[0-9]+-[0-9]+\)"' "$out/sl/svg/l1.svg" && grep -q '<feGaussianBlur stdDeviation="4"' "$out/sl/svg/l1.svg" || ng "ぼかした部品のコマの SVG に、ぼかしのフィルタがない"
 [ -f "$out/sl2/svg/slide-p2.svg" ] && [ ! -e "$out/sl2/svg/slide-p1.svg" ] || ng "--scenes のとき、選んだ場面が使うスライドの完成形だけになっていない"
 
 [ $fail = 0 ] && echo "frames の検査: すべて OK" || echo "frames の検査: NG あり"

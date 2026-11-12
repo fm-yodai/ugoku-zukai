@@ -39,7 +39,8 @@
         el("feGaussianBlur", { stdDeviation: 5, result: "b" }, f);
         const mg = el("feMerge", null, f); el("feMergeNode", { in: "b" }, mg); el("feMergeNode", { in: "SourceGraphic" }, mg);
       }
-      this.defs = defs; this.blurN = 0;
+      // ぼかしのフィルタの id は、View ごとに分ける（コマのシートは、いくつもの View の SVG を 1 枚に並べる。id が重なると範囲が入れ替わる）
+      this.defs = defs; this.blurN = 0; this.viewN = UZ._viewSeq = (UZ._viewSeq || 0) + 1;
       if (th.shape.shadow) {
         const f = el("filter", { id: "uz-shadow", x: "-20%", y: "-20%", width: "140%", height: "160%" }, defs);
         el("feDropShadow", { dx: 0, dy: 2, stdDeviation: 3, "flood-color": "#1d2433", "flood-opacity": 0.12 }, f);
@@ -239,7 +240,7 @@
             if (!E.blurF) {
               let x0 = it.bbox.x, y0 = it.bbox.y, x1 = x0 + it.bbox.w, y1 = y0 + it.bbox.h;
               for (const b of [it.label && it.label.bbox, ...(it.texts || []).map(T => T.bbox)]) if (b) { x0 = Math.min(x0, b.x); y0 = Math.min(y0, b.y); x1 = Math.max(x1, b.x + b.w); y1 = Math.max(y1, b.y + b.h); }
-              const f = el("filter", { id: `uz-bl-${++this.blurN}`, filterUnits: "userSpaceOnUse", x: x0 - 28, y: y0 - 28, width: x1 - x0 + 56, height: y1 - y0 + 56 }, this.defs);
+              const f = el("filter", { id: `uz-bl-${this.viewN}-${++this.blurN}`, filterUnits: "userSpaceOnUse", x: x0 - 28, y: y0 - 28, width: x1 - x0 + 56, height: y1 - y0 + 56 }, this.defs);
               E.blurF = el("feGaussianBlur", { stdDeviation: bl }, f);
               E.blurId = f.getAttribute("id");
             }
