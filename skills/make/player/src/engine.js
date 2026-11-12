@@ -92,6 +92,7 @@
       const P = UZ.sceneParts(sb, sc);   // スライドを指す場面は、部品 = 図、区画 = 区画の矩形
       const figs = P.figs, header = P.header, areas = P.areas;
       if (P.slide) {
+        areas.forEach((r, i) => { if (r.w < 40 || r.h < 40) err(`スライド「${P.slide}」: 部品「${figs[i]}」の区画が小さすぎる（フレームの中に置くなら、フレームの行か列を増やす）`); });
         const sl = slides[P.slide] || (slides[P.slide] = { id: P.slide, figs, transient: P.parts.filter(p => p.transient).map(p => p.id), complete: sb.slides[P.slide].start === "complete", scenes: [] });
         sl.scenes.push(sc.id);
       }
@@ -110,6 +111,7 @@
       return { id: sc.id, figs, header, areas, captions, lines: sc.lines, tone: figs.length === 1 ? tones[0] : "light", slide: P.slide, statement: P.statement };
     });
 
+    if (errors.length) return { errors, warnings };
     // 画像は、道具が先に読み込んで渡す（opts.assets。node は assets.cjs、組み立ては uz_assets.py）
     const assets = opts.assets || {};
     for (const [fid, f] of Object.entries(FIGS)) if (f.type === "image" && !assets[f.src]) err(`図「${fid}」: 画像「${f.src}」が読み込まれていない`);
@@ -135,7 +137,7 @@
       let fid = null, id = ref;
       if (typeof ref !== "string") { err(`${ctxv}: 対象は文字列で書く（${JSON.stringify(ref)}）`); return null; }
       if (ref.includes("/")) [fid, id] = ref.split("/");
-      if (figs[id] && !fid) return { fig: id, whole: true };
+      if (!fid && sc.figs.includes(id) && figs[id]) return { fig: id, whole: true };   // 図（部品）の全体。この場面にある図だけ
       const cands = (fid ? [fid] : sc.figs).filter(f => figs[f] && figs[f].items[id]);
       if (!cands.length) {
         if (fid && figs[fid] && id === "dot") return { fig: fid, id };
@@ -378,10 +380,15 @@
     for (let i = 0; i < scenes.length; i++) scenes[i].end = i + 1 < scenes.length ? scenes[i + 1].start : endCard;
 
     // 一度も出ない図への警告
+    // スライドの部品は、そのスライドを使うどの場面でも出ないときだけ知らせる（場面をまたいで少しずつ出すのは普通の使い方）
+    const shown = fid => acts.some(a => a.verb === "show" && a.keys.some(k => k.startsWith(fid + "/")));
     for (const sc of scenes) for (const fid of sc.figs) {
-      if (figs[fid].autoShow) continue;
+      if (figs[fid].autoShow || sc.slide) continue;
       const any = acts.some(a => a.verb === "show" && a.keys.some(k => k.startsWith(fid + "/")) && a.start < sc.end);
       if (!any) warn(`場面 ${sc.id}: 図「${fid}」を show していない（何も出ない）`);
+    }
+    for (const sl of Object.values(slides)) for (const fid of sl.figs) {
+      if (!figs[fid].autoShow && !shown(fid)) warn(`スライド「${sl.id}」: 部品「${fid}」を、どの場面でも show していない（何も出ない）`);
     }
     const sp = (sb.voice && sb.voice.speaker) ?? UZ.DEFAULT_SPEAKER;
     const credit = sb.credit || (sb.voice && sb.voice.credit) || timeline.credit || `VOICEVOX:${UZ.SPEAKER_NAMES[sp] || "話者 " + sp}`;

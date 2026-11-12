@@ -122,6 +122,49 @@ class AssetsTest(unittest.TestCase):
         r = subprocess.run(["node", os.path.join(SCRIPTS, "check_storyboard.cjs"), self.sb_path, "--theme", "koo"], capture_output=True, text=True)
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
 
+    def test_symlink_outside_is_rejected(self):
+        outside = tempfile.mkdtemp()
+        try:
+            shutil.copy(os.path.join(HERE, "assets", "dot.svg"), os.path.join(outside, "secret.svg"))
+            os.symlink(os.path.join(outside, "secret.svg"), os.path.join(self.tmp, "assets", "link.svg"))
+            os.symlink(outside, os.path.join(self.tmp, "assets", "ldir"))
+            for src in ("assets/link.svg", "assets/ldir/secret.svg"):
+                sb = deck([src])
+                with self.assertRaises(uz_assets.AssetError) as cm:
+                    uz_assets.load_assets(self.sb_path, sb)
+                self.assertIn("フォルダの外", str(cm.exception))
+                js = self.node_assets(sb)
+                self.assertEqual(js.get("code"), "ASSET", src)
+                self.assertIn("フォルダの外", js["error"])
+        finally:
+            shutil.rmtree(outside)
+
+    def test_bad_svg_size_agrees(self):
+        for i, vb in enumerate(("0 0 1.2.3 e", "0 0 １０ １０")):
+            with open(os.path.join(self.tmp, "assets", f"bad{i}.svg"), "w", encoding="utf-8") as f:
+                f.write(f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="{vb}"></svg>')
+            sb = deck([f"assets/bad{i}.svg"])
+            with self.assertRaises(uz_assets.AssetError) as cm:
+                uz_assets.load_assets(self.sb_path, sb)
+            self.assertIn("大きさを読み取れない", str(cm.exception))
+            self.assertEqual(self.node_assets(sb).get("code"), "ASSET")
+
+    def test_voice_check_zip_can_build(self):
+        import zipfile
+        root = os.path.dirname(os.path.dirname(os.path.dirname(SCRIPTS)))
+        z = os.path.join(self.tmp, "vc.zip")
+        r = subprocess.run([sys.executable, os.path.join(root, "tools", "build_voice_check.py"), "-o", z], capture_output=True, text=True)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        out = os.path.join(self.tmp, "vc")
+        zipfile.ZipFile(z).extractall(out)
+        bp = [os.path.join(d, "build_player.py") for d, _, fs in os.walk(out) if "build_player.py" in fs][0]
+        base = os.path.dirname(os.path.dirname(bp))
+        sbp = os.path.join(base, "examples", "proposal-analysis.json")
+        r = subprocess.run([sys.executable, bp, sbp, "--theme", "koo", "-o", os.path.join(self.tmp, "vc.html")], capture_output=True, text=True)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        r = subprocess.run(["node", os.path.join(os.path.dirname(bp), "check_storyboard.cjs"), sbp, "--theme", "koo"], capture_output=True, text=True)
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -87,7 +87,7 @@
       if (!sl || typeof sl !== "object") { E(`${where}: オブジェクトで書く`); continue; }
       if (!sl.title || typeof sl.title !== "string") E(`${where}: title がない（スライドの見出し）`);
       if (sl.statement != null && typeof sl.statement !== "string") E(`${where}: statement は文字列で書く`);
-      if (typeof sl.statement === "string" && UZ.statementLines(sl.statement).over) W(`${where}: 言いたいことが 2 行に収まらない（1 文を短くする）`);
+      if (typeof sl.statement === "string" && UZ.statementLines(sl.statement).over) E(`${where}: 言いたいことが 2 行に収まらない（1 文を短くする。3 行目からは画面に出ない）`);
       if (sl.start != null && sl.start !== "complete") E(`${where}: start は "complete" だけ（最初から完成形で出す。省くと、行の動作で出していく）`);
       if (!Array.isArray(sl.parts) || !sl.parts.length) { E(`${where}: parts（部品の列）がない`); continue; }
       const seen = new Set(), placed = [];
@@ -97,7 +97,7 @@
         if (id == null) { E(`${where}: 部品に id（その場で宣言する）か figure（figures の図を指す）がない`); continue; }
         if (p.figure != null) {
           if (p.type != null) E(`${pw}: figure と type は一緒に書けない`);
-          if (!sb.figures || !sb.figures[p.figure]) { E(`${pw}: 図「${p.figure}」が figures にない`); continue; }
+          if (!sb.figures || !Object.prototype.hasOwnProperty.call(sb.figures, p.figure)) { E(`${pw}: 図「${p.figure}」が figures にない`); continue; }
         } else {
           if (p.type == null) { E(`${pw}: type がない`); continue; }
           if (declared.has(id) || (sb.figures && Object.prototype.hasOwnProperty.call(sb.figures, id))) { E(`${pw}: id が重複している（図や、他のスライドの部品と同じ id は使えない）`); continue; }

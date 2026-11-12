@@ -88,7 +88,7 @@ const tests = {
     hasErr(await build(deck({ p1: { parts: [{ figure: "flow" }] } }, [SC("s1", "p1")], { flow: FLOW })), /title がない/);
     hasErr(await build(deck({ p1: { title: "t", parts: [] } }, [SC("s1", "p1")], { flow: FLOW })), /parts/);
     hasErr(await build(one([{ figure: "nai" }])), /図「nai」が figures にない/);
-    hasWarn(await build(deck({ p1: { title: "t", statement: "とても長い言いたいことの文を書くと画面の幅を超えて折り返しが起きますがそれが三行以上に及ぶような長さの文になってしまうと読み切れないので警告を出して知らせることにしていますのでこの文はその警告が出ることを確かめるためにわざと長く書いてあります。", parts: [{ figure: "flow" }] } }, [SC("s1", "p1")], { flow: FLOW })), /言いたいことが 2 行に収まらない/);
+    hasErr(await build(deck({ p1: { title: "t", statement: "とても長い言いたいことの文を書くと画面の幅を超えて折り返しが起きますがそれが三行以上に及ぶような長さの文になってしまうと読み切れないので警告を出して知らせることにしていますのでこの文はその警告が出ることを確かめるためにわざと長く書いてあります。", parts: [{ figure: "flow" }] } }, [SC("s1", "p1")], { flow: FLOW })), /言いたいことが 2 行に収まらない/);
     hasErr(await build(deck(TWO, [SC("s1", "p1")], { flow: FLOW }, "ugoku-zukai/2")), /slides を使うには format を "ugoku-zukai\/3"/);
   },
   async legacy_unchanged() {
@@ -297,6 +297,43 @@ const tests = {
     assert.ok(Math.abs(st["flow/app"].dim - 0.2) < 0.01 && st["flow/app"].blur > 0.99);
     assert.strictEqual(st["pts/a"].dim, 1, "focus は同じ図の中だけ");
     hasErr(await build(deck(TWO, [SC("s1", "p1", [{ id: "l1", text: "あ。", do: [{ blur: "nai" }] }])], { flow: FLOW })), /「nai」がこの場面の図/);
+  },
+
+  // ---- 第 1 部のレビューで見つかったこと ----
+  async show_across_scenes_no_false_warning() {   // 同じスライドを場面をまたいで少しずつ出しても「show していない」と言わない
+    const M = await build(deck(TWO, [
+      SC("s1", "p1", [{ id: "l1", text: "図を出します。", do: [{ show: "flow" }] }]),
+      SC("s2", "p1", [{ id: "l2", text: "箇条を出します。", do: [{ show: "pts" }] }])], { flow: FLOW }));
+    assert.deepStrictEqual(M.errors, []);
+    assert.deepStrictEqual(M.warnings.filter(w => /show していない/.test(w)), []);
+    const N = await build(deck(TWO, [SC("s1", "p1", [{ id: "l1", text: "図を出します。", do: [{ show: "flow" }] }]), SC("s2", "p1")], { flow: FLOW }));
+    assert.deepStrictEqual(N.warnings.filter(w => /show していない/.test(w)), ["スライド「p1」: 部品「pts」を、どの場面でも show していない（何も出ない）"]);
+  },
+  async inner_id_same_as_other_part() {   // ブロックの id が、この場面にない別の部品の id と同じでも、この場面のブロックを指す
+    const slides = {
+      p1: { title: "a", parts: [{ id: "defs", type: "list", items: LIST }] },
+      p2: { title: "b", parts: [{ id: "t2", type: "text", blocks: [{ id: "defs", kind: "para", text: "定義の文。" }, { id: "more", kind: "para", text: "続きの文。" }] }] } };
+    const M = await build(deck(slides, [
+      SC("s1", "p1", [{ id: "l1", text: "出します。", do: [{ show: "defs" }] }]),
+      SC("s2", "p2", [{ id: "l2", text: "定義だけ出します。", do: [{ show: "defs" }] }])]));
+    assert.deepStrictEqual(M.errors, []);
+    assert.ok(showAt(M, "t2/defs", M.duration) > 0.99, "この場面のブロックが出る");
+    assert.ok(showAt(M, "t2/more", M.duration) < 0.01);
+    assert.ok(showAt(M, "defs/a", M.duration) > 0.99, "s1 では部品 defs の全体");
+    hasErr(await build(deck(slides, [SC("s1", "p1", [{ id: "l1", text: "ない図。", do: [{ show: "t2" }] }]), SC("s2", "p2", [{ id: "l2", text: "出します。", do: [{ show: "t2" }] }])])), /「t2」がこの場面の図/);
+  },
+  async statement_too_long_is_error() {
+    hasErr(await build(deck({ p1: { title: "t", statement: "あ".repeat(130), parts: [{ figure: "flow" }] } }, [SC("s1", "p1")], { flow: FLOW })), /言いたいことが 2 行に収まらない/);
+  },
+  async prototype_names_do_not_crash() {
+    hasErr(await build(deck(TWO, [SC("s1", "constructor")], { flow: FLOW })), /スライド「constructor」が slides にない/);
+    hasErr(await build(deck({ p1: { title: "t", parts: [{ figure: "toString" }] } }, [SC("s1", "p1")], { flow: FLOW })), /図「toString」が figures にない/);
+    hasErr(await build({ format: "ugoku-zukai/2", title: "t", figures: { flow: FLOW }, scenes: [{ id: "s1", figure: "constructor", lines: [{ id: "l1", text: "あ。" }] }] }), /図「constructor」が figures にない/);
+  },
+  async tiny_frame_inner_is_error() {
+    const R = { col: [1, 12], row: [1, 1] };
+    hasErr(await build(deck({ p1: { title: "t", parts: [{ id: "fr", type: "frame", title: "題", area: R }, { id: "tx", type: "text", blocks: [{ id: "p", kind: "para", text: "文。" }], area: R }] } }, [SC("s1", "p1")])),
+      /スライド「p1」: 部品「tx」の区画が小さすぎる/);
   },
 };
 

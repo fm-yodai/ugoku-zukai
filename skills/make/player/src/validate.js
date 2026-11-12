@@ -199,11 +199,11 @@
       if (sc.chapter != null && (typeof sc.chapter !== "string" || !ID_RE.test(sc.chapter))) E(`${where}: chapter は構成メモの章の id を文字列で書く`);
       if (sc.slide != null) {
         if (sc.figure != null) E(`${where}: slide か figure のどちらか 1 つを書く`);
-        if (!sb.slides || !sb.slides[sc.slide]) E(`${where}: スライド「${sc.slide}」が slides にない`);
+        if (!sb.slides || !Object.prototype.hasOwnProperty.call(sb.slides, sc.slide)) E(`${where}: スライド「${sc.slide}」が slides にない`);
       } else {
         const figs = Array.isArray(sc.figure) ? sc.figure : [sc.figure];
         if (!figs.length || figs.length > 2) E(`${where}: figure は 1 つか 2 つ`);
-        for (const f of figs) if (!FIGS[f]) E(`${where}: 図「${f}」が figures にない`);
+        for (const f of figs) if (!Object.prototype.hasOwnProperty.call(FIGS, f)) E(`${where}: 図「${f}」が figures にない`);
       }
       if (!Array.isArray(sc.lines) || !sc.lines.length) { E(`${where}: lines がない`); continue; }
       for (const ln of sc.lines) {

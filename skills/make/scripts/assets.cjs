@@ -46,7 +46,11 @@ function loadAssets(storyboardPath, sb) {
     if (path.isAbsolute(src) || src.split(/[\\/]/).includes("..")) throw fail(src, "台本のフォルダの外を指している");
     if (!mime) throw fail(src, "PNG・JPEG・SVG ではない");
     let buf;
-    try { buf = fs.readFileSync(path.join(dir, src)); } catch (e) { throw fail(src, "ファイルがない"); }
+    let real;
+    try { real = fs.realpathSync(path.join(dir, src)); } catch (e) { throw fail(src, "ファイルがない"); }
+    // シンボリックリンクをたどった先も、台本のフォルダの下でなければ読まない
+    if (path.relative(fs.realpathSync(dir), real).split(path.sep)[0] === ".." || path.isAbsolute(path.relative(fs.realpathSync(dir), real))) throw fail(src, "台本のフォルダの外を指している");
+    try { buf = fs.readFileSync(real); } catch (e) { throw fail(src, "ファイルがない"); }
     const wh = size(buf, mime);
     if (!wh || !(wh[0] > 0) || !(wh[1] > 0)) throw fail(src, "大きさを読み取れない");
     out[src] = { w: wh[0], h: wh[1], mime, data: `data:${mime};base64,${buf.toString("base64")}` };

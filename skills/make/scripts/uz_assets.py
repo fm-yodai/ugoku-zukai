@@ -56,9 +56,12 @@ def _size(buf, mime):
     head = re.search(r"<svg\b[^>]*>", buf.decode("utf-8", "replace"))
     if not head:
         return None
-    vb = re.search(r"""\bviewBox\s*=\s*["']\s*[-\d.eE]+[\s,]+[-\d.eE]+[\s,]+([\d.eE]+)[\s,]+([\d.eE]+)\s*["']""", head.group(0))
+    vb = re.search(r"""\bviewBox\s*=\s*["']\s*[-\d.eE]+[\s,]+[-\d.eE]+[\s,]+([\d.eE]+)[\s,]+([\d.eE]+)\s*["']""", head.group(0), re.ASCII)
     if vb:
-        return (float(vb.group(1)), float(vb.group(2)))
+        try:   # assets.cjs の parseFloat と同じく、読めなければ「大きさを読み取れない」
+            return (float(vb.group(1)), float(vb.group(2)))
+        except ValueError:
+            return None
     w = re.search(r"""\bwidth\s*=\s*["']([\d.]+)(px)?["']""", head.group(0))
     h = re.search(r"""\bheight\s*=\s*["']([\d.]+)(px)?["']""", head.group(0))
     return (float(w.group(1)), float(h.group(1))) if w and h else None
@@ -77,8 +80,14 @@ def load_assets(storyboard_path, sb):
             raise _fail(src, "台本のフォルダの外を指している")
         if not mime:
             raise _fail(src, "PNG・JPEG・SVG ではない")
+        real = os.path.realpath(os.path.join(base, src))
+        if not os.path.isfile(real):
+            raise _fail(src, "ファイルがない")
+        # シンボリックリンクをたどった先も、台本のフォルダの下でなければ読まない
+        if os.path.commonpath([os.path.realpath(base), real]) != os.path.realpath(base):
+            raise _fail(src, "台本のフォルダの外を指している")
         try:
-            with open(os.path.join(base, src), "rb") as f:
+            with open(real, "rb") as f:
                 buf = f.read()
         except OSError:
             raise _fail(src, "ファイルがない")
