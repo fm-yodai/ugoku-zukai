@@ -84,6 +84,27 @@ python3 scripts/build_player.py storyboard.json -o preview.html     # 音声な�
 
 テーマに `chapter`（章扉の色）があれば、`title` 図だけの場面は暗い地（章扉の地）で出る。同梱のテーマ `koo` では Navy の地に白い文字になる。通常の地に出したいときは、図に `"tone": "light"` と書く。`title` 図を他の図と並べる場面では、`"tone": "light"` が要る。
 
+### toc
+
+目次。見出し（既定は「目次」）の下に、章の番号と題を左揃えで並べる。目次やアジェンダを `title` 図や `custom` で作らずに、これを使う。
+
+```json
+{ "type": "toc", "items": [
+  { "id": "c1", "text": "UX とは" },
+  { "id": "c2", "text": "ユーザビリティとの違い" },
+  { "id": "c3", "text": "UX 設計とは" } ] }
+```
+
+```json
+{ "type": "toc", "items": [ … ], "current": "c2" }
+```
+
+- `items` の `id` は構成メモの章の id、`text` は章の題にする。`check_storyboard.cjs --outline` は、章の id・題・順が構成メモと違えば警告する（構成メモを直したら、目次も直す）
+- `current`（任意）に章の id を書くと、その章を強調し、ほかの章を控えめにする。章の頭で同じ目次を出し直して、今どこにいるかを見せるときに使う
+- `heading`（任意）は見出しの文字。`""` なら見出しを出さない
+- 場面の頭で、全部の章が自動で出る（`show` は要らない）。項目の id で `focus` などを指せる
+- 地は `title` 図と同じ。テーマに `chapter` があれば章扉の地で出て、`"tone": "light"` で通常の地になる。他の図と並べるときやスライドの部品にするときは `"tone": "light"` が要る
+
 ### list
 
 ```json

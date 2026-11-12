@@ -19,7 +19,7 @@ SAMPLES = [
     ("graph-flow", "箱と矢印（業務の流れ）"),
     ("graph-state", "箱と矢印（状態遷移）"),
     ("sequence", "シーケンス図"),
-    ("table-compare", "箇条・比較・表"),
+    ("table-compare", "目次・箇条・比較・表"),
     ("mixed", "2 つの図・下の層"),
     ("proposal-process", "スイムレーン・As-Is/To-Be・ロードマップ"),
     ("proposal-analysis", "ツリー・2×2"),

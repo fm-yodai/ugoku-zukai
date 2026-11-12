@@ -80,6 +80,23 @@ function checkAgainstOutline(sb, M, outline, opts) {
     }
   }
 
+  // 目次（toc 図）: 章の id・題・順が構成メモの章と同じか
+  const byId = new Map(chapters.map(c => [c.id, c]));
+  for (const [fid, F] of Object.entries(M.figs || {})) {
+    if (!F || F.type !== "toc") continue;
+    const its = (F.spec.items || []).filter(it => it && typeof it.id === "string");
+    for (const it of its) {
+      const c = byId.get(it.id);
+      if (!c) warnings.push(`目次「${fid}」: 章「${it.id}」が構成メモの章にない（項目の id は構成メモの章の id にする）`);
+      else if (typeof c.title === "string" && String(it.text).trim() !== c.title.trim()) warnings.push(`目次「${fid}」: 章「${it.id}」の題「${it.text}」が構成メモの題「${c.title}」と違う`);
+    }
+    const want = chapters.map(c => c.id), got = its.map(it => it.id);
+    const missing = want.filter(id => !got.includes(id));
+    if (missing.length) warnings.push(`目次「${fid}」: 構成メモの章 ${missing.map(id => `「${id}」`).join("")} がない`);
+    const known = got.filter(id => byId.has(id));
+    if (known.join("\n") !== want.filter(id => known.includes(id)).join("\n")) warnings.push(`目次「${fid}」: 章の順が構成メモと違う（目次: ${known.join(" → ")}、構成メモ: ${want.join(" → ")}）`);
+  }
+
   return {
     errors, warnings, slides,
     chapters: chapters.map(c => ({ id: c.id, planned: positive(c.seconds) ? c.seconds : null, estimated: +est.get(c.id).toFixed(1) })),

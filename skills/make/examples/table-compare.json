@@ -3,6 +3,14 @@
   "title": "経費精算の進め方を選ぶ",
   "voice": { "speaker": 8, "speed": 1.1 },
   "figures": {
+    "toc": {
+      "type": "toc",
+      "items": [
+        { "id": "k1", "text": "いまの困りごと" },
+        { "id": "k2", "text": "二つの案" },
+        { "id": "k3", "text": "困りごとへの効き方" }
+      ]
+    },
     "issues": {
       "type": "list",
       "title": "いまの困りごと",
@@ -42,6 +50,9 @@
     }
   },
   "scenes": [
+    { "id": "s0", "figure": "toc", "lines": [
+      { "id": "l0", "text": "困りごと、二つの案、案ごとの効き方を、順に見ていきます。" }
+    ] },
     { "id": "s1", "figure": "issues", "lines": [
       { "id": "l1", "text": "いまの経費精算には、{a}三つの困りごとがあります。", "do": [ { "at": "a", "show": "issues" } ] },
       { "id": "l2", "text": "中でも大きいのは、{a}どこで止まっているかが見えないことです。", "do": [ { "at": "a", "focus": "i3" }, { "pulse": "i3" } ] }

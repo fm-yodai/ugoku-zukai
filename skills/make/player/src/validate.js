@@ -3,7 +3,7 @@
   "use strict";
   const ID_RE = /^[A-Za-z0-9_\-ぁ-んァ-ヶ一-龠ー.]+$/;
   const TYPES = {
-    title: ["text"], list: ["items"], compare: ["items"], table: ["columns", "rows"],
+    title: ["text"], toc: ["items"], list: ["items"], compare: ["items"], table: ["columns", "rows"],
     sequence: ["participants", "messages"], graph: ["nodes", "edges"], canvas: ["shapes"],
     swimlane: ["lanes", "steps"], beforeafter: ["before", "after"], roadmap: ["periods", "items"], tree: ["root"],
     chart: ["categories", "series"], kpi: ["items"], matrix: ["x", "y"], pyramid: ["levels"], cycle: ["steps"], venn: ["sets"],
@@ -36,7 +36,14 @@
         if (ids.has(id)) E(`${where}: id「${id}」が重複している`);
         ids.add(id);
       };
-      if (f.type === "title" && f.tone != null && !["dark", "light"].includes(f.tone)) E(`${where}: tone は dark か light`);
+      if ((f.type === "title" || f.type === "toc") && f.tone != null && !["dark", "light"].includes(f.tone)) E(`${where}: tone は dark か light`);
+      if (f.type === "toc" && Array.isArray(f.items)) {
+        if (!f.items.length) E(`${where}: items（章）が空`);
+        addId("heading", "見出し"); addId("rule", "見出しの線");   // 図が使う id（章の id には使えない）
+        for (const it of f.items) { addId(it && it.id, "章"); if (!it || typeof it.text !== "string" || !it.text.trim()) E(`${where}: 章 ${it && it.id} に text がない`); }
+        if (f.current != null && !f.items.some(it => it && it.id === f.current)) E(`${where}: current「${f.current}」が items の id にない`);
+        if (f.heading != null && typeof f.heading !== "string") E(`${where}: heading は文字列で書く（見出しを出さないときは ""）`);
+      }
       const role = (r, what) => { if (r != null && !ROLES.includes(r)) E(`${where}: ${what} の role「${r}」は ${ROLES.join(" / ")} のどれか`); };
       if (f.type === "graph") {
         for (const n of f.nodes || []) { addId(n.id, "ノード"); role(n.role, n.id); if (!n.label) E(`${where}: ノード ${n.id} に label がない`); }

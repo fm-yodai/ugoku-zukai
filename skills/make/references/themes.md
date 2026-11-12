@@ -18,7 +18,7 @@
 | `actor`・`store`・`external` | Blue の枠と Blue-soft の面、Gold-deep の枠と Gold-soft の面、Gray-600 の枠と Gray-soft の面 |
 | 良い・足した・✓（`good`・`added`） | Gold の枠、Gold-soft の面、文字と印は Gold-deep |
 | 悪い・消した・✗、論点の外（`bad`・`removed`・`muted`） | グレーアウト。Gray-300 の面、文字と印は Gray-600 |
-| 字幕の帯、章扉（`title` 図の場面）の地 | Navy。文字は白 |
+| 字幕の帯、章扉（`title` 図の場面）と目次（`toc` 図の場面）の地 | Navy。文字は白 |
 
 デザインシステムに緑と赤はないので、良い・悪いは「色の付いた側（Gold）」と「グレーアウトした側」で言い分ける。**このテーマを使う動画では、ここにない色を足さない。** `canvas` の図形や `custom` で色を直接書くときも、テーマの `tokens` にある色から選ぶ。
 
@@ -76,7 +76,7 @@
 | `font.family`・`weight`・`bold`・`css` | 字体の並び、太さ、Google Fonts の URL |
 | `shape.radius`・`stroke`・`fill`・`fillMix`・`fillAlpha`・`edgeWidth`・`glow`・`shadow` | 角丸、線の太さ、塗り方、光らせるか、影 |
 | `subtitle.bg`・`ink` | 字幕の帯と文字 |
-| `chapter.bg`・`ink`・`sub`・`muted`・`line`（任意） | 章扉の色。あれば、`title` 図だけの場面の地が `bg` になり、題が `ink`、`sub` の文字が `sub`、クレジットが `muted`、字幕の帯の枠が `line` になる。なければ章扉も通常の地 |
+| `chapter.bg`・`ink`・`sub`・`muted`・`line`（任意） | 章扉の色。あれば、`title` 図か `toc` 図だけの場面の地が `bg` になり、題が `ink`、`sub` の文字と目次の番号が `sub`（目次に `current` があるときは、今の章以外が `muted`）、クレジットが `muted`、字幕の帯の枠が `line` になる。なければ章扉も通常の地 |
 | `tokens`（任意） | 色の値とデザインのトークン名の対応。人と Claude が読むための記録で、プレーヤーは使わない |
 
 - `shape.fill`: `solid`（背景と役割の色を `fillMix` で混ぜた塗り）・`tint`（役割の色を `fillAlpha` で透かす。暗い背景向き）・`none`

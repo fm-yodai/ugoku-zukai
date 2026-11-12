@@ -43,8 +43,8 @@
 
   const FIG = UZ.FIG = {};
 
-  // 題の札の地: テーマに chapter があれば "dark"（章扉の色）。図に tone: "light" と書けば通常の地
-  UZ.titleTone = (f, theme) => (f && f.type === "title" && theme && theme.chapter && f.tone !== "light" ? "dark" : "light");
+  // 題の札と目次の地: テーマに chapter があれば "dark"（章扉の色）。図に tone: "light" と書けば通常の地
+  UZ.titleTone = (f, theme) => (f && (f.type === "title" || f.type === "toc") && theme && theme.chapter && f.tone !== "light" ? "dark" : "light");
 
   // ======== 題の札（title）========
   FIG.title = {
@@ -60,6 +60,43 @@
         items.push({ id: "sub", kind: "text", texts: [s], bbox: { ...s.bbox } });
       }
       return { w: W, h: H, items, order: items.map(i => i.id), autoShow: true };
+    },
+  };
+
+  // ======== 目次（toc）========
+  // 見出し（既定「目次」）と、章の番号と題を左揃えで並べる。current（項目の id）を書くと、その章を強調し、ほかを控えめにする。
+  // 地は題の札と同じ（テーマに chapter があれば暗い地。tone: "light" で通常の地）
+  FIG.toc = {
+    async layout(f, S) {
+      const dark = UZ.titleTone(f, S.theme) === "dark" ? S.chapter : null;
+      const ink = dark ? dark.ink : S.ink, sub = dark ? (dark.sub || dark.ink) : S.muted;
+      const off = dark ? (dark.muted || sub) : S.muted;   // current があるときの、ほかの章
+      const n = f.items.length, size = n > 8 ? 26 : n > 6 ? 30 : 34, gap = Math.round(size * (n > 8 ? 1.5 : 1.7));
+      const numW = Math.round(size * 1.9), maxW = 1000 - numW, items = [], order = [];
+      const head = f.heading == null ? "目次" : String(f.heading);
+      let y = 0, w = 0;
+      if (head) {
+        const T = UZ.mkText([head], 0, 26, 46, { anchor: "start", weight: S.bold, color: ink });
+        items.push({ id: "heading", kind: "text", texts: [T], bbox: { ...T.bbox } });
+        order.push("heading");
+        items.push({ id: "rule", kind: "text", texts: [], panel: { x: 0, y: 70, w: 64, h: 4, r: 0, fill: sub, stroke: "none" }, bbox: { x: 0, y: 70, w: 64, h: 4 } });
+        order.push("rule");
+        y = 108; w = T.bbox.w;
+      }
+      const hasCur = f.current != null;
+      f.items.forEach((it, i) => {
+        const cur = hasCur && it.id === f.current;
+        const lines = UZ.wrap(String(it.text), size, maxW, cur ? S.bold : 400, 2);
+        const lineH = Math.round(size * 1.4), h = lines.length * lineH;
+        const num = UZ.mkText([String(i + 1)], 0, y + lineH / 2, size, { anchor: "start", weight: S.bold, color: cur ? (dark ? ink : S.accent) : hasCur ? off : sub });
+        const T = UZ.mkText(lines, numW, y + h / 2, size, { anchor: "start", weight: cur ? S.bold : 400, color: hasCur && !cur ? off : ink, lineH });
+        const bw = numW + T.bbox.w;
+        items.push({ id: it.id, kind: "text", texts: [num, T], bbox: { x: 0, y, w: bw, h } });
+        order.push(it.id);
+        w = Math.max(w, bw);
+        y += h + (gap - lineH);
+      });
+      return { w: Math.max(w, 1), h: Math.max(y - (gap - Math.round(size * 1.4)), 1), items, order, autoShow: true, autoStagger: 0.08, maxScale: 1 };
     },
   };
 

@@ -105,9 +105,9 @@
           areas[i] = { ...areas[i], y: areas[i].y + 36, h: areas[i].h - 36 };
         }
       });
-      // 場面の地: 題の札だけの場面は、テーマに chapter があれば暗い地（章扉）。それ以外は通常の地
+      // 場面の地: 題の札か目次だけの場面は、テーマに chapter があれば暗い地（章扉）。それ以外は通常の地
       const tones = figs.map(fid => UZ.titleTone(FIGS[fid], theme));
-      if (figs.length > 1 && tones.includes("dark")) err(`場面 ${sc.id}: 題の札を他の図と並べるときは、題の札に tone: "light" と書く（暗い地は題の札だけの場面で使う）`);
+      if (figs.length > 1 && tones.includes("dark")) err(`場面 ${sc.id}: 題の札や目次を他の図と並べるときは、その図に tone: "light" と書く（暗い地は題の札か目次だけの場面で使う）`);
       return { id: sc.id, chapter: sc.chapter, figs, header, areas, captions, lines: sc.lines, tone: figs.length === 1 ? tones[0] : "light", slide: P.slide, statement: P.statement };
     });
 
@@ -190,7 +190,11 @@
         const keys = sl.figs.filter(fid => !sl.transient.includes(fid) && !figs[fid].autoShow).flatMap(fid => expand({ fig: fid, whole: true }));
         if (keys.length) acts.push({ verb: "show", keys, start: sc.start + 0.25, dur: 0.5, each: 0.5, stagger: 0.04, end: sc.start + 0.75 + 0.04 * keys.length });
       }
-      for (const fid of sc.figs) if (figs[fid].autoShow) acts.push({ verb: "show", keys: figs[fid].order.map(id => figs[fid].items[id].key), start: sc.start + 0.25, dur: 0.8, each: 0.8, stagger: 0.35, end: sc.start + 1.2 + 0.35 * figs[fid].order.length });
+      // 場面の頭で自動で出す図（題の札・目次）。項目の多い図は間隔を詰める（図が autoStagger で決める）
+      for (const fid of sc.figs) if (figs[fid].autoShow) {
+        const st = figs[fid].extra.autoStagger ?? 0.35;
+        acts.push({ verb: "show", keys: figs[fid].order.map(id => figs[fid].items[id].key), start: sc.start + 0.25, dur: 0.8, each: 0.8, stagger: st, end: sc.start + 1.2 + st * figs[fid].order.length });
+      }
       for (const ln of sc.lines) {
         const tl = TL[ln.id];
         if (tl.text != null && tl.text !== UZ.parseText(ln.read || ln.text).text) { err(`行 ${ln.id}: 音声が古い（合成した後に文が変わった）。tts.py をもう一度実行する`); continue; }
