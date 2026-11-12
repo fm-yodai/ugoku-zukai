@@ -7,6 +7,7 @@
     sequence: ["participants", "messages"], graph: ["nodes", "edges"], canvas: ["shapes"],
     swimlane: ["lanes", "steps"], beforeafter: ["before", "after"], roadmap: ["periods", "items"], tree: ["root"],
     chart: ["categories", "series"], kpi: ["items"], matrix: ["x", "y"], pyramid: ["levels"], cycle: ["steps"], venn: ["sets"],
+    text: ["blocks"],
   };
   const ROLES = ["actor", "process", "store", "external", "muted", "added", "removed", "good", "bad", "warn", "accent"];
 
@@ -157,6 +158,20 @@
         const ss = new Set();
         for (const st of f.sets || []) { addId(st.id, "集合"); role(st.role, st.id); ss.add(st.id); }
         for (const o of f.overlaps || []) { addId(o.id, "重なり"); if (!Array.isArray(o.of) || o.of.length < 2 || o.of.some(x => !ss.has(x))) E(`${where}: 重なり ${o.id} の of は sets の id を 2 つ以上`); }
+      }
+      if (f.type === "text") {
+        if (!Array.isArray(f.blocks) || !f.blocks.length) E(`${where}: blocks（テキストのブロックの列）がない`);
+        for (const b of Array.isArray(f.blocks) ? f.blocks : []) {
+          if (!b || typeof b !== "object") { E(`${where}: ブロックはオブジェクトで書く`); continue; }
+          addId(b.id, "ブロック");
+          if (!UZ.TEXT_KINDS.includes(b.kind)) { E(`${where}: ブロック ${b.id} の kind は ${UZ.TEXT_KINDS.join(" / ")} のどれか（今は ${b.kind}）`); continue; }
+          if (b.kind === "bullets") {
+            if (!Array.isArray(b.items) || !b.items.length || b.items.some(x => typeof x !== "string" || !x)) E(`${where}: ブロック ${b.id}（bullets）の items は、文字列の配列で書く`);
+            else b.items.forEach((x, i) => addId(`${b.id}.${i + 1}`, "箇条の項目"));
+          } else if (typeof b.text !== "string" || !b.text) E(`${where}: ブロック ${b.id} に text がない`);
+          if (b.source != null && typeof b.source !== "string" && !(Array.isArray(b.source) && b.source.every(x => typeof x === "string")))
+            W(`${where}: ブロック ${b.id} の source は文字列か文字列の配列で書く`);
+        }
       }
       if (f.type === "canvas") {
         for (const s of f.shapes || []) {

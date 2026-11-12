@@ -347,8 +347,10 @@
     }
     const place = (fid, area) => {
       const F = figs[fid], w = F.x1 - F.x0, h = F.y1 - F.y0;
-      const s = Math.min(area.w / w, area.h / h, F.fixed ? 10 : (F.type === "title" ? 1 : 1.3));
-      return { s, ox: area.x + (area.w - w * s) / 2 - F.x0 * s, oy: area.y + (area.h - h * s) / 2 - F.y0 * s };
+      // 拡大の上限: 図が決めていればそれ（テキストは 1 = 文字の大きさを保つ）
+      const s = Math.min(area.w / w, area.h / h, F.extra.maxScale ?? (F.fixed ? 10 : (F.type === "title" ? 1 : 1.3)));
+      const top = F.extra.valign === "top";   // テキストは区画の上に寄せる
+      return { s, ox: area.x + (area.w - w * s) / 2 - F.x0 * s, oy: (top ? area.y : area.y + (area.h - h * s) / 2) - F.y0 * s };
     };
     for (const sc of scenes) sc.place = Object.fromEntries(sc.figs.map((fid, i) => [fid, place(fid, sc.areas[i])]));
     acts.sort((a, b) => a.start - b.start);

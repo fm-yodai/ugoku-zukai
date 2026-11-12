@@ -98,7 +98,18 @@
       lines.forEach((s, i) => { const sp = el("tspan", { x: t._x, y: t._y - (n - 1) * t._lineH / 2 + i * t._lineH }, t); sp.textContent = s; });
     }
     textSpec(parent, T, o = {}) {
-      return this.text(parent, T.lines, T.x, T.y, T.size, { weight: T.weight, color: o.color || T.color, anchor: T.anchor, lineH: T.lineH, halo: o.halo });
+      const t = this.text(parent, T.lines, T.x, T.y, T.size, { weight: T.weight, color: o.color || T.color, anchor: T.anchor, lineH: T.lineH, halo: o.halo });
+      if (T.spans) this.setSpans(t, T.spans);
+      return t;
+    }
+    // 強調の語のある文: 行ごとの tspan の中に、区切りごとの tspan を入れる（強調は太字と強調色）
+    setSpans(t, spans) {
+      while (t.firstChild) t.removeChild(t.firstChild);
+      const n = spans.length;
+      spans.forEach((row, i) => {
+        const line = el("tspan", { x: t._x, y: t._y - (n - 1) * t._lineH / 2 + i * t._lineH }, t);
+        for (const seg of row) { const sp = el("tspan", seg.em ? { "font-weight": this.S.bold, fill: this.S.accent } : null, line); sp.textContent = seg.t; }
+      });
     }
 
     buildFig(F) {
@@ -144,6 +155,7 @@
           if (it.label) E.label = this.textSpec(it.isReply ? E.g : L.fx, it.label, { halo: true });
         } else if (it.kind === "text") {
           E.g = el("g", null, L.box);
+          if (it.panel) el("rect", { x: it.panel.x, y: it.panel.y, width: it.panel.w, height: it.panel.h, rx: it.panel.r, fill: it.panel.fill, stroke: it.panel.stroke, "stroke-width": 1.2 }, E.g);
           if (it.rowBox) E.hl = el("rect", { x: it.rowBox.x, y: it.rowBox.y, width: it.rowBox.w, height: it.rowBox.h, rx: 8, fill: C.rgba(S.accent, 0.12), opacity: 0 }, E.g);
           if (it.bullet) {
             if (it.bullet.kind === "num") {

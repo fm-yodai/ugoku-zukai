@@ -19,6 +19,10 @@
     for (const a of M.acts) times.add(a.end + 0.01);
     const B = UZ.AREA.body;
     const bounds = { x: B.x - 16, y: B.y - 40, w: B.w + 32, h: B.h + 52 };
+    // テキストの部品は縮めない約束なので、区画に収まらなければ知らせる
+    for (const sc of M.scenes) for (const fid of sc.figs) {
+      if (M.figs[fid].type === "text" && sc.place[fid].s < 0.999) add("はみ出し", `${fid} のテキストが区画に収まらない（文を減らすか、区画を広げる）`, sc.start);
+    }
     for (const t of [...times].sort((a, b) => a - b)) {
       if (t >= M.endCard) continue;
       const fr = UZ.frame(M, t);

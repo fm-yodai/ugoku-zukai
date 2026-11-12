@@ -16,6 +16,11 @@ const lineEnd = (M, id) => { const l = M.timeline.lines.find(x => x.id === id); 
 const showAt = (M, key, t) => { const s = UZ.frame(M, t).st[key]; return s ? s.show : 0; };
 const hasErr = (M, re) => assert.ok((M.errors || []).some(e => re.test(e)), `誤りに ${re} がない: ${JSON.stringify(M.errors)}`);
 const hasWarn = (M, re) => assert.ok((M.warnings || []).some(e => re.test(e)), `警告に ${re} がない: ${JSON.stringify(M.warnings)}`);
+// 左に flow、右（col 7〜12）にテキストの部品 defs
+const textDeck = (blocks, acts, area) => deck({ p1: { title: "見出し", parts: [
+  { figure: "flow", area: { col: [1, 6], row: [1, 6] } },
+  { id: "defs", type: "text", blocks, area: area || { col: [7, 12], row: [1, 6] } }] } },
+  [SC("s1", "p1", [{ id: "l1", text: "説明します。", do: acts || [] }])], { flow: FLOW });
 const TWO = { p1: { title: "見出し", parts: [
   { figure: "flow", area: { col: [1, 7], row: [1, 6] } },
   { id: "pts", type: "list", items: LIST, area: { col: [8, 12], row: [1, 6] } }] } };
@@ -92,6 +97,65 @@ const tests = {
     const single = M.scenes.find(s => s.figs.length === 1 && !s.captions.length);
     assert.deepStrictEqual(single.areas[0], UZ.AREA.body);
     assert.deepStrictEqual(UZ.frame(M, 3).statement.lines, []);
+  },
+
+  // ---- Task 2: テキストの部品 ----
+  async text_blocks_layout() {
+    const M = await build(textDeck([
+      { id: "h", kind: "heading", text: "ユーザビリティ" },
+      { id: "p", kind: "para", text: "決まった利用者が、決まった状況で、目的を有効に、効率よく、満足して達成できる度合い。" },
+      { id: "b", kind: "bullets", items: ["使う前", "使っている間", "使った後"] },
+      { id: "q", kind: "quote", text: "利用者の知覚と反応。", source: ["ISO 9241-210"] }], [{ show: "b" }]));
+    assert.deepStrictEqual(M.errors, []);
+    const F = M.figs.defs, W = M.scenes[0].areas[1].w;
+    assert.ok(Math.abs(F.w - W) < 0.01, "図の幅は区画の幅");
+    let y = -1;
+    for (const id of ["h", "p", "b.1", "b.2", "b.3", "q"]) {
+      const b = F.items[id].bbox;
+      assert.ok(b.x >= -0.01 && b.x + b.w <= W + 0.01, `${id} が区画の幅に収まる`);
+      assert.ok(b.y > y, `${id} は前のブロックより下`); y = b.y;
+    }
+    assert.ok(showAt(M, "defs/b.1", M.duration) > 0.99 && showAt(M, "defs/b.3", M.duration) > 0.99, "ブロックの id で全項目が出る");
+    assert.ok(showAt(M, "defs/p", M.duration) < 0.01);
+    assert.ok(F.items.q.texts.some(t => t.lines.join("").includes("ISO 9241-210")), "囲みに出どころが出る");
+  },
+  async text_em_spans() {
+    assert.deepStrictEqual(UZ.parseEm("目的を**有効に**達成"), { text: "目的を有効に達成", ranges: [[3, 6]] });
+    assert.deepStrictEqual(UZ.parseEm("強調なし"), { text: "強調なし", ranges: [] });
+    const long = "決まった利用者が、決まった状況で、目的を**有効に、効率よく、満足して達成できる**度合いのことを、ユーザビリティと呼びます。";
+    const M = await build(textDeck([{ id: "p", kind: "para", text: long }]));
+    assert.deepStrictEqual(M.errors, []);
+    const T = M.figs.defs.items.p.texts[0];
+    assert.ok(T.lines.length >= 2, "折り返している");
+    assert.strictEqual(T.lines.join(""), UZ.parseEm(long).text);
+    assert.strictEqual(T.spans.flat().filter(x => x.em).map(x => x.t).join(""), "有効に、効率よく、満足して達成できる");
+    assert.deepStrictEqual(T.spans.map(l => l.map(x => x.t).join("")), T.lines);
+  },
+  async text_long_ascii_wraps() {
+    const M = await build(textDeck([{ id: "p", kind: "para", text: "https://example.com/" + "abcdefghij".repeat(12) }]));
+    assert.deepStrictEqual(M.errors, []);
+    const T = M.figs.defs.items.p.texts[0], W = M.scenes[0].areas[1].w;
+    for (const l of T.lines) assert.ok(UZ.textW(l, T.size, T.weight) <= W + 0.01, "どの行も区画の幅以下");
+    assert.deepStrictEqual(UZ.checkLayout(M).filter(i => /defs/.test(i.msg)), []);
+  },
+  async text_overflow_is_issue() {
+    const blocks = [1, 2, 3, 4, 5, 6].map(i => ({ id: "p" + i, kind: "para", text: "決まった利用者が、決まった状況で、目的を達成できる度合いです。" }));
+    const M = await build(textDeck(blocks, [{ show: "defs" }], { col: [7, 12], row: [1, 2] }));
+    assert.deepStrictEqual(M.errors, []);
+    assert.ok(UZ.checkLayout(M).some(i => /defs のテキストが区画に収まらない/.test(i.msg)));
+  },
+  async text_not_enlarged() {
+    const M = await build(deck({ p1: { title: "t", parts: [{ id: "defs", type: "text", blocks: [{ id: "p", kind: "para", text: "短い文。" }] }] } }, [SC("s1", "p1")]));
+    assert.deepStrictEqual(M.errors, []);
+    assert.strictEqual(M.scenes[0].place.defs.s, 1);
+    assert.strictEqual(M.scenes[0].place.defs.oy, M.scenes[0].areas[0].y, "区画の上に寄せる");
+  },
+  async text_bad_shapes() {
+    hasErr(await build(textDeck([{ id: "x", kind: "memo", text: "あ" }])), /kind は heading \/ para \/ bullets \/ quote/);
+    hasErr(await build(textDeck([{ id: "x", kind: "bullets" }])), /items/);
+    hasErr(await build(textDeck([{ id: "x", kind: "para" }])), /text がない/);
+    hasErr(await build(textDeck([{ kind: "para", text: "あ" }])), /id がない/);
+    hasWarn(await build(textDeck([{ id: "x", kind: "para", text: "あ", source: 3 }])), /source は文字列か文字列の配列/);
   },
 };
 
