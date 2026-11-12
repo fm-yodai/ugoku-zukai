@@ -126,7 +126,22 @@
         const fid = sc.figs[i];
         if (figs[fid]) continue;
         const f = FIGS[fid];
-        const L = await UZ.FIG[f.type].layout(f, S, { area: sc.areas[i], tryBoth: !f.direction, assets });
+        const A = sc.areas[i];
+        let L = null;
+        // スライドの部品は、区画に合わせて組む（図が fill に対応していれば。fit: "content" で止める）。
+        // 文字の倍率 k の候補（FILL_K）のうち、区画に収まり、折り返しの総数（図が返す lineCount）が k = 1 のときより増えない、一番大きい k を採る。
+        // k = 1 でも収まらなければ、今までどおり組んで縮める
+        if (sc.slide && UZ.FIG[f.type].fill && f.fit !== "content") {
+          const fits = [];
+          for (const k of UZ.FILL_K) {
+            const T = await UZ.FIG[f.type].layout(f, S, { area: A, fill: { w: A.w, h: A.h, k }, assets });
+            if (T.w <= A.w + 0.5 && T.h <= A.h + 0.5) fits.push({ k, T });
+          }
+          const base = fits.find(x => x.k === 1);
+          const pick = fits.find(x => !base || x.T.lineCount == null || x.T.lineCount <= base.T.lineCount);
+          if (pick) L = { ...pick.T, maxScale: 1, fillK: pick.k };
+        }
+        if (!L) L = await UZ.FIG[f.type].layout(f, S, { area: A, tryBoth: !f.direction, assets });
         const items = {};
         for (const it of L.items) { it.fig = fid; it.key = `${fid}/${it.id}`; items[it.id] = it; }
         figs[fid] = { id: fid, type: f.type, spec: f, w: L.w, h: L.h, items, order: L.order, autoShow: !!L.autoShow, fixed: !!L.fixed, extra: L };
@@ -399,8 +414,12 @@
       const F = figs[fid], w = F.x1 - F.x0, h = F.y1 - F.y0;
       // 拡大の上限: 図が決めていればそれ（テキストは 1 = 文字の大きさを保つ）
       const s = Math.min(area.w / w, area.h / h, F.extra.maxScale ?? (F.fixed ? 10 : (F.type === "title" ? 1 : 1.3)));
-      const top = F.extra.valign === "top";   // テキストは区画の上に寄せる
-      return { s, ox: area.x + (area.w - w * s) / 2 - F.x0 * s, oy: (top ? area.y : area.y + (area.h - h * s) / 2) - F.y0 * s };
+      // 区画の中の揃え: 部品の valign・halign。なければ図の既定（テキストは上）、それもなければ中央
+      const va = F.spec.valign || F.extra.valign || "middle", ha = F.spec.halign || "center";
+      const dx = area.w - w * s, dy = area.h - h * s;
+      const ox = area.x + (ha === "start" ? 0 : ha === "end" ? dx : dx / 2) - F.x0 * s;
+      const oy = area.y + (va === "top" ? 0 : va === "bottom" ? dy : dy / 2) - F.y0 * s;
+      return { s, ox, oy };
     };
     for (const sc of scenes) sc.place = Object.fromEntries(sc.figs.map((fid, i) => [fid, place(fid, sc.areas[i])]));
     acts.sort((a, b) => a.start - b.start);

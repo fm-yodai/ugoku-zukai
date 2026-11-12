@@ -36,6 +36,9 @@
         if (ids.has(id)) E(`${where}: id「${id}」が重複している`);
         ids.add(id);
       };
+      if (f.valign != null && !["top", "middle", "bottom"].includes(f.valign)) E(`${where}: valign は top / middle / bottom のどれか`);
+      if (f.halign != null && !["start", "center", "end"].includes(f.halign)) E(`${where}: halign は start / center / end のどれか`);
+      if (f.fit != null && !["fill", "content"].includes(f.fit)) E(`${where}: fit は fill か content`);
       if ((f.type === "title" || f.type === "toc") && f.tone != null && !["dark", "light"].includes(f.tone)) E(`${where}: tone は dark か light`);
       if (f.type === "toc" && Array.isArray(f.items)) {
         if (!f.items.length) E(`${where}: items（章）が空`);

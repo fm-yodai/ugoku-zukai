@@ -8,19 +8,20 @@
 
   // 箱（ノード）を 1 つ作る。label は 1〜2 行、sub は小さく下に
   function nodeBox(S, id, label, o = {}) {
-    const size = o.size || 22, maxW = o.maxW || 220;
+    // o.k: 補足（sub）の文字の倍率（区画に合わせて組むとき）
+    const size = o.size || 22, maxW = o.maxW || 220, k = o.k || 1, subSize = Math.round(16 * k), subLH = Math.round(21 * k);
     const lines = UZ.wrap(label, size, maxW, 500, 2);
-    const subLines = o.sub ? UZ.wrap(o.sub, 16, Math.max(maxW, 150), 400, 2) : [];
-    const w = Math.max(o.minW || 120, ...lines.map(s => UZ.textW(s, size, 500) + 40), ...subLines.map(s => UZ.textW(s, 16) + 30));
-    const h = Math.max(o.minH || 0, 26 + lines.length * (size + 8) + subLines.length * 21);
-    return { id, w: Math.round(w), h: Math.round(h), lines, subLines, size, role: o.role || "process", shape: o.shape || "box" };
+    const subLines = o.sub ? UZ.wrap(o.sub, subSize, Math.max(maxW, 150 * k), 400, 2) : [];
+    const w = Math.max(o.minW || 120, ...lines.map(s => UZ.textW(s, size, 500) + 40), ...subLines.map(s => UZ.textW(s, subSize) + 30));
+    const h = Math.max(o.minH || 0, 26 * k + lines.length * (size + 8) + subLines.length * subLH);
+    return { id, w: Math.round(w), h: Math.round(h), lines, subLines, size, subSize, subLH, role: o.role || "process", shape: o.shape || "box" };
   }
   function placeBox(S, nb, x, y, extra = {}) {
-    const cx = x + nb.w / 2, lh = nb.size + 8;
-    const blockH = nb.lines.length * lh + nb.subLines.length * 21;
+    const cx = x + nb.w / 2, lh = nb.size + 8, ss = nb.subSize || 16, sl = nb.subLH || 21;
+    const blockH = nb.lines.length * lh + nb.subLines.length * sl;
     const top = y + nb.h / 2 - blockH / 2;
     const texts = [T(nb.lines, cx, top + nb.lines.length * lh / 2, nb.size, { weight: 500, color: S.label(nb.role), lineH: lh })];
-    if (nb.subLines.length) texts.push(T(nb.subLines, cx, top + nb.lines.length * lh + nb.subLines.length * 21 / 2, 16, { color: S.muted, lineH: 21 }));
+    if (nb.subLines.length) texts.push(T(nb.subLines, cx, top + nb.lines.length * lh + nb.subLines.length * sl / 2, ss, { color: S.muted, lineH: sl }));
     const color = S.border(nb.role);
     return { id: nb.id, kind: "box", x, y, w: nb.w, h: nb.h, r: nb.shape === "round" ? nb.h / 2 : S.radius, shape: nb.shape,
       stroke: color, fill: S.fill(nb.role), texts, bbox: { x, y, w: nb.w, h: nb.h }, dotAt: [cx, y + nb.h - 12], ...extra };
@@ -567,16 +568,26 @@
   // ======== サイクル（cycle）========
   // steps を円周に時計回りで並べ、隣どうしを弧の矢印で結ぶ（最後 → 最初も）。trace で点を回せる
   FIG.cycle = {
-    async layout(f, S) {
+    // ctx.fill: 文字を k 倍にし、輪を区画に合わせて広げる（横に広い区画では横長の輪。縦横の比は 0.55〜1）
+    fill: true,
+    async layout(f, S, ctx) {
+      const F = ctx && ctx.fill, k = F ? F.k : 1;
       const st = f.steps, n = st.length, items = [], order = [];
-      const nb = st.map(s => nodeBox(S, s.id, s.label, { sub: s.sub, role: s.role, maxW: 170, minW: 130, size: 21, shape: "round" }));
-      const R = Math.max(150, Math.min(230, 70 + n * 30));
-      const Ry = R * 0.78;
+      const nb = st.map(s => nodeBox(S, s.id, s.label, { sub: s.sub, role: s.role, maxW: 170 * k, minW: 130 * k, size: Math.round(21 * k), shape: "round", k }));
+      let R = Math.max(150, Math.min(230, 70 + n * 30)) * k, Ry = R * 0.78;
+      if (F) {
+        const bw = Math.max(...nb.map(b => b.w)), bh = Math.max(...nb.map(b => b.h));
+        const rx = (F.w - bw) / 2 - 8, ry = (F.h - bh) / 2 - 8;
+        Ry = Math.min(ry, rx); R = Math.min(rx, Ry / 0.55);
+        Ry = Math.min(Ry, R);
+        if (R < 120 * k || Ry < 90 * k) return { w: Infinity, h: Infinity, items: [], order: [] };   // 区画が狭すぎる（k を下げる）
+      }
+      const ratio = Ry / R;
       const pos = st.map((_, i) => { const a = -Math.PI / 2 + i * 2 * Math.PI / n; return [Math.cos(a) * R, Math.sin(a) * Ry, a]; });
       const box = {};
       st.forEach((s, i) => { const b = nb[i]; box[s.id] = placeBox(S, b, pos[i][0] - b.w / 2, pos[i][1] - b.h / 2); });
       if (f.center) {
-        const t = T(UZ.wrap(f.center, 22, R * 0.9, 700, 3), 0, 0, 22, { weight: 700, color: S.accent });
+        const cs = Math.round(22 * k), t = T(UZ.wrap(f.center, cs, Math.min(R, Ry / 0.78) * 0.9, 700, 3), 0, 0, cs, { weight: 700, color: S.accent });
         items.push({ id: "center", kind: "text", texts: [t], bbox: { ...t.bbox }, over: [] });
       }
       // 弧: 楕円の上を、箱の外に出た所から次の箱に入る所まで
@@ -590,14 +601,15 @@
         if (pts.length < 2) return;
         const id = `${s.id}>${t.id}`;
         edges.push({ id, from: s.id, to: t.id });
-        const lab = s.edge ? (() => { const m = pts[Math.floor(pts.length / 2)], d = Math.hypot(m[0], m[1] / 0.78) || 1; return T(s.edge, m[0] * (1 + 34 / d), m[1] * (1 + 30 / d), 17, { color: S.ink }); })() : null;
+        const lab = s.edge ? (() => { const m = pts[Math.floor(pts.length / 2)], d = Math.hypot(m[0], m[1] / ratio) || 1; return T(s.edge, m[0] * (1 + 34 / d), m[1] * (1 + 30 / d), Math.round(17 * k), { color: S.ink }); })() : null;
         items.push(edgeItem(S, id, pts, { from: s.id, to: t.id, stroke: S.muted, label: lab }));
       });
       st.forEach(s => items.push(box[s.id]));
       const fin = revealOrder(st.map(s => s.id), edges);
       if (f.center) fin.push("center");
       const sz = fit(items);
-      return { w: sz.w, h: sz.h, items, order: fin, direct: true };
+      const lineCount = nb.reduce((a, b) => a + b.lines.length + b.subLines.length, 0);
+      return { w: sz.w, h: sz.h, items, order: fin, direct: true, lineCount };
     },
   };
 

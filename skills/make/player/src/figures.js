@@ -102,30 +102,41 @@
 
   // ======== 箇条（list）========
   FIG.list = {
-    async layout(f, S) {
-      const n = f.items.length, size = n > 6 ? 22 : 26, gap = n > 6 ? 50 : 66;
-      const maxW = 980, items = [], order = [];
-      let y = 0, w = 0;
-      f.items.forEach((it, i) => {
+    fill: true,   // ctx.fill: 区画の幅いっぱいに折り返し、余った高さを項目の間に配る（table と同じ約束）
+    async layout(f, S, ctx) {
+      const F = ctx && ctx.fill, k = F ? F.k : 1;
+      const n = f.items.length, size = Math.round((n > 6 ? 22 : 26) * k), subSize = Math.round(18 * k);
+      const ind = Math.round(64 * k), bx = Math.round(22 * k);
+      let gap = Math.round((n > 6 ? 50 : 66) * k);
+      const maxW = F ? F.w - ind : 980, items = [], order = [];
+      const blocks = f.items.map(it => {
         const lines = UZ.wrap(it.text, size, maxW, 500, 2);
-        const t = UZ.mkText(lines, 64, 0, size, { anchor: "start", weight: 500, color: S.ink });
-        const subT = it.sub ? UZ.mkText(UZ.wrap(it.sub, 18, maxW), 64, 0, 18, { anchor: "start", color: S.muted }) : null;
-        const blockH = t.bbox.h + (subT ? subT.bbox.h + 4 : 0);
-        const cy = y + blockH / 2;
-        // 文字の位置を確定し直す
-        const tt = UZ.mkText(lines, 64, y + t.bbox.h / 2, size, { anchor: "start", weight: 500, color: S.ink });
-        const texts = [tt];
-        if (subT) texts.push(UZ.mkText(subT.lines, 64, y + t.bbox.h + 4 + subT.bbox.h / 2, 18, { anchor: "start", color: S.muted }));
-        const bullet = f.numbered ? { kind: "num", n: i + 1, x: 22, y: y + tt.lineH / 2, r: 18 } : { kind: "dot", x: 22, y: y + tt.lineH / 2, r: 6 };
-        const bw = Math.max(...texts.map(x => x.bbox.x + x.bbox.w));
-        const bbox = { x: 0, y, w: bw, h: blockH };
-        items.push({ id: it.id, kind: "text", texts, bullet, bbox, rowBox: { x: -12, y: y - 8, w: bw + 24, h: blockH + 16 } });
-        order.push(it.id);
-        w = Math.max(w, bw);
-        y += blockH + (gap - size);
-        void cy;
+        const subLines = it.sub ? UZ.wrap(it.sub, subSize, maxW) : null;
+        const tH = lines.length * Math.round(size * 1.38), sH = subLines ? subLines.length * Math.round(subSize * 1.38) : 0;
+        return { it, lines, subLines, tH, sH, h: tH + (subLines ? sH + 4 : 0) };
       });
-      return { w: Math.max(w, 600), h: y - (gap - size), items, order };
+      if (F) {   // 項目の間は文字の 0.6 つ分から始め、余った高さを配る（1 か所あたり、さらに文字 1.2 つ分まで）
+        gap = size + Math.round(size * 0.6);
+        const h0 = blocks.reduce((a, x) => a + x.h, 0) + (n - 1) * (gap - size);
+        if (n > 1) gap += Math.max(0, Math.min((F.h - h0) / (n - 1), size * 1.2));
+      }
+      let y = 0, w = 0, over = false;
+      blocks.forEach((B, i) => {
+        const tt = UZ.mkText(B.lines, ind, y + B.tH / 2, size, { anchor: "start", weight: 500, color: S.ink });
+        const texts = [tt];
+        if (B.subLines) texts.push(UZ.mkText(B.subLines, ind, y + B.tH + 4 + B.sH / 2, subSize, { anchor: "start", color: S.muted }));
+        const bullet = f.numbered ? { kind: "num", n: i + 1, x: bx, y: y + tt.lineH / 2, r: Math.round(18 * k) } : { kind: "dot", x: bx, y: y + tt.lineH / 2, r: Math.round(6 * k) };
+        const bw = Math.max(...texts.map(x => x.bbox.x + x.bbox.w));
+        if (F && bw > F.w + 1) over = true;
+        items.push({ id: B.it.id, kind: "text", texts, bullet, bbox: { x: 0, y, w: bw, h: B.h }, rowBox: { x: -12, y: y - 8, w: bw + 24, h: B.h + 16 } });
+        order.push(B.it.id);
+        w = Math.max(w, bw);
+        y += B.h + (gap - size);
+      });
+      const h = y - (gap - size);
+      // 区画に合わせて組んだときは、幅は区画いっぱい（左に揃う）
+      const lineCount = blocks.reduce((a, B) => a + B.lines.length + (B.subLines ? B.subLines.length : 0), 0);
+      return { w: F ? F.w : Math.max(w, 600), h: over ? Infinity : h, items, order, lineCount };
     },
   };
 
@@ -171,10 +182,16 @@
   };
 
   // ======== 表（table）========
+  // ctx.fill（スライドの部品を区画に合わせて組むとき）: { w, h, k }。k は文字の倍率。
+  // 区画の幅いっぱいに列を広げ、余った高さを行に配る。収まらなければ、区画より大きい w・h を返す（エンジンが k を下げて組み直す）
   FIG.table = {
-    async layout(f, S) {
+    fill: true,
+    async layout(f, S, ctx) {
+      const F = ctx && ctx.fill, k = F ? F.k : 1;
       const cols = f.columns.map(c => (typeof c === "string" ? { id: c, label: c } : c));
-      const size = 20, hsize = 19, padX = 18, markW = 30, rowMarkW = 48;
+      const size = Math.round(20 * k), hsize = Math.round(19 * k), padX = Math.round(18 * k), markW = Math.round(30 * k), rowMarkW = 48;
+      // 区画に合わせて組むときは、行の上下の余白を小さめから始め、余った高さを配る
+      const lineStep = Math.round(28 * k), padY = Math.round((F ? 16 : 26) * k), maxLines = F ? 3 : 2;
       const cellText = (row, ci) => {
         const v = Array.isArray(row.cells) ? row.cells[ci] : row.cells[cols[ci].id];
         return v == null ? { text: "" } : typeof v === "object" ? v : { text: String(v) };
@@ -182,30 +199,82 @@
       const colW = cols.map((c, ci) => {
         let w = UZ.textW(c.label, hsize, S.bold);
         for (const r of f.rows) w = Math.max(w, UZ.textW(cellText(r, ci).text, size));
-        return Math.min(380, Math.max(90, w)) + padX * 2 + markW;
+        return Math.min(380 * k, Math.max(90 * k, w)) + padX * 2 + markW;
       });
+      if (F) {   // 区画の幅に合わせる
+        const room = F.w - rowMarkW;
+        // 折り返さないときの幅（見出しと各セルの最長 + 余白）
+        const nat = cols.map((c, ci) => Math.max(UZ.textW(c.label, hsize, S.bold), ...f.rows.map(r => UZ.textW(cellText(r, ci).text, size, ci === 0 ? 500 : 400))) + padX * 2 + markW + 2);
+        const sum = nat.reduce((a, b) => a + b, 0);
+        if (sum <= room) {   // 全部 1 行で入る: 余りを均等に配る
+          nat.forEach((w, i) => { colW[i] = w + (room - sum) / nat.length; });
+        } else {   // 入らない: 狭い幅から始め、表が一番低くなる列に少しずつ幅を足す
+          const pad = padX * 2 + markW, minW = Math.round(110 * k);
+          // 点数: 表の高さ（行ごとの最大の行数の合計）に、折り返しの総数を少し足す（高さが同じなら、折り返しの少ない配り方。行の見出しの折り返しは避ける）
+          const height = ws => {
+            let h = Math.max(...cols.map((c, ci) => UZ.wrap(c.label, hsize, ws[ci] - padX * 2, S.bold, 9).length)) * 0.8, all = 0;
+            for (const r of f.rows) {
+              const ls = cols.map((_, ci) => UZ.wrap(cellText(r, ci).text, size, ws[ci] - pad, ci === 0 ? 500 : 400, 9).length);
+              h += Math.max(...ls); all += ls.reduce((a, b) => a + b, 0) + (ls[0] - 1) * 2;   // 行の見出し（1 列目）の折り返しは重く数える
+            }
+            return h + all * 0.15;
+          };
+          const ws = nat.map(w => Math.min(w, minW));
+          const step = Math.max(8, Math.round(room / 120));
+          let left = room - ws.reduce((a, b) => a + b, 0);
+          // 各列について、足す幅を 1 歩から自然な幅まで先まで試し、幅あたり一番低くなる足し方を採る
+          // （短い見出しの列は、一度に大きく広げないと 1 行にならないため）
+          while (left >= 1) {
+            const h0 = height(ws);
+            let best = -1, bestAdd = 0, bestGain = 0;
+            for (let i = 0; i < ws.length; i++) {
+              for (let add = step; add <= Math.min(left, nat[i] - ws[i] + step - 1); add += step) {
+                const t = ws.slice(); t[i] += Math.min(add, left);
+                const gain = (h0 - height(t)) / add;
+                if (gain > bestGain + 1e-9) { bestGain = gain; best = i; bestAdd = Math.min(add, left); }
+              }
+            }
+            // 低くならないときは、自然な幅との差が一番大きい列に足す（全部の列が自然な幅なら、残りを均等に配って終える）
+            if (best < 0) {
+              let gap = 0;
+              ws.forEach((w, i) => { if (nat[i] - w > gap) { gap = nat[i] - w; best = i; } });
+              if (best < 0) { ws.forEach((_, i) => { ws[i] += left / ws.length; }); break; }
+              bestAdd = Math.min(step, left);
+            }
+            ws[best] += bestAdd; left -= bestAdd;
+          }
+          ws.forEach((w, i) => { colW[i] = w; });
+        }
+      }
       const total = colW.reduce((a, b) => a + b, 0);
       const xs = [0]; colW.forEach(w => xs.push(xs[xs.length - 1] + w));
+      const headLines = cols.map((c, ci) => UZ.wrap(c.label, hsize, colW[ci] - padX * 2, S.bold, 2));
+      const headH = Math.max(Math.round(50 * k), padY + Math.max(...headLines.map(l => l.length)) * Math.round(hsize * 1.38));
+      const rowsL = f.rows.map(r => {
+        const cells = cols.map((c, ci) => {
+          const v = cellText(r, ci);
+          return { ...v, col: c.id, lines: UZ.wrap(v.text, size, colW[ci] - padX * 2 - markW, ci === 0 ? 500 : 400, maxLines) };
+        });
+        return { r, cells, rh: padY + Math.max(1, ...cells.map(c => c.lines.length)) * lineStep };
+      });
+      // 余った高さを行に配る（1 行あたり文字 1 つ分まで。残りは区画の中の揃えで空きになる）
+      if (F) {
+        const h0 = headH + rowsL.reduce((a, x) => a + x.rh, 0);
+        const add = Math.max(0, Math.min((F.h - h0) / Math.max(1, rowsL.length), size * 1.2));
+        for (const x of rowsL) x.rh += add;
+      }
       const items = [], order = [];
-      const headH = 50;
-      // 見出し
-      const headTexts = cols.map((c, ci) => UZ.mkText(UZ.wrap(c.label, hsize, colW[ci] - padX * 2, S.bold, 2), xs[ci] + padX, headH / 2, hsize, { anchor: "start", weight: S.bold, color: S.ink }));
+      const headTexts = cols.map((c, ci) => UZ.mkText(headLines[ci], xs[ci] + padX, headH / 2, hsize, { anchor: "start", weight: S.bold, color: S.ink }));
       items.push({ id: "header", kind: "rect", x: 0, y: 0, w: total, h: headH, r: 6, fill: S.surface, texts: headTexts, bbox: { x: 0, y: 0, w: total, h: headH } });
       order.push("header");
       let y = headH;
-      for (const r of f.rows) {
-        const cells = cols.map((c, ci) => {
-          const v = cellText(r, ci);
-          return { ...v, col: c.id, lines: UZ.wrap(v.text, size, colW[ci] - padX * 2 - markW, ci === 0 ? 500 : 400, 2) };
-        });
-        const nl = Math.max(1, ...cells.map(c => c.lines.length));
-        const rh = 26 + nl * 28;
+      for (const { r, cells, rh } of rowsL) {
         const rowItem = { id: r.id, kind: "rect", x: 0, y, w: total, h: rh, r: 4, fill: "none", rule: true, bbox: { x: 0, y, w: total, h: rh }, members: [] };
         items.push(rowItem);
         order.push(r.id);
         cells.forEach((c, ci) => {
           const cid = `${r.id}.${c.col}`;
-          const t = UZ.mkText(c.lines, xs[ci] + padX, y + rh / 2, size, { anchor: "start", weight: ci === 0 ? 500 : 400, color: S.ink });
+          const t = UZ.mkText(c.lines, xs[ci] + padX, y + rh / 2, size, { anchor: "start", weight: ci === 0 ? 500 : 400, color: S.ink, lineH: lineStep });
           const it = { id: cid, kind: "text", texts: [t], bbox: { x: xs[ci], y, w: colW[ci], h: rh }, parent: r.id, col: c.col, textBox: t.bbox };
           if (c.mark) it.staticMark = { kind: c.mark, x: xs[ci] + colW[ci] - padX - 6, y: y + rh / 2 };
           items.push(it);
@@ -217,7 +286,10 @@
       cols.forEach((c, ci) => {
         items.push({ id: c.id, kind: "group", members: f.rows.map(r => `${r.id}.${c.id}`), bbox: { x: xs[ci], y: 0, w: colW[ci], h: y }, headerIndex: ci });
       });
-      return { w: total + rowMarkW, h: y, items, order, rowMarkX: total + 24 };
+      // 区画に合わせて組んだときは、列の幅をはみ出す行（折り返しきれなかった文）があれば、収まらないとして返す
+      const clipped = F && rowsL.some(x => x.cells.some((c, ci) => c.lines.some(l => UZ.textW(l, size, ci === 0 ? 500 : 400) > colW[ci] - padX * 2 - markW + 1)));
+      const lineCount = headLines.reduce((a, l) => a + l.length, 0) + rowsL.reduce((a, x) => a + x.cells.reduce((b, c) => b + c.lines.length, 0), 0);
+      return { w: total + rowMarkW, h: clipped ? Infinity : y, items, order, rowMarkX: total + 24, lineCount };
     },
   };
 
