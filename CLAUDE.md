@@ -18,20 +18,20 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 # まとめての検査。ふだんは run_r4.sh だけ回せば全部走る（r4 → r3 → r2 → r1 → m3 → m1 の順に呼ぶ）
 #   run_m1.sh: 見本台本 × テーマ 3 種の配置検査・テーマの検査・デザイン抽出
 #   run_m3.sh: 字幕と読み・コマ・再生ページ・作業フォルダと、文書とスクリプトの食い違い
-#   run_r1.sh: 構成メモ・台本の章・絵コンテのページ
+#   run_r1.sh: 構成メモ・台本の章・スライドコンテのページ
 #   run_r2.sh: 指摘の一覧・成功基準・エージェントの定義・進行役の文書
 #   run_r3.sh: 再生ページの位置の表示・公開先の記録と作業フォルダの一覧・声の試聴・直しの文書（VOICEVOX があれば、試聴と声の使い回しも）
-#   run_r4.sh: スライド（区画・テキスト・画像・フレーム・完成形のコマ・blur）と、スライドの文字の検査
+#   run_r4.sh: スライド（区画・テキスト・画像・フレーム・完成形のコマ・blur）、スライドの文字の検査、構成メモと台本のスライドの照合、案の見比べ（alts.py）、進行役の文書
 bash skills/make/scripts/tests/run_r4.sh
 
 # 台本 1 本の検査（形・id の解決・配置）。--timeline で実際の声の長さでも検査する
 node skills/make/scripts/check_storyboard.cjs skills/make/examples/sequence.json --theme koo [--timeline work/voice/timeline.json] [--json]
 
-# 構成メモの検査（<workdir>/outline.json か、ファイルを直接渡す。形式は references/outline.md、見本は examples/outlines/）。--ready は台本に進める状態かも見る
+# 構成メモの検査（<workdir>/outline.json か、ファイルを直接渡す。形式は references/outline.md の ugoku-zukai-outline/2 = 3 段の意図。見本は examples/outlines/）。--ready は台本に進める状態か（基本・章の順番の意図・章の意図）も見る。前の形式 /1（says・shows）も読める
 python3 skills/make/scripts/check_outline.py skills/make/examples/outlines/ux.json [--ready] [--json]
 python3 skills/make/scripts/check_outline.py <workdir> --agree-all   # 利用者が全部を見て通したとき、proposed をまとめて agreed にする
 
-# 台本と構成メモの突き合わせ（場面の chapter と構成メモの章、章ごとの見積もりの長さ）。--complete は台本を書き終えたものとして見る
+# 台本と構成メモの突き合わせ（場面の chapter と構成メモの章、章ごとの見積もりの長さ、構成メモのスライドと台本のスライドの id）。--complete は台本を書き終えたものとして見る
 node skills/make/scripts/check_storyboard.cjs skills/make/scripts/tests/outlines/pair/storyboard.json --outline skills/make/scripts/tests/outlines/pair/outline.json [--complete]
 
 # テーマの検査（コントラストなど）。--design で、取り込んだデザイン（extract_design.py の報告）から外れていないかも見る
@@ -61,8 +61,13 @@ python3 skills/make/scripts/setup_render.py
 node skills/make/scripts/frames.cjs skills/make/examples/sequence.json --theme koo -o work/frames
 node skills/make/scripts/frames.cjs skills/make/examples/mixed.json --theme koo -o work/frames-s2 --scenes s2   # 一部の場面のコマだけ書く（カンマ区切り。出力先の前の回のコマは消えるので、全体とは分ける。--lines l8,l33 なら、その行のある場面）
 
-# 利用者向けの絵コンテのページ（コマの横に「s2 / l2 @0:14」と字幕の全文。PNG は要らない。--outline で章の見出しと「Claude が決めたこと」が付く。台本を直したら frames.cjs を回し直す。コマが古いと終了コード 2 で止まる）
-python3 skills/make/scripts/build_sheet.py skills/make/examples/sequence.json --frames work/frames -o work/sheet.html [--outline outline.json] [--artifact]
+# 利用者向けのスライドコンテのページ（スライドごとに完成形のコマ、行ごとにコマと「s2 / l2 @0:14」と字幕の全文。PNG は要らない。--outline で章の題と、章・スライドの意図とつながりが付く。出すのはスライド・原稿・意図だけ。台本を直したら frames.cjs を回し直す。コマが古いと終了コード 2 で止まる）
+python3 skills/make/scripts/build_sheet.py skills/make/examples/slide-forms.json --frames work/frames -o work/sheet.html [--outline skills/make/examples/outlines/slide-forms.json] [--alts <workdir>/alts.json] [--artifact]
+
+# スライドの複数案（2〜4 つ）を作り、スライドコンテの中に並べ、選んだ案を台本と構成メモに入れる。案の台本は <workdir>/storyboard.<組>-<案>.json、コマは <workdir>/alts/<組>/<案>/frames、一覧は <workdir>/alts.json
+python3 skills/make/scripts/alts.py new <workdir> g1 --replaces <スライドの id,…> --options a,b [--keep-current]
+python3 skills/make/scripts/alts.py frames <workdir> [--theme koo]   # この後、build_sheet.py --alts <workdir>/alts.json で並べる
+python3 skills/make/scripts/alts.py pick <workdir> g1 b               # 選ばないときは drop <workdir> g1
 
 # 声: 初回だけ VOICEVOX を入れ（約 94MB）、1 行ずつ合成して timeline.json と narration.mp3 を作る
 python3 skills/make/scripts/setup_voice.py --status   # 入っているかと、利用規約への同意の記録があるか（終了コード 0 = 聞かずに使える、3 = 利用者に聞く）
@@ -82,7 +87,7 @@ python3 tools/build_voice_check.py
 
 ## 全体の構造
 
-**進め方**: 番号の付いた決まった手順はない。進行役（`SKILL.md` を実行しているセッション）が利用者と話して構成を固め、決まったことを構成メモ（`outline.json`。`by` = 誰が言ったか、`state` = 利用者が見たか）に書く。話題ごとに「聞く・案を出す・調べる」を選び、案を出すときは他の選択肢を残す。任されたら、絵コンテまで自分で決めてから見せる。そこから台本（`storyboard.json`。場面の `chapter` で構成メモの章を指す）→ 絵コンテ（`frames.cjs`・`build_sheet.py`）→ 声（`tts.py --readings` で読みを確かめてから合成）→ 組み立て（`build_player.py`）と Artifact での公開、と進む。順番として守るのは 3 つだけ: 声を合成する前に利用者が絵コンテを見ている、公開する前に機械検査が通っている、must を直さずに公開するときは報告に残論点として書く。公開した後は、利用者が再生ページの「直したい箇所を指定する」で出る `s2 / l2 @0:14`（場面 / 行 @時刻）を伝えて直しを頼む。直すのは指された行だけで、変えていない行の声は作り直さない。Claude Code では、`workdir.py list` で作業フォルダを探して、別のセッションからも直せる。原則と道具の一覧は `skills/make/SKILL.md`、環境ごとのコマンドは `references/run-code.md`（Claude Code）と `references/run-chat.md`（チャット）。
+**進め方**: 意図 → スライド → 原稿の順に作る。細かく決まった手順はない。進行役（`SKILL.md` を実行しているセッション）が利用者と話して、基本（聴衆・持ち帰ってほしいこと・長さなど）、章の順番の意図、章の意図を固め、構成メモ（`outline.json`。`ugoku-zukai-outline/2`。`by` = 誰が言ったか、`state` = 利用者が見たか）に書く。意図は聴衆の側から書く。話題ごとに「聞く・案を出す・調べる」を選び、案を出すときは他の選択肢を残す。次に、進行役か writer が章ごとにスライドの案（完成形、1 枚ごとの意図、動かし方、原稿の初稿）を台本（`storyboard.json`。場面の `chapter` で構成メモの章を指し、スライドの id で構成メモのスライドと結ぶ）に書き、スライドコンテ（`frames.cjs`・`build_sheet.py`）で利用者に見せる。スライドコンテのページに出すのは、スライド・原稿・意図だけで、進行役が決めたことや検査の結果は会話で伝える。迷ったスライドは、案を 2〜4 つ作ってスライドコンテの中に並べ、利用者に選んでもらう（`alts.py`。Artifact は増やさず、同じページを更新する）。任されたら、スライドコンテまで自分で決めてから見せる。スライドが固まってから評価役に原稿を見せ、声（`tts.py --readings` で読みを確かめてから合成）→ 組み立て（`build_player.py`）と Artifact での公開、と進む。順番として守るのは 3 つだけ: 声を合成する前に利用者がスライドコンテを見ている、公開する前に機械検査が通っている、must を直さずに公開するときは報告に残論点として書く。公開した後は、利用者が再生ページの「直したい箇所を指定する」で出る `s2 / l2 @0:14`（場面 / 行 @時刻）を伝えて直しを頼む。直すのは指された行だけで、変えていない行の声は作り直さない。Claude Code では、`workdir.py list` で作業フォルダを探して、別のセッションからも直せる。原則と道具の一覧は `skills/make/SKILL.md`、環境ごとのコマンドは `references/run-code.md`（Claude Code）と `references/run-chat.md`（チャット）。
 
 **プレーヤー（`skills/make/player/src/`）は、ブラウザと node で同じコードを動かす**のが要。
 - `util → figures → figures2 → figures3 → validate → slides → engine → check` は DOM に触らない。グローバルの `UZ` に生えていく（`UZ.build(storyboard, theme, timeline)` が配置と時刻を計算する）。DOM に触るのは `view_svg.js` だけ
@@ -96,7 +101,7 @@ python3 tools/build_voice_check.py
 
 **テーマ**（`player/themes/*.json`、`references/themes.md`）: 色・文字・線の定義。同梱は `koo` の 1 つで、「空 提案書デザインシステム」（テーマの `derived_from` の Artifact）のトークンから作ってある。そこにない色を足さない（例外は、線と文字に使う暗くした Blue だけ。テーマの `tokens` に対応がある）。緑と赤はなく、良い・悪いは Gold とグレーアウトで言い分ける。`colors.boxes` が役割ごとの箱の面・枠・文字、`chapter` が章扉（`title` 図だけの場面）の地と文字を決める。字幕の帯と章扉は Navy。別のデザインを渡されたときは、進行役がそのデザインの色から決める。決めたテーマは構成メモの `basics.look.theme` に書く。台本と同じフォルダに構成メモがあれば、`check_storyboard.cjs`・`frames.cjs`・`build_player.py` は `--theme` を省くとそのテーマを使い、違うテーマを渡すと終了コード 2 で止まる（`uz_node.cjs` の `pickTheme` と `build_player.py` の `pick_theme`。2 か所を同じ約束に保つ）。`extract_design.py` が手持ちのデザイン（トークン・CSS・HTML・Tailwind・Office・画像・PDF）からテーマを作り、`check_theme.py` で検査する。
 
-**作り手と評価役**: Claude Code では `agents/` のサブエージェントを使う（作り手は researcher = 調べる、writer = 台本の初稿と章単位の書き直し。評価役は fact-checker / writing-reviewer / director。animator は保留中で呼ばない）。チャットでは 1 会話で役を順に演じる。評価役は決まった関門ではなく、章立てが固まったとき・台本の初稿・絵コンテを見せる前・直した後・合成の前に呼ぶ。成功基準は `references/criteria/`（構成メモ O-、合意との照合 A-、台本 S-、図 G-、画面 V-。文章の規則は `references/writing/` の TW- と SP-。SP-11〜SP-14 は行と章のつながり）、評価役の約束と指摘の扱いは `references/review-protocol.md`、評価役の出力の形は `references/writing/review-format.md`。指摘にはレベル（must / should / nits）が付き、`scripts/ledger.py` の指摘の一覧に入る。どれを直すかは利用者が選ぶ（台本の初稿に限り、合意した内容を変えない指摘は進行役が 1 回だけ先に直す）。自動で合格まで回すことはしない。
+**作り手と評価役**: Claude Code では `agents/` のサブエージェントを使う（作り手は researcher = 調べる、writer = 台本の初稿と章単位の書き直し。評価役は fact-checker / writing-reviewer / director。animator は保留中で呼ばない）。チャットでは 1 会話で役を順に演じる。評価役は決まった関門ではなく、章の意図が固まったとき・最初のスライドコンテを見せる前（スライド）・スライドが固まったとき（原稿）・直した後・合成の前に呼ぶ（評価役の定義と基準の文書は、R4 第 3 部で意図に合わせて直す。それまでは前の進め方の言葉のまま）。成功基準は `references/criteria/`（構成メモ O-、合意との照合 A-、台本 S-、図 G-、画面 V-。文章の規則は `references/writing/` の TW- と SP-。SP-11〜SP-14 は行と章のつながり）、評価役の約束と指摘の扱いは `references/review-protocol.md`、評価役の出力の形は `references/writing/review-format.md`。指摘にはレベル（must / should / nits）が付き、`scripts/ledger.py` の指摘の一覧に入る。どれを直すかは利用者が選ぶ（台本の初稿に限り、合意した内容を変えない指摘は進行役が 1 回だけ先に直す）。自動で合格まで回すことはしない。
 
 ## 守ること
 

@@ -25,7 +25,8 @@ for f in ../../agents/writing-reviewer.md references/criteria/README.md referenc
 grep -q "主張の範囲を変えない" ../../agents/writing-reviewer.md && grep -q "文の案をそのまま入れない" references/review-protocol.md || ng "文の案が主張の範囲を変えないことの約束がない"
 grep -q "語りとして書く" ../../agents/writer.md && grep -q "章扉" ../../agents/writer.md && grep -q "かぎ括弧を外す" ../../agents/writer.md || ng "writer.md に、語りとして書く・章扉・read のかぎ括弧がない"
 grep -q "FAIL にした基準には、必ず指摘" ../../agents/fact-checker.md || ng "fact-checker.md に、FAIL には指摘を付ける約束がない"
-grep -q "言うこと 1 つで 8〜10 秒" references/outline.md || ng "outline.md に、言うことの数からの尺の見積もりがない"
+grep -q "章の意図と全体の長さから割り振る" references/outline.md || ng "outline.md に、章の長さを章の意図と全体の長さから割り振ることがない"
+grep -q "言うこと 1 つで 8〜10 秒" references/outline.md && ng "outline.md に、言うことの数からの尺の見積もり（R4 でやめた）が残っている"
 for f in references/run-code.md references/run-chat.md; do
   for w in "--agree-all" "--lines" "--close"; do grep -q -- "$w" $f || ng "$f に $w がない"; done
 done

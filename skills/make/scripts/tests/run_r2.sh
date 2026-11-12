@@ -61,7 +61,7 @@ grep -nE "contract|契約|budget\.parts|interview" references/structures.md && n
 grep -q "引き出し" references/structures.md || ng "structures.md が型を引き出しとして位置づけていない"
 # 環境ごとの文書（道具ごとのコマンド。フェーズごとの手順は置かない）
 for f in references/run-code.md references/run-chat.md; do
-  for h in "パスの書き方" "作業フォルダ" "構成メモ" "調べる" "台本と機械検査" "絵コンテと粗い再生ページ" "評価役と指摘の一覧" "声" "組み立てと公開" "報告"; do
+  for h in "パスの書き方" "作業フォルダ" "構成メモ" "調べる" "台本と機械検査" "スライドコンテと粗い再生ページ" "評価役と指摘の一覧" "声" "組み立てと公開" "報告"; do
     grep -q "^## $h" $f || ng "$f に「## $h」がない"
   done
   grep -qE "^## [0-9] " $f && ng "$f に番号の付いたフェーズが残っている"
@@ -99,8 +99,8 @@ grep -q "preview.html" scripts/workdir.py || ng "workdir.py の一覧に preview
 old=$(grep -rnE "計画モード|画面モード|構造モード|契約モード|台本モード|docs/design\.md" references SKILL.md)
 [ -z "$old" ] || { ng "references に古いモードの名前か、スキルの外の文書への参照がある"; echo "$old"; }
 grep -rn 'CLAUDE_PLUGIN_ROOT' references | grep -v "references/run-code.md:" && ng "run-code.md のほかに \${CLAUDE_PLUGIN_ROOT} がある（チャットにはこの変数がない）"
-c=$(awk '/^## 絵コンテと粗い再生ページ/{on=1} on && /setup_render.py/ && !a{a=NR} on && /frames.cjs .*-o/ && !b{b=NR} END{print (a && b && a < b) ? "ok" : "ng"}' references/run-chat.md)
-[ "$c" = ok ] || ng "run-chat.md の絵コンテの節で、setup_render.py が frames.cjs より後にある"
+c=$(awk '/^## スライドコンテと粗い再生ページ/{on=1} on && /setup_render.py/ && !a{a=NR} on && /frames.cjs .*-o/ && !b{b=NR} END{print (a && b && a < b) ? "ok" : "ng"}' references/run-chat.md)
+[ "$c" = ok ] || ng "run-chat.md のスライドコンテの節で、setup_render.py が frames.cjs より後にある"
 # 最終レビュー（2026-11-10）の指摘
 # エージェントの本文に書いたスクリプトのコマンドが、tools: で許されている
 for f in researcher writer fact-checker writing-reviewer director; do
@@ -112,10 +112,12 @@ done
 grep "^| S-F4 " references/criteria/script.md | grep -q "言い換え" || ng "script.md の S-F4 が、利用者の言うことを言い換えた行だけを除く形になっていない"
 grep "^| A-2 " references/criteria/agreement.md | grep -q "S-F4" || ng "agreement.md の A-2 が、事実を述べる具体例を S-F4 に回していない"
 grep -q "言い換え" $A/fact-checker.md || ng "fact-checker.md が、利用者の言うことを言い換えた行だけを除く形になっていない"
-# 先に直す範囲（台本の初稿と、その最初の絵コンテ。読みは別に 1 回）が、文書の間でそろっている
-for f in SKILL.md references/review-protocol.md references/run-chat.md references/run-code.md; do
-  grep -q "最初の絵コンテ" $f || ng "$f に、最初の絵コンテの指摘も先に直す対象だという記述がない"
+# 先に直す範囲（最初のスライドコンテの前の評価と、原稿の初稿の評価。読みは別に 1 回）が、文書の間でそろっている
+# （review-protocol.md は R4 第 3 部で直すので、前の呼び名「絵コンテ」のまま確かめる）
+for f in SKILL.md references/run-chat.md references/run-code.md; do
+  grep -q "最初のスライドコンテ" $f || ng "$f に、最初のスライドコンテの指摘も先に直す対象だという記述がない"
 done
+grep -q "最初の絵コンテ" references/review-protocol.md || ng "references/review-protocol.md に、最初の絵コンテの指摘も先に直す対象だという記述がない"
 grep -q "読みの一覧" SKILL.md && grep -q "同じ場所・同じ基準" references/writing/review-format.md || ng "SKILL.md の読みの扱いか、review-format.md の同じキーの扱いがない"
 grep -q "設計書から広げた判断" ../../docs/design.md || ng "docs/design.md に、設計書から広げた判断の記録がない"
 [ $fail = 0 ] && echo "R2 の検査: すべて OK" || echo "R2 の検査: NG あり"
