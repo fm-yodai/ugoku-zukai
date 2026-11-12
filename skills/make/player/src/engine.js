@@ -181,6 +181,12 @@
     for (const sc of scenes) {
       const first = TL[sc.lines[0].id];
       sc.start = Math.max(0, first.start - 0.35);
+      // 最初から完成形で出すスライド（start: "complete"）: 最初に使う場面の頭で、完成形に含める部品をすべて出す
+      const sl = sc.slide && slides[sc.slide];
+      if (sl && sl.complete && sl.scenes[0] === sc.id) {
+        const keys = sl.figs.filter(fid => !sl.transient.includes(fid) && !figs[fid].autoShow).flatMap(fid => expand({ fig: fid, whole: true }));
+        if (keys.length) acts.push({ verb: "show", keys, start: sc.start + 0.25, dur: 0.5, each: 0.5, stagger: 0.04, end: sc.start + 0.75 + 0.04 * keys.length });
+      }
       for (const fid of sc.figs) if (figs[fid].autoShow) acts.push({ verb: "show", keys: figs[fid].order.map(id => figs[fid].items[id].key), start: sc.start + 0.25, dur: 0.8, each: 0.8, stagger: 0.35, end: sc.start + 1.2 + 0.35 * figs[fid].order.length });
       for (const ln of sc.lines) {
         const tl = TL[ln.id];

@@ -195,6 +195,49 @@ const tests = {
     hasWarn(M, /図「im3」: 画像の出どころ（source）がない/);
     assert.ok(!M.warnings.some(w => /im1.*出どころ/.test(w)));
   },
+
+  // ---- Task 4: フレーム・最初から完成形・完成形に含めない部品 ----
+  async frame_behind_parts() {
+    const R = { col: [7, 12], row: [1, 6] };
+    const M = await build(deck({ p1: { title: "t", parts: [
+      { figure: "flow", area: { col: [1, 6], row: [1, 6] } },
+      { id: "fr", type: "frame", title: "定義", area: R },
+      { id: "defs", type: "text", blocks: [{ id: "p", kind: "para", text: "本文。" }], area: R }] } },
+      [SC("s1", "p1", [{ id: "l1", text: "出します。", do: [{ show: "fr" }, { show: "defs" }] }])], { flow: FLOW }));
+    assert.deepStrictEqual(M.errors, []);
+    const b = M.figs.fr.items.box.bbox, ar = M.scenes[0].areas[1];
+    assert.ok(Math.abs(b.w - ar.w) < 0.01 && Math.abs(b.h - ar.h) < 0.01, "枠は区画の大きさ");
+    assert.strictEqual(M.scenes[0].place.fr.s, 1);
+    assert.ok(M.figs.fr.items.title.texts[0].lines.join("") === "定義");
+    assert.ok(showAt(M, "fr/box", M.duration) > 0.99 && showAt(M, "fr/title", M.duration) > 0.99);
+    assert.ok(M.scenes[0].figs.indexOf("fr") < M.scenes[0].figs.indexOf("defs"), "宣言の順が描く順");
+  },
+  async complete_shows_all() {
+    const M = await build(deck({ p1: { ...TWO.p1, start: "complete" } }, [SC("s1", "p1")], { flow: FLOW }));
+    assert.deepStrictEqual(M.errors, []);
+    const t = lineEnd(M, "l_s1");
+    for (const k of ["flow/app", "flow/app>sys", "pts/a", "pts/b"]) assert.ok(showAt(M, k, t + 3) > 0.99, `${k} が出ている`);
+    assert.ok(!M.warnings.some(w => /show していない/.test(w)));
+  },
+  async complete_skips_transient() {
+    const M = await build(deck({ p1: { title: "t", start: "complete", parts: [
+      { figure: "flow", area: { col: [1, 12], row: [1, 6] } },
+      { id: "pts", type: "list", items: LIST, area: { col: [1, 12], row: [1, 6] }, transient: true }] } }, [SC("s1", "p1")], { flow: FLOW }));
+    assert.deepStrictEqual(M.errors, []);
+    assert.ok(showAt(M, "flow/app", M.duration) > 0.99);
+    assert.ok(showAt(M, "pts/a", M.duration) < 0.01, "完成形に含めない部品は自動では出ない");
+    assert.deepStrictEqual(M.slides.p1.transient, ["pts"]);
+  },
+  async complete_only_first_scene() {
+    const slides = { p1: { ...TWO.p1, start: "complete" }, p2: { title: "別", parts: [{ id: "other", type: "list", items: [{ id: "x", text: "別の話" }] }] } };
+    const M = await build(deck(slides, [
+      SC("s1", "p1", [{ id: "l1", text: "箇条を消します。", do: [{ hide: "pts", after: 2 }] }]),
+      SC("s2", "p2", [{ id: "l2", text: "別の話です。", do: [{ show: "other" }] }]),
+      SC("s3", "p1", [{ id: "l3", text: "戻ります。" }])], { flow: FLOW }));
+    assert.deepStrictEqual(M.errors, []);
+    assert.ok(showAt(M, "pts/a", M.duration) < 0.01, "戻っても、消した部品は消えたまま");
+    assert.ok(showAt(M, "flow/app", M.duration) > 0.99);
+  },
 };
 
 (async () => {

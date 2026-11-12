@@ -93,6 +93,20 @@
     },
   };
 
+  // ======== フレーム（frame）========
+  // 区画いっぱいの囲み。他の部品と同じ区画に重ねて、部品をまとめる枠にする（台本で、中に入る部品より前に書く）
+  FIG.frame = {
+    async layout(f, S, ctx) {
+      const W = ctx.area.w, H = ctx.area.h;
+      const items = [{ id: "box", kind: "text", texts: [], panel: { x: 0, y: 0, w: W, h: H, r: S.radius, fill: S.surface, stroke: S.line }, bbox: { x: 0, y: 0, w: W, h: H } }];
+      if (f.title) {
+        const T = UZ.mkText([String(f.title)], 16, 24, 18, { anchor: "start", weight: S.bold, color: S.muted });
+        items.push({ id: "title", kind: "text", texts: [T], bbox: { ...T.bbox } });
+      }
+      return { w: W, h: H, items, order: items.map(i => i.id), maxScale: 1 };
+    },
+  };
+
   // ======== 画像（image）========
   // 画像の大きさ（ctx.assets[src] の w・h）をそのまま図の大きさにし、区画に収まる最大まで伸び縮みさせる
   FIG.image = {
