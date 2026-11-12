@@ -46,7 +46,7 @@ python3 skills/make/scripts/check_text.py skills/make/examples/sequence.json
 python3 skills/make/scripts/ledger.py ingest <workdir> <評価役の出力.json …>
 python3 skills/make/scripts/ledger.py list <workdir> [--full] [--by lead|user] [--state open,fixing,kept,closed] [--json]   # must は全文、should は 1 件 1 行、nits は件数だけ
 python3 skills/make/scripts/ledger.py decide <workdir> --by lead|user [--fix <key> …] [--keep <key> …]   # lead = 進行役が先に直した、user = 利用者が選んだ。--keep は user だけ
-python3 skills/make/scripts/ledger.py decide <workdir> --by lead|user --close <key> … --note <理由>   # 直し中の指摘を、再確認なしで閉じる（must は user だけ）
+python3 skills/make/scripts/ledger.py decide <workdir> --by lead|user --close <key> … --note <理由>   # 直し中の指摘を、再確認なしで閉じる（must は user だけ。user は未対応の指摘も閉じられる）
 python3 skills/make/scripts/ledger.py status <workdir>     # 件数の要約
 python3 skills/make/scripts/ledger.py residual <workdir>   # must で直っていない指摘（残論点）を review/residual.md に書く
 
@@ -56,7 +56,7 @@ python3 skills/make/scripts/workdir.py new this-repo
 python3 skills/make/scripts/workdir.py publish <workdir> --url <Artifact の URL> [--theme koo] [--source <題材の場所>]
 python3 skills/make/scripts/workdir.py list [--json]
 
-# 各行の落ち着いたコマ（SVG と PNG のシート）。PNG には初回だけ resvg を入れる。終了コード 4 = PNG なし（SVG と frames.json だけ）
+# 各行の落ち着いたコマ（SVG と PNG のシート）と、スライドごとの完成形（svg/slide-<id>.svg と slide-<id>.png）。PNG には初回だけ resvg を入れる。終了コード 4 = PNG なし（SVG と frames.json だけ）
 python3 skills/make/scripts/setup_render.py
 node skills/make/scripts/frames.cjs skills/make/examples/sequence.json --theme koo -o work/frames
 node skills/make/scripts/frames.cjs skills/make/examples/mixed.json --theme koo -o work/frames-s2 --scenes s2   # 一部の場面のコマだけ書く（カンマ区切り。出力先の前の回のコマは消えるので、全体とは分ける。--lines l8,l33 なら、その行のある場面）

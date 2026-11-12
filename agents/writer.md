@@ -130,7 +130,7 @@ python3 ${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/check_text.py <workdir>/storyb
 node ${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/frames.cjs <workdir>/storyboard.json --theme <テーマ> -o <workdir>/frames-writer
 ```
 
-`svg/slide-<スライドの id>.svg` がスライドごとの完成形のコマ（`frames.json` の `slides`）、`sheet-NN.png` が行ごとのコマを 6 つずつ並べたシート（見るのは `frames.json` の `sheets` に載ったものだけ。PNG があるかは `frames.json` の `png` で分かる）、`frames.json` が行ごとの `sub_forced`・`settled`（読み方は `criteria/screen.md`）。終了コード 4 は PNG を書けなかったという意味なので、`svg/` と `frames.json` だけで見る。
+`svg/slide-<スライドの id>.svg` と `slide-<スライドの id>.png` がスライドごとの完成形のコマ（`frames.json` の `slides`。1 枚を大きく見るときは PNG）、`sheet-NN.png` が行ごとのコマを 6 つずつ並べたシート（見るのは `frames.json` の `sheets` に載ったものだけ。PNG があるかは `frames.json` の `png` で分かる）、`frames.json` が行ごとの `sub_forced`・`settled`（読み方は `criteria/screen.md`）。終了コード 4 は PNG を書けなかったという意味なので、`svg/` と `frames.json` だけで見る。
 
 最後に、基準 A-・G-・S-・V- を 1 つずつ自分で点検する（評価役の代わりではなく、漏れを減らすため）。点検は、作った順と同じに、スライド（A-・G-）→ 至り方（V-6）→ 原稿（S-）の順で行う。
 

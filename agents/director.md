@@ -53,7 +53,7 @@ tools: Read, Glob, Write
 
 ## `script`（スライド）
 
-見るのは、スライドの**完成形**である。完成形は、途中で消える部品（`transient`）を除いて、宣言した部品がすべて出た状態を指す。台本のスライドの宣言（`slides` の `title`・`statement`・`parts`・`area`、`figures`）と、完成形のコマ `<workdir>/frames/svg/slide-<スライドの id>.svg` を読む（`frames.json` の `slides` に、id・ファイル・使う場面がある。SVG は文字として読める。見出し・文・部品の位置が分かる）。完成形のコマがなければ、宣言だけで判定し、`evidence` に「完成形のコマがない」と書く。
+見るのは、スライドの**完成形**である。完成形は、途中で消える部品（`transient`）を除いて、宣言した部品がすべて出た状態を指す。台本のスライドの宣言（`slides` の `title`・`statement`・`parts`・`area`、`figures`）と、完成形のコマ `<workdir>/frames/svg/slide-<スライドの id>.svg` を読む（`frames.json` の `slides` に、id・ファイル・使う場面がある。SVG は文字として読める。見出し・文・部品の位置が分かる）。見た目（余白・揃え・大きさの釣り合い）は、同じスライドの PNG（`<workdir>/frames/slide-<スライドの id>.png`。`slides[].png`。PNG を書けなかったときはない）を画像として見る。完成形のコマがなければ、宣言だけで判定し、`evidence` に「完成形のコマがない」と書く。
 
 判定は、次の順に行う。**字幕（`text`）を読むのは、3 の後である。** 先に字幕を読むと、字幕がなくても読めるかを判定できなくなる。
 
@@ -104,6 +104,8 @@ tools: Read, Glob, Write
 ## 出力
 
 受け取った出力先のパスに、`review-format.md` の形で Write する。`reviewer` は `director`、`target` は受け取ったもの。`rule` には VG の約束番号を書いてよい。
+
+**最後の手順として、必ず出力先のファイルに Write する。** 本文で JSON を返したり、「JSON にしてください」と進行役に頼んだりしない（進行役は出力ファイルを `ledger.py ingest` で取り込む）。Write した後の返事は、出力先のパスと件数（must・should・nits）だけでよい
 
 - `level` は基準の表に従う。重さが must だけの基準（O-D1〜O-D4・O-D6・O-D8、A-1〜A-3・A-5、S-D1・S-D2、G-D1・G-D2・G-D11・G-D12、V-1〜V-4）の指摘は must。must と should を分けている基準（O-D7、A-4、G-D7・G-D13・G-D14、V-6）では、基準の表の定義どおりに付ける。should の基準（O-D5・O-D9、S-D4、G-D3〜G-D6、G-D8〜G-D10、G-D15、V-5）では、伝わりやすさに効くものを should、直さなくても伝わり方が変わらない好みの範囲を nits にする
 - 根拠の無い判定は無効になる

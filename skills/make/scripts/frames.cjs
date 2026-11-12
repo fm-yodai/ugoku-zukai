@@ -4,7 +4,8 @@
 //   --lines   カンマで区切った行の id。その行のある場面を --scenes で選んだのと同じになる（直しは行の id で来るため）
 //   --scenes  カンマで区切った場面の id。その場面の行だけを書く（配置と時刻は台本全体で計算するので、コマの中身は全体のときと同じ）。
 //             出力先にある前の回のコマは消えるので、全体のコマを残したいときは出力先を分ける
-// 書くもの: <出力先>/svg/<行 id>.svg、台本にスライドがあれば <出力先>/svg/slide-<スライドの id>.svg（完成形のコマ。frames.json の slides[] に id・svg・使う場面）、<出力先>/sheet-NN.png、<出力先>/frames.json（始めに、前の回のこの 3 つだけを消す）
+// 書くもの: <出力先>/svg/<行 id>.svg、台本にスライドがあれば <出力先>/svg/slide-<スライドの id>.svg と <出力先>/slide-<スライドの id>.png
+//   （完成形のコマ。frames.json の slides[] に id・svg・png・使う場面）、<出力先>/sheet-NN.png、<出力先>/frames.json（始めに、前の回のこれらだけを消す）
 // シート: 1280×1170。1 コマは 640×390（上に 30 の帯「行 id ＋字幕の頭 20 字」、その下に 640×360 のコマ）を 2 列 × 3 行
 // frames.json の timed = 時刻の出どころ（voice = --timeline で渡した合成した声の時刻表、estimate = 文字数からの見積もり）
 // frames.json の lines[].start = その行の始まりの時刻、t = コマを取った時刻、sub_forced = 再生ではその時刻に字幕が出ていない（または薄い）ので補った、settled = その行の動作がすべて終わっている
@@ -102,7 +103,7 @@ const esc = s => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(
   const L = M.timeline.lines;
   // 前の回の残り（行が減ったときの古いシートや SVG）を読まないよう、frames.cjs が書くものだけ消す。ほかのファイルは触らない
   if (fs.existsSync(outDir)) {
-    for (const f of fs.readdirSync(outDir)) if (/^sheet-.*\.png$/.test(f) || f === "frames.json") fs.rmSync(path.join(outDir, f), { force: true });
+    for (const f of fs.readdirSync(outDir)) if (/^(sheet|slide)-.*\.png$/.test(f) || f === "frames.json") fs.rmSync(path.join(outDir, f), { force: true });
     fs.rmSync(path.join(outDir, "svg"), { recursive: true, force: true });
   }
   fs.mkdirSync(path.join(outDir, "svg"), { recursive: true });
@@ -139,9 +140,9 @@ const esc = s => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(
     forceFrame = UZ.finalFrame(M, sl.id);
     new UZ.View(svg, M).render(forceFrame.t);
     forceFrame = null;
-    const rel = `svg/slide-${sl.id}.svg`;
-    fs.writeFileSync(path.join(outDir, rel), serialize(svg, { xmlns: "http://www.w3.org/2000/svg", width: W, height: H }));
-    slides.push({ id: sl.id, svg: rel, scenes: sl.scenes });
+    const rel = `svg/slide-${sl.id}.svg`, str = serialize(svg, { xmlns: "http://www.w3.org/2000/svg", width: W, height: H });
+    fs.writeFileSync(path.join(outDir, rel), str);
+    slides.push({ id: sl.id, svg: rel, png: `slide-${sl.id}.png`, scenes: sl.scenes, _svg: str });
   }
 
   // シート: 6 コマずつ、帯の下に入れ子の <svg>（はみ出しを切る）を置き、<g transform> で並べる
@@ -167,16 +168,23 @@ const esc = s => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(
 
   const Resvg = loadResvg();
   const writeJson = png => fs.writeFileSync(path.join(outDir, "frames.json"),
-    JSON.stringify({ png, timed: tl ? "voice" : "estimate", storyboard_sha256: sbHash, sheets: sheets.map(({ file: f, lines }) => ({ file: f, lines })), lines: frames, slides }, null, 2) + "\n");
+    JSON.stringify({ png, timed: tl ? "voice" : "estimate", storyboard_sha256: sbHash, sheets: sheets.map(({ file: f, lines }) => ({ file: f, lines })), lines: frames,
+      slides: slides.map(({ _svg, png: p, ...x }) => (png ? { ...x, png: p } : x)) }, null, 2) + "\n");
   if (!Resvg) {
     writeJson(false);
     console.error(`resvg を読めない（置き場 ${renderHome()}）。PNG は作らず SVG と frames.json だけ書いた。python3 setup_render.py を実行する`);
     process.exit(4);
   }
   try {
+    const fontOpt = { loadSystemFonts: true, defaultFontFamily: fonts[0], sansSerifFamily: fonts[0] };
     for (const sh of sheets) {
-      const r = new Resvg(sh.svg, { font: { loadSystemFonts: true, defaultFontFamily: fonts[0], sansSerifFamily: fonts[0] }, background: "#ffffff" });
+      const r = new Resvg(sh.svg, { font: fontOpt, background: "#ffffff" });
       fs.writeFileSync(path.join(outDir, sh.file), r.render().asPng());
+    }
+    // スライドの完成形は 1 枚ずつ PNG にする（進行役や評価役が 1 枚を大きく見るため。シートと同じく、日本語の字体を最後の候補に足す）
+    for (const sl of slides) {
+      const str = sl._svg.replace(/font-family="([^"]*)"/g, (m0, v) => `font-family="${v}, ${esc(famList)}"`);
+      fs.writeFileSync(path.join(outDir, sl.png), new Resvg(str, { font: fontOpt }).render().asPng());
     }
   } catch (e) {
     writeJson(false);
@@ -184,5 +192,5 @@ const esc = s => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(
     process.exit(4);
   }
   writeJson(true);
-  console.log(`${frames.length} コマ、シート ${sheets.length} 枚 → ${outDir}`);
+  console.log(`${frames.length} コマ、シート ${sheets.length} 枚${slides.length ? `、スライドの完成形 ${slides.length} 枚` : ""} → ${outDir}`);
 })().catch(e => { console.error(e); process.exit(1); });

@@ -159,7 +159,10 @@ code=$?
 node -e '
 const fs = require("fs"), [dir, legacy] = process.argv.slice(1);
 const fr = JSON.parse(fs.readFileSync(dir + "/frames.json", "utf8"));
-let ok = JSON.stringify(fr.slides) === JSON.stringify([{ id: "p1", svg: "svg/slide-p1.svg", scenes: ["s1"] }, { id: "p2", svg: "svg/slide-p2.svg", scenes: ["s2"] }]);
+// PNG を書けたとき（fr.png）は、スライドごとの PNG（slide-<id>.png）も slides[].png に載り、ファイルがある
+const want = ["p1", "p2"].map((id, i) => ({ id, svg: `svg/slide-${id}.svg`, scenes: [`s${i + 1}`], ...(fr.png ? { png: `slide-${id}.png` } : {}) }));
+let ok = JSON.stringify(fr.slides) === JSON.stringify(want);
+if (fr.png) ok = ok && want.every(x => fs.existsSync(dir + "/" + x.png));
 const fin = fs.readFileSync(dir + "/svg/slide-p1.svg", "utf8"), line = fs.readFileSync(dir + "/svg/l1.svg", "utf8");
 // 完成形には、行でまだ出していない部品（二つ目の項目・段落）も出ていて、字幕は出ていない
 ok = ok && fin.includes("二つ目の項目") && fin.includes("強調") && fin.includes("言いたいことの文。") && !fin.includes("一つ目だけ出します。");

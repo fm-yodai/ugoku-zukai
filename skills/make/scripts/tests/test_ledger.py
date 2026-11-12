@@ -372,6 +372,20 @@ class LedgerTest(unittest.TestCase):
         self.assertIn("直し中", se)
         self.assertEqual(self.items()["l1:S-W4"]["state"], "open")
 
+    def test_close_open_by_user(self):      # 指摘と違う直し方を利用者が選んだときは、--fix を挟まずに閉じられる（通し 4）
+        self.run("ingest", self.wd, self.out("director", [F("s9:V-6")]))
+        rc, so, se = self.run("decide", self.wd, "--by", "user", "--close", "s9:V-6", "--note", "説明枠を循環図の上下中央に揃えた")
+        self.assertEqual(rc, 0, se)
+        it = self.items()["s9:V-6"]
+        self.assertEqual((it["state"], it["by"]), ("closed", "user"))
+        self.assertEqual(it["history"][-1], ["close:user", "説明枠を循環図の上下中央に揃えた"])
+        # 直さないと決めた指摘（kept）は閉じない
+        self.run("ingest", self.wd, self.out("director", [F("s10:V-6")]))
+        self.run("decide", self.wd, "--by", "user", "--keep", "s10:V-6")
+        rc, _, se = self.run("decide", self.wd, "--by", "user", "--close", "s10:V-6", "--note", "x")
+        self.assertEqual(rc, 2)
+        self.assertEqual(self.items()["s10:V-6"]["state"], "kept")
+
     def test_close_must_only_by_user(self):  # must を、評価役の再確認なしで進行役だけでは閉じない
         self.run("ingest", self.wd, self.out("fact-checker", [F("l1:S-F1")]))
         self.run("decide", self.wd, "--by", "user", "--fix", "l1:S-F1")

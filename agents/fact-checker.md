@@ -73,6 +73,8 @@ tools: Read, Grep, Glob, Write, WebFetch, WebSearch, Bash(git show *), Bash(git 
 
 受け取った出力先のパスに、`review-format.md` の形で Write する。`reviewer` は `fact-checker`、`target` は受け取ったもの。
 
+**最後の手順として、必ず出力先のファイルに Write する。** 本文で JSON を返したり、「JSON にしてください」と進行役に頼んだりしない（進行役は出力ファイルを `ledger.py ingest` で取り込む）。Write した後の返事は、出力先のパスと件数（must・should・nits）だけでよい
+
 - **`level` は基準の表に従う**。O-F1・O-F2・S-F1・S-F2・S-F5 は must だけの基準なので、誤り・言い過ぎ・根拠不足はすべて must にする（軽く見えても should や nits にしない。取り込むときに must に直される）。S-F4 は should。直さなくても聴衆の理解が変わらない細部は nits にしてよい
 - `where` は、原稿の行なら行の id（`l7`）。スライドのテキストと、スライドの中で宣言した図なら、そのスライドを最初に使う場面の id（`s3`）にして、`problem` の頭にスライドの id とブロックの id を書く。`figures` に宣言した図は図の id でもよい。構成メモなら、基本の項目は `basics.<キー>`、章の意図は章の id（`c3`）、全体は `*`。キーの頭（`l7:S-F1` の `l7`）と同じにする
 - **FAIL にした基準には、必ず指摘（`findings`）を 1 つ以上付ける。** 指摘のない FAIL は、場所のない must（`*:S-F2`）として取り込まれ、直す人が場所を探せない。中身がほかの基準の指摘と同じなら、その基準は FAIL にせず、`checks` の `evidence` に「`l22:S-F1` と同じ」とキーを書く

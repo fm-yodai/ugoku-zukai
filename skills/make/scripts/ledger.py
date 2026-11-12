@@ -6,7 +6,7 @@ references/writing/review-format.md が正。
   python3 ledger.py decide   <workdir> --by lead|user [--fix <key> …] [--keep <key> …]
                                                                 直す（--fix）・直さない（--keep）を記録する。
                                                                 lead = 進行役が先に直した、user = 利用者が選んだ。--keep は user だけ
-  python3 ledger.py decide   <workdir> --by lead|user --close <key> … --note <理由>
+  python3 ledger.py decide   <workdir> --by lead|user --close <key> … --note <理由>   # lead は直し中だけ、user は未対応も閉じられる
                                                                 直し中（fixing）の指摘を、評価役の再確認なしで閉じる（評価役の見落としだった、
                                                                 利用者が別の言い方に直した、など）。理由は履歴に残る。must を閉じられるのは user だけ
   python3 ledger.py list     <workdir> [--state open,fixing,kept,closed] [--by lead|user] [--reviewer <名前>] [--full] [--json]
@@ -34,6 +34,7 @@ references/writing/review-format.md が正。
   rechecks の FAIL                 → fixing と closed は open に戻す。open と kept はそのまま
   decide --fix                     → open を fixing にし、by を記録する。kept を fixing にできるのは --by user だけ。closed と fixing は警告して飛ばす
   decide --keep（--by user だけ）  → open と fixing を kept にし、by を user にする
+  decide --close（--note が要る）  → fixing を closed にする。--by user なら open も closed にできる（指摘と違う直し方を利用者が選んだとき）
 
 取り込みの決まり:
   evidence のない指摘と再確認は捨てて警告する。evidence のない PASS は UNKNOWN として扱う
@@ -281,14 +282,19 @@ def decide(workdir, by, fix, keep, close=(), note=""):
         missing = [k for k in close if k not in led["items"]]
         if missing:
             raise Refuse("台帳にないキー: " + "、".join(missing))
-        bad = [k for k in close if led["items"][k]["state"] != "fixing"]
+        # 利用者は、指摘とは違う直し方を選んで直したときなど、未対応（open）の指摘も直接閉じられる。進行役は直し中（fixing）だけ
+        ok = ("fixing", "open") if by == "user" else ("fixing",)
+        bad = [k for k in close if led["items"][k]["state"] not in ok]
         if bad:
-            raise Refuse("--close で閉じられるのは直し中（fixing）の指摘だけ（先に --fix。直さないなら --keep）: " + "、".join(bad))
+            raise Refuse(("--by user --close で閉じられるのは、未対応（open）か直し中（fixing）の指摘だけ: " if by == "user" else
+                          "--by lead --close で閉じられるのは直し中（fixing）の指摘だけ（先に --fix。直さないなら --keep）: ") + "、".join(bad))
         musts = [k for k in close if led["items"][k]["level"] == "must"]
         if musts and by != "user":
             raise Refuse("must の指摘を再確認なしで閉じられるのは利用者だけ（--by user。そうでなければ評価役に再確認を頼む）: " + "、".join(musts))
         for k in close:
             it = led["items"][k]
+            if it["state"] == "open":
+                it["by"] = "user"
             it["state"] = "closed"
             log(it, f"close:{by}", note)
         save(workdir, led)

@@ -258,6 +258,7 @@ python3 ${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/ledger.py status <workdir>
 
 ```sh
 python3 ${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/ledger.py decide <workdir> --by lead --close l18:S-W4 --note "read は前から付いていた"
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/ledger.py decide <workdir> --by user --close s9:V-6 --note "利用者が、説明枠を循環図の上下中央に揃える直し方を選んだ"   # 利用者が違う直し方を選んだときは、未対応のままでも閉じられる
 ```
 - スライドへの指摘のキーは、そのスライドを最初に使う場面の id で始まる（`s4:A-3`）。どのスライドのどの部品かは、指摘の本文の頭に書いてある（`review-format.md` の「`where` の書き方」）
 - どの評価役の指摘かは、`list --full` と `--json` の `reviewer` で分かる（`--reviewer director` で絞れる）

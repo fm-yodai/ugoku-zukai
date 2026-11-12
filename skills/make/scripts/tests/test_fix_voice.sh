@@ -7,6 +7,15 @@ fail=0
 ng() { echo "NG: $1"; fail=1; }
 d=$(mktemp -d)
 cp scripts/tests/text/warn.json "$d/sb.json"
+# 文の警告の見本から、最初の 3 行（l1〜l3）だけを使う（見本の行が増えても、この検査の前提を変えない）
+python3 - "$d/sb.json" <<'EOF0'
+import json, sys
+p = sys.argv[1]
+sb = json.load(open(p, encoding="utf-8"))
+for sc in sb["scenes"]:
+    sc["lines"] = [ln for ln in sc["lines"] if ln["id"] in ("l1", "l2", "l3")]
+json.dump(sb, open(p, "w", encoding="utf-8"), ensure_ascii=False)
+EOF0
 # 終了コード 3（時間で区切った）の間くり返し、最後の回の出力を出す
 synth() {
   local out code

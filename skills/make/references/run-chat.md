@@ -257,6 +257,7 @@ python3 <skill>/scripts/ledger.py status <workdir>
 
 ```sh
 python3 <skill>/scripts/ledger.py decide <workdir> --by lead --close l18:S-W4 --note "read は前から付いていた"
+python3 <skill>/scripts/ledger.py decide <workdir> --by user --close s9:V-6 --note "利用者が、説明枠を循環図の上下中央に揃える直し方を選んだ"   # 利用者が違う直し方を選んだときは、未対応のままでも閉じられる
 ```
 - 直しが合意に関わるなら、先に構成メモを直して検査し、それから台本を直す
 - `*` で始まるキー（場所の決まらない指摘）は、シェルに展開されないよう引用符で囲む（`--fix '*:V-1'`）
