@@ -21,6 +21,7 @@ SLIDE_SB = os.path.join(SCRIPTS, "..", "examples", "slide-forms.json")
 SLIDE_OUTLINE = os.path.join(SCRIPTS, "..", "examples", "outlines", "slide-forms.json")
 
 sys.path.insert(0, SCRIPTS)
+sys.path.insert(0, HERE)
 try:
     import build_sheet
 except ImportError:  # まだ無いときは、各検査が失敗で知らせる
@@ -294,6 +295,81 @@ class BuildSheetTest(unittest.TestCase):
             self.assertIn(f"<h2>{title}</h2>", html)
         self.assertNotIn('class="us-intent"', html)
         self.assertEqual(html.count('class="us-final"'), 4)
+
+    # ---- 複数案（--alts）----
+    def alts_setup(self, options=None, replaces=None):
+        """作業フォルダ（見本と同じ画像を持つ）に、今の台本と案 B の台本・コマ・alts.json を作る。戻り値: (作業フォルダ, alts.json のパス)"""
+        import alt_fixture
+        wd = self.newdir()
+        os.makedirs(os.path.join(wd, "alts", "g1", "b"))
+        shutil.copytree(os.path.join(os.path.dirname(SLIDE_SB), "assets"), os.path.join(wd, "assets"))
+        shutil.copytree(os.path.join(wd, "assets"), os.path.join(wd, "alts", "g1", "b", "assets"))
+        shutil.copy(SLIDE_SB, os.path.join(wd, "storyboard.json"))
+        with open(os.path.join(wd, "alts", "g1", "b", "storyboard.json"), "w", encoding="utf-8") as f:
+            json.dump(alt_fixture.variant_b(load(SLIDE_SB)), f, ensure_ascii=False)
+        for sb, out in ((os.path.join(wd, "storyboard.json"), "frames"), (os.path.join(wd, "alts", "g1", "b", "storyboard.json"), "alts/g1/b/frames")):
+            r = subprocess.run(["node", FRAMES, sb, "--theme", "koo", "-o", os.path.join(wd, out)], capture_output=True, text=True)
+            assert r.returncode in (0, 4), r.stderr
+        opts = options or [
+            {"name": "案 A", "diff": "図を左、定義を右に置く", "storyboard": "storyboard.json", "frames": "frames"},
+            {"name": "案 B", "diff": "定義を 2 枚に分け、図をなくす", "storyboard": "alts/g1/b/storyboard.json", "frames": "alts/g1/b/frames",
+             "slides": alt_fixture.OPTION_B_SLIDES}]
+        path = os.path.join(wd, "alts.json")
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump({"groups": [{"id": "g1", "replaces": replaces or ["definitions"], "options": opts}]}, f, ensure_ascii=False)
+        return wd, path
+
+    def build_alts(self, wd, path):
+        return self.build(os.path.join(wd, "storyboard.json"), os.path.join(wd, "frames"), "--outline", SLIDE_OUTLINE, "--alts", path)
+
+    def test_alts_block(self):
+        wd, path = self.alts_setup()
+        r, html = self.build_alts(wd, path)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(html.count('class="us-alts"'), 1)
+        self.assertEqual(html.count('class="us-alt"'), 2)
+        a, b = html.split('class="us-alt"')[1:]
+        b = b.split("<!--/us-alts-->")[0]
+        self.assertIn("<h3>案 A</h3>", a)
+        self.assertIn("図を左、定義を右に置く", a)
+        self.assertEqual(a.count('class="us-final"'), 1)
+        self.assertIn(load(SLIDE_OUTLINE)["chapters"][1]["slides"][0]["intent"]["text"], a)   # 案 A の意図は構成メモのもの
+        self.assertIn("s3 / l4 @", a)
+        self.assertIn("<h3>案 B</h3>", b)
+        self.assertEqual(b.count('class="us-final"'), 2)
+        for word in ("定義を 2 枚に分け、図をなくす", "ユーザビリティの定義だけを、落ち着いて読める", "前のスライドから: 同じ形で、広いほうの語に進む", "s3a / l4a @", "s3b / l4b @"):
+            self.assertIn(word, b)
+        # 案の段の外には、置き換える範囲のスライドの段も行も出ない。ほかのスライドは今までどおり
+        outside = html.split('class="us-alts"')[0] + html.split('class="us-alts"')[1].split("</div><!--/us-alts-->")[1]
+        self.assertNotIn("s3 / l4 @", outside)
+        self.assertEqual(outside.count('class="us-final"'), 3)
+        self.assertIn("s4 / l8 @", outside)
+        self.assertNotIn("<script", html)
+
+    def test_alts_errors(self):
+        wd, path = self.alts_setup()
+        good = load(path)
+
+        def run(change):
+            d = json.loads(json.dumps(good))
+            change(d)
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(d, f, ensure_ascii=False)
+            r, html = self.build_alts(wd, path)
+            self.assertEqual(r.returncode, 2)
+            self.assertEqual(html, "")
+            return r.stderr
+        g = lambda d: d["groups"][0]
+        self.assertIn("スライド「nai」が台本にない", run(lambda d: g(d).update(replaces=["nai"])))
+        self.assertIn("続いていない", run(lambda d: g(d).update(replaces=["relation", "ux-def"])))
+        self.assertIn("案は 2〜4 つ", run(lambda d: g(d).update(options=g(d)["options"][:1])))
+        self.assertIn("案の名前「案 A」が重なっている", run(lambda d: g(d)["options"][1].update(name="案 A")))
+        self.assertIn("台本がない", run(lambda d: g(d)["options"][1].update(storyboard="alts/g1/x/storyboard.json")))
+        self.assertIn("frames.json", run(lambda d: g(d)["options"][1].update(frames="alts/g1/x/frames")))
+        self.assertIn("スライド「nai」が、案「案 B」の台本にない", run(lambda d: g(d)["options"][1].update(slides=[{"id": "nai", "intent": "x"}])))
+        r, html = self.build(os.path.join(wd, "storyboard.json"), os.path.join(wd, "frames"), "--alts", os.path.join(wd, "none.json"))
+        self.assertEqual(r.returncode, 2)
+        self.assertIn("alts.json", r.stderr)
 
     # ---- まだ決めていないこと（構成メモの open）と、時刻の出どころ ----
     def outline_with_open(self, items):
