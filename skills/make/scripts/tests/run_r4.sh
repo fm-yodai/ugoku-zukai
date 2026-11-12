@@ -5,6 +5,7 @@ cd "$(dirname "$0")/../.."
 fail=0
 ng() { echo "NG: $1"; fail=1; }
 node scripts/tests/test_slides.cjs >/dev/null 2>&1 || { ng "test_slides.cjs"; node scripts/tests/test_slides.cjs; }
+node scripts/tests/test_figures_more.cjs >/dev/null 2>&1 || { ng "test_figures_more.cjs"; node scripts/tests/test_figures_more.cjs; }
 node scripts/tests/test_outline_pair.cjs >/dev/null 2>&1 || { ng "test_outline_pair.cjs"; node scripts/tests/test_outline_pair.cjs; }
 python3 scripts/tests/test_assets.py >/dev/null 2>&1 || { ng "test_assets.py"; python3 scripts/tests/test_assets.py; }
 python3 scripts/tests/test_alts.py >/dev/null 2>&1 || { ng "test_alts.py"; python3 scripts/tests/test_alts.py; }

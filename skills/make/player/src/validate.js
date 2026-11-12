@@ -120,6 +120,17 @@
           for (const k of ["from", "to", "at"]) if (it[k] != null && !per.has(it[k])) E(`${where}: 項目 ${it.id} の ${k}「${it[k]}」が periods にない`);
           if (it.at == null && it.from == null) E(`${where}: 項目 ${it.id} に from（帯）か at（マイルストーン）がない`);
         }
+        // 矢印（links）: 項目から項目へ。右の期間か、期間が重なる項目へ引く（右から左へは引けない）
+        const pi = Object.fromEntries((f.periods || []).map((p, i) => [typeof p === "string" ? p : p.id, i]));
+        const span = it => { const a = pi[it.at ?? it.from], b = it.at != null ? a : pi[it.to ?? it.from]; return [a, b]; };
+        const byId = Object.fromEntries((f.items || []).map(it => [it.id, it]));
+        if (f.links != null && !Array.isArray(f.links)) E(`${where}: links は { from, to, label } の列で書く`);
+        for (const l of Array.isArray(f.links) ? f.links : []) {
+          if (!l || !byId[l.from] || !byId[l.to] || l.from === l.to) { E(`${where}: links の from・to は、別々の項目の id を書く（${JSON.stringify(l)}）`); continue; }
+          if (ids.has(`${l.from}>${l.to}`)) E(`${where}: 矢印 ${l.from}>${l.to} が重複している`);
+          ids.add(`${l.from}>${l.to}`);
+          if (span(byId[l.to])[1] < span(byId[l.from])[0]) E(`${where}: 矢印 ${l.from}>${l.to} は右から左へ向かう（矢印は、右の期間か、期間が重なる項目へ引く）`);
+        }
       }
       if (f.type === "tree") {
         const walk = (n, d) => { if (!n || typeof n !== "object") { E(`${where}: ノードがオブジェクトでない`); return; } addId(n.id, "ノード"); role(n.role, n.id); if (!n.label) E(`${where}: ノード ${n.id} に label がない`); if (d > 4) W(`${where}: 5 段より深い（読み切れない）`); for (const c of n.children || []) walk(c, d + 1); };
@@ -141,7 +152,8 @@
       }
       if (f.type === "matrix") {
         if (!f.x || !f.x.label || !f.y || !f.y.label) E(`${where}: x.label と y.label が要る`);
-        for (const k of Object.keys(f.quadrants || {})) { if (!["tl", "tr", "bl", "br"].includes(k)) E(`${where}: quadrants のキーは tl / tr / bl / br`); const q = f.quadrants[k]; addId(typeof q === "object" && q.id ? q.id : k, "象限"); }
+        for (const k of Object.keys(f.quadrants || {})) { if (!["tl", "tr", "bl", "br"].includes(k)) E(`${where}: quadrants のキーは tl / tr / bl / br`); const q = f.quadrants[k]; addId(typeof q === "object" && q.id ? q.id : k, "象限");
+          if (q && typeof q === "object") { role(q.role, q.id || k); if (q.off && q.role) E(`${where}: 象限 ${q.id || k} に off と role は同時に書けない（off = 該当しない象限のグレー）`); } }
         for (const it of f.items || []) { addId(it.id, "点"); role(it.role, it.id); if (!(it.x >= 0 && it.x <= 1 && it.y >= 0 && it.y <= 1)) E(`${where}: 点 ${it.id} の x / y は 0〜1`); }
       }
       if (f.type === "pyramid") {
@@ -154,10 +166,25 @@
         if ((f.steps || []).length < 3 || f.steps.length > 8) E(`${where}: 段階は 3〜8 個`);
       }
       if (f.type === "venn") {
-        if ((f.sets || []).length < 2 || f.sets.length > 3) E(`${where}: 集合は 2 か 3 個`);
-        const ss = new Set();
-        for (const st of f.sets || []) { addId(st.id, "集合"); role(st.role, st.id); ss.add(st.id); }
-        for (const o of f.overlaps || []) { addId(o.id, "重なり"); if (!Array.isArray(o.of) || o.of.length < 2 || o.of.some(x => !ss.has(x))) E(`${where}: 重なり ${o.id} の of は sets の id を 2 つ以上`); }
+        const all = f.sets || [], ss = new Set();
+        for (const st of all) { addId(st.id, "集合"); role(st.role, st.id); ss.add(st.id); }
+        // 包含（inside）: 相手は別の集合。輪にしない。1 つの集合に含めるのは 2 つまで
+        const inner = new Set(), nKids = {};
+        for (const st of all) {
+          if (st.inside == null) continue;
+          if (!ss.has(st.inside) || st.inside === st.id) { E(`${where}: 集合 ${st.id} の inside「${st.inside}」が sets にない（別の集合の id を書く）`); continue; }
+          inner.add(st.id); nKids[st.inside] = (nKids[st.inside] || 0) + 1;
+          const seen = new Set([st.id]);
+          for (let c = st; c && c.inside != null; c = all.find(x => x.id === c.inside)) { if (seen.has(c.inside)) { E(`${where}: 集合 ${st.id} の inside が輪になっている`); break; } seen.add(c.inside); }
+        }
+        for (const [id, k] of Object.entries(nKids)) if (k > 2) E(`${where}: 集合 ${id} に含める集合（inside）は 2 つまで`);
+        const nTop = all.length - inner.size;
+        if (inner.size ? (nTop < 1 || nTop > 3) : (all.length < 2 || all.length > 3)) E(`${where}: 集合は 2 か 3 個（inside で含まれる集合は数えない。含む集合が 1 つだけでもよい）`);
+        for (const o of f.overlaps || []) {
+          addId(o.id, "重なり");
+          if (!Array.isArray(o.of) || o.of.length < 2 || o.of.some(x => !ss.has(x))) E(`${where}: 重なり ${o.id} の of は sets の id を 2 つ以上`);
+          else if (o.of.some(x => inner.has(x))) E(`${where}: 重なり ${o.id} の of に、含まれる集合（inside のある集合）は書けない`);
+        }
       }
       if (f.type === "text") {
         if (!Array.isArray(f.blocks) || !f.blocks.length) E(`${where}: blocks（テキストのブロックの列）がない`);

@@ -230,6 +230,12 @@
         items.push({ id: row.tr.id, kind: "band", ...bb, r: 6, texts: t ? [t] : [], bbox: bb, members: bars.filter(b => b.tr === row.tr).map(b => b.it.id), lane: true });
         order.push(row.tr.id);
       }
+      // 矢印（links）: 右の期間の項目へは横向き、期間が重なる項目へは縦向き。横向きの矢印が出入りする帯の端は、矢じりが入るぶん短くする
+      const barOf = Object.fromEntries(bars.map(b => [b.it.id, b]));
+      const links = (f.links || []).filter(l => barOf[l.from] && barOf[l.to] && l.from !== l.to).map(l => ({ ...l, A: barOf[l.from], B: barOf[l.to] }));
+      for (const l of links) l.horiz = l.B.a > l.A.b;
+      const cutR = new Set(links.filter(l => l.horiz).map(l => l.from)), cutL = new Set(links.filter(l => l.horiz).map(l => l.to));
+      const CUT = 14, geo = {};
       for (const { it, a, b, r, tr } of bars) {
         const row = trackRows.find(x => x.tr === tr);
         const top = row.y + 15 + r * (barH + rowGap), color = S.border(it.at != null ? it.role || "accent" : it.role || "process");
@@ -238,14 +244,32 @@
           const lab = T(UZ.wrap(it.label, 18, colW - 10, 700, 2), cx + d + 8, cy, 18, { anchor: "start", weight: 700, color: S.ink });
           items.push({ id: it.id, kind: "box", shape: "diamond", x: cx - d, y: cy - d, w: d * 2, h: d * 2, r: 0, stroke: color, fill: S.fill(it.role || "accent"), texts: [], label: lab,
             bbox: { x: cx - d, y: cy - d, w: d * 2, h: d * 2 }, dotAt: [cx, cy] });
+          geo[it.id] = { x0: cx - d, x1: cx + d, out: lab.bbox.x + lab.bbox.w + 6, y0: cy - d, y1: cy + d, cy };
         } else {
-          const x = X(a) + 8, w = X(b + 1) - X(a) - 16;
+          const x = X(a) + 8 + (cutL.has(it.id) ? CUT : 0), w = X(b + 1) - 8 - (cutR.has(it.id) ? CUT : 0) - x;
+          geo[it.id] = { x0: x, x1: x + w, out: x + w, y0: top, y1: top + barH, cy: top + barH / 2 };
           const lines = UZ.wrap(it.label, 19, w - 24, 500, 2);
           const fs = lines.length > 1 ? 17 : 19;
           const t = T(UZ.wrap(it.label, fs, w - 20, 500, 2), x + 14, top + barH / 2, fs, { anchor: "start", weight: 500, color: S.label(it.role || "process"), lineH: fs + 3 });
           items.push({ id: it.id, kind: "bar", x, y: top, w, h: barH, r: 8, grow: "right", stroke: color, fill: S.fill(it.role || "process"), texts: [t], bbox: { x, y: top, w, h: barH } });
         }
       }
+      const linkIds = [];
+      for (const l of links) {
+        const A = geo[l.from], B = geo[l.to];
+        let pts;
+        if (l.horiz) {
+          if (Math.abs(A.cy - B.cy) < 0.5) pts = [[A.out, A.cy], [B.x0, B.cy]];
+          else { const mx = Math.max(A.out + 12, B.x0 - 22); pts = [[A.out, A.cy], [mx, A.cy], [mx, B.cy], [B.x0, B.cy]]; }
+        } else {
+          const x = (Math.max(A.x0, B.x0) + Math.min(A.x1, B.x1)) / 2, down = B.cy > A.cy;
+          pts = [[x, down ? A.y1 : A.y0], [x, down ? B.y0 : B.y1]];
+        }
+        const id = `${l.from}>${l.to}`;
+        items.push(edgeItem(S, id, pts, { label: labelOn(S, pts, l.label, 17), from: l.from, to: l.to }));
+        linkIds.push(id);
+      }
+      order.push(...linkIds);
       // いま
       if (f.now != null) {
         const i = pIdx[f.now.period ?? f.now] ?? 0, x = X(i) + colW * (f.now.pos ?? 0.5);
@@ -429,6 +453,9 @@
     },
   };
 
+  // 象限の塗り。該当しない象限（off）はグレーで沈め、当てはまる象限は役割の色を薄く敷く
+  UZ.QUAD_OFF = S => C.rgba(S.muted, 0.2);
+  UZ.QUAD_ON = color => C.rgba(color, 0.16);
   // ======== 2×2 マトリクス（matrix）========
   // x / y の軸と 4 象限。items は 0〜1 の座標で置く点。move の to に {x, y} を書くと点が動く
   FIG.matrix = {
@@ -441,12 +468,13 @@
         const o = typeof q[k] === "string" ? { label: q[k] } : q[k];
         const id = o.id || k, [qx, qy] = QP[k];
         const x = ox + qx * W / 2, y = oy + qy * H / 2;
-        const hl = o.role ? C.rgba(S.role(o.role), 0.12) : C.rgba(S.ink, 0.025);
+        // 塗り: 役割の色（role）か、該当しない象限のグレー（off）。どちらもなければ、ほぼ地の色
+        const hl = o.off ? UZ.QUAD_OFF(S) : o.role ? UZ.QUAD_ON(S.role(o.role)) : C.rgba(S.ink, 0.025);
         const lx = qx ? x + W / 2 - 14 : x + 14;
-        const tl = T(UZ.wrap(o.label, 21, W / 2 - 40, 700, 2), lx, y + 26, 21, { anchor: qx ? "end" : "start", weight: 700, color: o.role ? S.role(o.role) : S.muted });
+        const tl = T(UZ.wrap(o.label, 21, W / 2 - 40, 700, 2), lx, y + 26, 21, { anchor: qx ? "end" : "start", weight: 700, color: o.role && !o.off ? S.role(o.role) : S.muted });
         const texts = [tl];
         if (o.sub) texts.push(T(UZ.wrap(o.sub, 15, W / 2 - 40, 400, 2), lx, tl.bbox.y + tl.bbox.h + 14, 15, { anchor: qx ? "end" : "start", color: S.muted }));
-        items.push({ id, kind: "rect", x, y, w: W / 2, h: H / 2, r: 0, fill: hl, texts, bbox: { x, y, w: W / 2, h: H / 2 }, quad: true });
+        items.push({ id, kind: "rect", x, y, w: W / 2, h: H / 2, r: 0, fill: hl, texts, bbox: { x, y, w: W / 2, h: H / 2 }, quad: true, off: !!o.off });
         order.push(id);
       }
       // 軸
@@ -574,29 +602,56 @@
   };
 
   // ======== ベン図（venn）========
-  // sets は 2〜3 個。overlaps で重なりに言葉を置く（of: 重なる集合の id）
+  // sets のうち inside のないものが、重なり合う円（1〜3 個）。overlaps で重なりに言葉を置く（of: 重なる集合の id）
+  // inside: "<集合の id>" と書いた集合は、その円の内側に小さく描く（包含。1 つの円に 2 つまで、入れ子も書ける）
   FIG.venn = {
     async layout(f, S) {
-      const sets = f.sets, n = sets.length, r = n === 2 ? 190 : 165, items = [], order = [];
-      const d = n === 2 ? r * 1.05 : r * 1.1;
-      const centers = n === 2 ? [[-d / 2, 0], [d / 2, 0]] : [[-d / 2, -d * 0.29], [d / 2, -d * 0.29], [0, d * 0.58]];
-      const cOf = {};
-      sets.forEach((s, i) => {
-        const [cx, cy] = centers[i], color = S.role(s.role || ["actor", "process", "store"][i]);
+      const sets = f.sets, byId = Object.fromEntries(sets.map(s => [s.id, s]));
+      const tops = sets.filter(s => !s.inside || !byId[s.inside]), n = tops.length, items = [], order = [];
+      const kidsOf = id => sets.filter(s => s.inside === id && byId[s.inside]);
+      const R = n === 1 ? 210 : n === 2 ? 190 : 165;
+      const d = n === 2 ? R * 1.05 : R * 1.1;
+      const centers = n === 1 ? [[0, 0]] : n === 2 ? [[-d / 2, 0], [d / 2, 0]] : [[-d / 2, -d * 0.29], [d / 2, -d * 0.29], [0, d * 0.58]];
+      const cOf = {}, done = new Set();
+      const fs = r => (r >= 150 ? 23 : r >= 95 ? 21 : 19);
+      // 集合 1 つ: 円と名前。away = 他の円から離れる向き（重なり合う円のときだけ）
+      const put = (s, cx, cy, r, away) => {
+        if (done.has(s.id)) return;   // 入れ子が輪になっているとき（検査が誤りにする）に止まるように
+        done.add(s.id);
+        const color = S.role(s.role || ["actor", "process", "store", "external", "accent"][sets.indexOf(s) % 5]);
+        const kids = kidsOf(s.id).slice(0, 2);
         cOf[s.id] = [cx, cy];
-        // 集合の名前は円の外寄り（中心から離れる向き）
-        const away = n === 2 ? [Math.sign(cx) * 0.5, 0] : [cx / (Math.hypot(cx, cy) || 1) * 0.5, cy / (Math.hypot(cx, cy) || 1) * 0.5];
-        const lx = cx + away[0] * r, ly = cy + away[1] * r;
-        const texts = [T(UZ.wrap(s.label, 23, r * 0.8, 700, 2), lx, ly - (s.sub ? 12 : 0), 23, { weight: 700, color: S.ink })];
-        if (s.sub) texts.push(T(UZ.wrap(s.sub, 16, r * 0.8, 400, 2), lx, ly + 20, 16, { color: S.muted }));
-        items.push({ id: s.id, kind: "box", shape: "ellipse", x: cx - r, y: cy - r, w: r * 2, h: r * 2, r, stroke: color, fill: C.rgba(color, 0.16), texts, bbox: { x: cx - r, y: cy - r, w: r * 2, h: r * 2 }, dotAt: [lx, ly] });
+        let lx, ly, maxW, kidAt;
+        if (away) {
+          // 上を向く垂線（他の円から遠い側）。含む集合があれば、名前は脇へ寄せ、離れる向きの側を内側の円に空ける
+          let p = [away[1], -away[0]];
+          if (p[1] > 0 || (p[1] === 0 && p[0] > 0)) p = [-p[0], -p[1]];
+          if (kids.length) { lx = cx + away[0] * 0.17 * r + p[0] * 0.72 * r; ly = cy + away[1] * 0.17 * r + p[1] * 0.72 * r; maxW = r * 0.8; }
+          else { lx = cx + away[0] * 0.5 * r; ly = cy + away[1] * 0.5 * r; maxW = r * 0.8; }
+          kidAt = kids.length === 1 ? [{ x: cx + away[0] * 0.45 * r, y: cy + away[1] * 0.45 * r, r: r * 0.45 }]
+            : kids.map((_, i) => ({ x: cx + away[0] * 0.5 * r + p[0] * 0.32 * r * (i ? -1 : 1), y: cy + away[1] * 0.5 * r + p[1] * 0.32 * r * (i ? -1 : 1), r: r * 0.3 }));
+        } else if (kids.length) {
+          // 名前は円の上、内側の円は下
+          lx = cx; ly = cy - (kids.length === 1 ? 0.6 : 0.62) * r; maxW = r * 1.2;
+          kidAt = kids.length === 1 ? [{ x: cx, y: cy + 0.34 * r, r: r * 0.58 }] : kids.map((_, i) => ({ x: cx + (i ? 0.46 : -0.46) * r, y: cy + 0.26 * r, r: r * 0.42 }));
+        } else { lx = cx; ly = cy; maxW = r * 1.5; }
+        const size = fs(r);
+        const texts = [T(UZ.wrap(s.label, size, maxW, 700, 2), lx, ly - (s.sub ? 12 : 0), size, { weight: 700, color: S.ink })];
+        if (s.sub) texts.push(T(UZ.wrap(s.sub, 16, maxW, 400, 2), lx, ly + 20, 16, { color: S.muted }));
+        items.push({ id: s.id, kind: "box", shape: "ellipse", x: cx - r, y: cy - r, w: r * 2, h: r * 2, r, stroke: color, fill: C.rgba(color, 0.16), texts, bbox: { x: cx - r, y: cy - r, w: r * 2, h: r * 2 }, dotAt: [lx, ly], parent: s.inside });
         order.push(s.id);
+        kids.forEach((k, i) => put(k, kidAt[i].x, kidAt[i].y, kidAt[i].r, null));
+      };
+      tops.forEach((s, i) => {
+        const [cx, cy] = centers[i] || [0, 0], L = Math.hypot(cx, cy) || 1;
+        put(s, cx, cy, R, n === 1 ? null : n === 2 ? [Math.sign(cx), 0] : [cx / L, cy / L]);
       });
       for (const o of f.overlaps || []) {
         const cs = o.of.map(id => cOf[id]).filter(Boolean);
+        if (!cs.length) continue;
         let mx = cs.reduce((a, c) => a + c[0], 0) / cs.length, my = cs.reduce((a, c) => a + c[1], 0) / cs.length;
-        if (n === 3 && cs.length === 2) { const other = sets.find(s => !o.of.includes(s.id)); const oc = cOf[other.id]; const vx = mx - oc[0], vy = my - oc[1], L = Math.hypot(vx, vy) || 1; mx += vx / L * r * 0.12; my += vy / L * r * 0.12; }
-        const size = 18, maxW = cs.length === 3 ? r * 0.55 : n === 2 ? r * 0.75 : r * 0.6;
+        if (n === 3 && cs.length === 2) { const other = tops.find(s => !o.of.includes(s.id)); const oc = cOf[other.id]; const vx = mx - oc[0], vy = my - oc[1], L = Math.hypot(vx, vy) || 1; mx += vx / L * R * 0.12; my += vy / L * R * 0.12; }
+        const size = 18, maxW = cs.length === 3 ? R * 0.55 : n === 2 ? R * 0.75 : R * 0.6;
         const t = T(UZ.wrap(o.label, size, maxW, 700, 3), mx, my, size, { weight: 700, color: S.ink });
         items.push({ id: o.id, kind: "text", texts: [t], bbox: { ...t.bbox }, over: sets.map(x => x.id) });
         order.push(o.id);

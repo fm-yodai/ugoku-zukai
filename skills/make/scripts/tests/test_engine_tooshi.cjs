@@ -65,12 +65,12 @@ const tests = {
     const [t1, t2, t3] = ["l1", "l2", "l3"].map(id => M.acts.find(a => a.verb === "trace" && a.line === id));
     assert.ok(t1.end <= t2.start && t2.end <= t3.start, "検査の前提: trace が台本の順に並ぶ");
     const lab = t => { const s = UZ.frame(M, t).st["flow/dot:dot"]; return { show: s.labelShow || 0, text: s.labelText }; };
-    assert.ok(lab(t1.start + 1.0).show > 0.99, "最初の trace の頭で札が出る");
-    assert.strictEqual(lab(t1.start + 1.0).text, "申請書");
-    assert.ok(lab(t1.start + 3.5).show < 0.01, "しばらくしたら消える");
+    assert.ok(lab(t1.start + 0.5).show > 0.99, "最初の trace の頭で札が出る");
+    assert.strictEqual(lab(t1.start + 0.5).text, "申請書");
+    assert.ok(lab(t1.start + 1.0).show < 0.01, "1 秒で消える（点が動き出す前に消えている）");
     assert.ok(lab(t2.start + 0.5).show < 0.01 && lab(t2.start + 1.5).show < 0.01, "同じ札の 2 回目の trace では出ない");
-    assert.ok(lab(t3.start + 1.0).show > 0.99, "札の言葉が変わったら、もう一度だけ出る");
-    assert.strictEqual(lab(t3.start + 1.0).text, "承認の通知");
+    assert.ok(lab(t3.start + 0.5).show > 0.99, "札の言葉が変わったら、もう一度だけ出る");
+    assert.strictEqual(lab(t3.start + 0.5).text, "承認の通知");
     const view = fs.readFileSync(path.join(__dirname, "..", "..", "player", "src", "view_svg.js"), "utf8");
     assert.ok(view.includes("s.labelShow") && !view.includes("inBox"), "view_svg.js は labelShow で札を出す（箱の出入りで出し入れしない）");
   },

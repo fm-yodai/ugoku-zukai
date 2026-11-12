@@ -124,6 +124,11 @@
         const E = { it };
         if (it.kind === "box") {
           E.g = el("g", null, L.box);
+          // 点がいる箱の強調（trace）: 外側に、点の色の薄い輪（四角と楕円。ひし形などは枠だけ）
+          if (it.dotAt && !["diamond", "poly", "store"].includes(it.shape)) {
+            E.hereR = it.shape === "ellipse" ? el("ellipse", { cx: it.x + it.w / 2, cy: it.y + it.h / 2, rx: it.w / 2 + 6, ry: it.h / 2 + 6, fill: "none", "stroke-width": 5, opacity: 0 }, E.g)
+              : el("rect", { x: it.x - 6, y: it.y - 6, width: it.w + 12, height: it.h + 12, rx: it.r + 6, fill: "none", "stroke-width": 5, opacity: 0 }, E.g);
+          }
           const sw = S.stroke;
           const mk = (fill, stroke, extra) => {
             if (it.shape === "diamond") return el("path", { d: `M${it.x + it.w / 2},${it.y} L${it.x + it.w},${it.y + it.h / 2} L${it.x + it.w / 2},${it.y + it.h} L${it.x},${it.y + it.h / 2} Z`, fill, stroke, "stroke-width": sw, "stroke-linejoin": "round", ...extra }, E.g);
@@ -182,6 +187,7 @@
         } else if (it.kind === "rect") {
           E.g = el("g", null, L.back);
           E.bg = el("rect", { x: it.x, y: it.y, width: it.w, height: it.h, rx: it.r, fill: it.fill === "none" ? C.rgba(S.accent, 0) : it.fill }, E.g);
+          if (it.quad) E.tintR = el("rect", { x: it.x, y: it.y, width: it.w, height: it.h, opacity: 0 }, E.g);   // 象限を途中で塗る（tint）ための面
           if (it.rule) E.rule = el("path", { d: `M${it.x},${it.y + it.h} H${it.x + it.w}`, stroke: S.line, "stroke-width": 1.2 }, E.g);
           E.texts = (it.texts || []).map(T => this.textSpec(E.g, T));
         } else if (it.kind === "band") {
@@ -202,7 +208,7 @@
           E.texts = it.texts.map(T => this.textSpec(E.g, T, { halo: true }));
         } else if (it.kind === "dot") {
           E.g = el("g", null, L.fx);
-          el("circle", { r: it.r, fill: it.color, filter: glow ? "url(#uz-glow)" : null, stroke: glow ? null : S.bg, "stroke-width": glow ? null : 2 }, E.g);
+          E.dotC = el("circle", { r: it.r, fill: it.color, filter: glow ? "url(#uz-glow)" : null, stroke: glow ? null : S.bg, "stroke-width": glow ? null : 2 }, E.g);
           E.pill = el("g", { transform: "translate(0,30)" }, E.g);
           E.pillR = el("rect", { y: -15, height: 30, rx: 15, fill: S.bg, stroke: it.color, "stroke-width": 1.6 }, E.pill);
           E.pillT = this.text(E.pill, [""], 0, 0, 17, { weight: S.bold, color: S.ink });
@@ -266,11 +272,25 @@
           }
           if (E.life) E.life.style.opacity = op(smooth((show - 0.5) / 0.5) * 0.9);
           const sc = 1 + 0.07 * (s.pulse || 0);
-          const cx = it.x + it.w / 2, cy = it.y + it.h / 2;
+          // 大きさを変えた箱（resize）: 面と枠の形を書き換え、文字は箱に付いていく
+          const R = s.rect || it, geo = s.rect ? [R.x, R.y, R.w, R.h].map(v => v.toFixed(2)).join(",") : "";
+          if ((E._geo || "") !== geo) {
+            E._geo = geo;
+            for (const e of [E.fill, E.stroke]) {
+              if (it.shape === "ellipse") { e.setAttribute("cx", R.x + R.w / 2); e.setAttribute("cy", R.y + R.h / 2); e.setAttribute("rx", R.w / 2); e.setAttribute("ry", R.h / 2); }
+              else { e.setAttribute("x", R.x); e.setAttribute("y", R.y); e.setAttribute("width", R.w); e.setAttribute("height", R.h); }
+            }
+            const to = s.rect && s.textOff ? `translate(${s.textOff[0].toFixed(2)},${s.textOff[1].toFixed(2)})` : null;
+            for (const tx of [...E.texts, E.smark].filter(Boolean)) { if (to) tx.setAttribute("transform", to); else tx.removeAttribute("transform"); }
+          }
+          const cx = R.x + R.w / 2, cy = R.y + R.h / 2;
           E.g.setAttribute("transform", `translate(${off[0]},${off[1]}) translate(${cx},${cy}) scale(${sc}) translate(${-cx},${-cy})`);
           const col = s.tint ? C.mix(s.tintFrom || it.stroke, s.tint, s.tintP) : (s.pulse > 0.01 ? C.mix(it.stroke, S.accent, s.pulse) : it.stroke);
-          E.stroke.setAttribute("stroke", col);
-          E.stroke.setAttribute("stroke-width", S.stroke + 1.6 * (s.pulse || 0));
+          // 点がいる箱（here）: 枠を点の色で太くする
+          const here = s.here || 0;
+          E.stroke.setAttribute("stroke", here > 0.01 ? C.mix(col, s.hereColor || S.warn, here) : col);
+          E.stroke.setAttribute("stroke-width", S.stroke + 1.6 * (s.pulse || 0) + 2.4 * here);
+          if (E.hereR) { E.hereR.setAttribute("stroke", s.hereColor || S.warn); E.hereR.setAttribute("opacity", (0.3 * here).toFixed(3)); }
           if (s.text != null && E.texts[0]) this.relabel(E.texts[0], it.texts[0], s);
         } else if (it.kind === "edge") {
           if (it.dashed) E.line.style.opacity = op(smooth(show));
@@ -307,6 +327,14 @@
         } else if (it.kind === "rect") {
           E.g.style.opacity = op(smooth(show));
           if (it.fill === "none") E.bg.setAttribute("fill", C.rgba(s.tint || S.accent, 0.16 * Math.max(s.pulse || 0, s.tint ? s.tintP : 0)));
+          if (E.tintR) {
+            // 塗り替えは、元の面を消しながら新しい面を重ねる。題の色も、塗りに合わせる
+            const p = s.tint ? s.tintP : 0;
+            E.bg.style.opacity = (1 - p).toFixed(3);
+            E.tintR.setAttribute("opacity", p.toFixed(3));
+            if (s.tint) E.tintR.setAttribute("fill", s.tintOff ? UZ.QUAD_OFF(S) : UZ.QUAD_ON(s.tint));
+            if (E.texts[0]) E.texts[0].setAttribute("fill", C.mix(it.texts[0].color || S.ink, s.tint ? (s.tintOff ? S.muted : s.tint) : it.texts[0].color || S.ink, p));
+          }
         } else if (it.kind === "band" || it.kind === "frame" || it.kind === "image") {
           E.g.style.opacity = op(smooth(show));
         } else if (it.kind === "mark") {
@@ -319,10 +347,11 @@
           E.g.style.opacity = op(smooth(show));
         } else if (it.kind === "dot") {
           E.g.style.opacity = op(show);
+          E.dotC.style.opacity = s.dotVis == null ? 1 : s.dotVis.toFixed(3);
           if (s.pos) E.g.setAttribute("transform", `translate(${s.pos[0].toFixed(1)},${s.pos[1].toFixed(1)})`);
           const label = s.labelText || "";
           if (E._label !== label) { E._label = label; this.setLines(E.pillT, [label]); const w = UZ.textW(label, 17, 700) + 22; E.pillR.setAttribute("x", -w / 2); E.pillR.setAttribute("width", w); }
-          // 札は、点が何を表すかを最初に 1 回だけ見せる（engine.js の labelShow。箱の文字に重ならないよう、点の下に出す）
+          // 札は、点が何を表すかを最初に 1 回だけ見せる（engine.js の labelShow。点が箱で止まっている間だけ出る。箱の文字に重ならないよう、点の位置の下に出す）
           E.pill.style.opacity = label ? op(s.labelShow || 0) : 0;
           E.pill.setAttribute("transform", `translate(0,30) scale(${(1 + 0.14 * (s.labelPop || 0)).toFixed(3)})`);
         }

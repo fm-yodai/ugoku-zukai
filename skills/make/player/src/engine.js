@@ -5,7 +5,7 @@
 
   UZ.FORMATS = ["ugoku-zukai/2", "ugoku-zukai/3"];   // /2 = 場面が図を指す形だけ。/3 = スライドも使える
   UZ.FORMAT = "ugoku-zukai/3";
-  UZ.VERBS = ["show", "hide", "focus", "unfocus", "blur", "unblur", "pulse", "mark", "unmark", "trace", "reply", "note", "badge", "relabel", "tint", "move", "custom"];
+  UZ.VERBS = ["show", "hide", "focus", "unfocus", "blur", "unblur", "pulse", "mark", "unmark", "trace", "reply", "note", "badge", "relabel", "tint", "move", "resize", "custom"];
   const MARK_RE = /\{([A-Za-z0-9_]+)\}/g;
 
   // ---- 字幕の文と印 ----
@@ -61,8 +61,8 @@
   };
 
   // ---- 動作の既定の長さ ----
-  const LABEL_HOLD = 2.4;   // 点の札を見せておく秒数
-  const DUR = { show: 0.7, hide: 0.5, focus: 0.6, unfocus: 0.6, blur: 0.6, unblur: 0.6, pulse: 0.8, mark: 0.5, unmark: 0.4, trace: 2.0, reply: 0.8, note: 0.6, badge: 0.5, relabel: 0.6, tint: 0.6, move: 1.0, custom: 2.0 };
+  const LABEL_HOLD = 1.0;   // 点の札を見せておく秒数（この間、点は動かない）
+  const DUR = { show: 0.7, hide: 0.5, focus: 0.6, unfocus: 0.6, blur: 0.6, unblur: 0.6, pulse: 0.8, mark: 0.5, unmark: 0.4, trace: 2.0, reply: 0.8, note: 0.6, badge: 0.5, relabel: 0.6, tint: 0.6, move: 1.0, resize: 0.9, custom: 2.0 };
   const STAGGER = 0.22;
 
   const verbOf = a => UZ.VERBS.find(v => Object.prototype.hasOwnProperty.call(a, v));
@@ -179,6 +179,7 @@
     const itemByKey = {};
     for (const F of Object.values(figs)) for (const it of Object.values(F.items)) itemByKey[it.key] = it;
     const dotState = {};   // 点の今の位置（台本を読みながら追う）
+    const sizeState = {};  // 大きさを変えた箱の今の形（resize を重ねたとき、前の形から続ける）
 
     for (const sc of scenes) {
       const first = TL[sc.lines[0].id];
@@ -249,26 +250,27 @@
             const F = figs[fid], did = a.dot || "dot", key = `${fid}/dot:${did}`;
             if (!extras.dots[key]) extras.dots[key] = { key, fig: fid, id: did };
             let cur = dotState[key];
-            const pts = [];
-            let startNode = path[0];
             if (cur && cur.node !== path[0]) {
               err(`${where}: 点「${did}」はいま ${cur.node} にいる。経路は ${cur.node} から書く`); return;
             }
-            pts.push(F.items[startNode].dotAt);
-            let ok = true, segs = 0;
+            // 点は辺の上だけに出る（辺の始まりから終わりまで。角は丸める）。箱にいる間は、点の代わりに箱を強調する
+            const legs = [];
+            let ok = true;
             for (let i = 1; i < path.length; i++) {
               const e = F.items[`${path[i - 1]}>${path[i]}`];
               if (!e) { err(`${where}: 辺 ${path[i - 1]}>${path[i]} が宣言されていない（点は宣言した辺の上だけを通る）`); ok = false; break; }
-              pts.push(...(F.extra.direct ? e.pts : enterExit(F.items[path[i - 1]], e.pts, F.items[path[i]])));
-              pts.push(F.items[path[i]].dotAt);
-              segs++;
+              const lp = roundCorners(dedupe(e.pts), 30);
+              legs.push({ poly: UZ.withLengths(lp), from: F.items[path[i - 1]].key, to: F.items[path[i]].key });
             }
             if (!ok) return;
-            act.key = key; act.poly = UZ.withLengths(dedupe(pts)); act.appear = !cur;
+            act.key = key; act.legs = legs; act.appear = !cur;
+            act.node = F.items[path[0]].key; act.at = F.items[path[0]].dotAt; act.endAt = F.items[path[path.length - 1]].dotAt; act.color = S.warn;
             act.label = a.label; act.fig = fid;
-            // 札は、点が何を表すかを最初に 1 回だけ見せる（同じ言葉の札は、その後の trace では出さない）
+            // 札は、点が何を表すかを最初に 1 回だけ見せる（同じ言葉の札は、その後の trace では出さない）。
+            // 札を見せる間（LABEL_HOLD 秒）は、点は動かずに箱を強調し、札が消えてから動き出す
             act.labelNew = a.label != null && a.label !== (cur ? cur.label : undefined);
-            dur = a.dur ?? Math.max(0.6, DUR.trace * segs);
+            act.hold = act.labelNew ? LABEL_HOLD : act.appear ? 0.35 : 0;
+            dur = a.dur ?? Math.max(0.6, DUR.trace * legs.length + (act.labelNew ? LABEL_HOLD : 0));
             dotState[key] = { node: path[path.length - 1], last: path, label: a.label != null ? a.label : (cur ? cur.label : undefined) };
           } else if (verb === "reply") {
             const path = asList(val);
@@ -297,7 +299,11 @@
           } else if (verb === "relabel" || verb === "tint") {
             act.keys = [];
             for (const ref of asList(val)) { const r = resolve(sc, ref, where); if (r && !r.whole) act.keys.push(`${r.fig}/${r.id}`); }
-            act.text = a.text; act.color = a.as ? S.role(a.as) : S.accent;
+            act.text = a.text;
+            // as: "off" は、2×2 の象限を「該当しない」のグレーにする
+            act.off = verb === "tint" && a.as === "off";
+            if (act.off && act.keys.some(k => !itemByKey[k] || !itemByKey[k].quad)) { err(`${where}: as: "off" は 2×2（matrix）の象限だけに使える`); return; }
+            act.color = act.off ? S.muted : a.as ? S.role(a.as) : S.accent;
             if (verb === "relabel" && a.text == null) err(`${where}: text が要る`);
           } else if (verb === "move") {
             const r = resolve(sc, val, where);
@@ -313,6 +319,28 @@
             if (a.by) to = [c0[0] + a.by[0], c0[1] + a.by[1]];
             if (!to) { err(`${where}: to（座標か id）か by が要る`); return; }
             act.key = it.key; act.delta = [to[0] - c0[0], to[1] - c0[1]];
+          } else if (verb === "resize") {
+            const r = resolve(sc, val, where);
+            if (!r) return;
+            const it = r.whole ? null : figs[r.fig].items[r.id];
+            if (!it || it.kind !== "box" || ["diamond", "poly", "store"].includes(it.shape) || it.header || it.life) { err(`${where}: 大きさを変えられるのは、四角と楕円の箱だけ（「${val}」は違う）`); return; }
+            const to = a.to && typeof a.to === "object" && !Array.isArray(a.to) ? a.to : null;
+            const sc2 = a.scale == null ? null : Array.isArray(a.scale) ? a.scale : [a.scale, a.scale];
+            if ((!to || (to.w == null && to.h == null)) && !sc2) { err(`${where}: to（{ w, h } のどちらかか両方）か scale（倍率）が要る`); return; }
+            const nums = [...(to ? [to.w, to.h].filter(v => v != null) : []), ...(sc2 || [])];
+            if (nums.some(v => typeof v !== "number" || !(v > 0)) || (sc2 && sc2.length !== 2)) { err(`${where}: 大きさと倍率は正の数で書く`); return; }
+            const AN = { center: [0.5, 0.5], left: [0, 0.5], right: [1, 0.5], top: [0.5, 0], bottom: [0.5, 1], "top-left": [0, 0], "top-right": [1, 0], "bottom-left": [0, 1], "bottom-right": [1, 1] };
+            const an = AN[a.anchor || "center"];
+            if (!an) { err(`${where}: anchor は ${Object.keys(AN).join(" / ")} のどれか`); return; }
+            if (a.text != null && !["center", "top"].includes(a.text)) { err(`${where}: text は center（箱の中心に付いていく）か top（箱の上に寄せる）`); return; }
+            const cur = sizeState[it.key] || { rect: { x: it.x, y: it.y, w: it.w, h: it.h }, textOff: [0, 0] };
+            const w = to && to.w != null ? to.w : cur.rect.w * (sc2 ? sc2[0] : 1), h = to && to.h != null ? to.h : cur.rect.h * (sc2 ? sc2[1] : 1);
+            const rect = { x: cur.rect.x + (cur.rect.w - w) * an[0], y: cur.rect.y + (cur.rect.h - h) * an[1], w, h };
+            // 文字は箱の中心に付いていく。text: "top" なら、新しい箱の上に寄せる（中に別の箱を入れるとき）
+            const textOff = [rect.x + rect.w / 2 - (it.x + it.w / 2), rect.y + rect.h / 2 - (it.y + it.h / 2)];
+            if (a.text === "top" && it.texts && it.texts.length) textOff[1] = rect.y + 14 - Math.min(...it.texts.map(t => t.bbox.y));
+            act.key = it.key; act.from = cur.rect; act.to = rect; act.textFrom = cur.textOff; act.textTo = textOff;
+            sizeState[it.key] = { rect, textOff };
           } else if (verb === "custom") {
             const src = sb.custom && sb.custom[val];
             if (!src) { err(`${where}: custom「${val}」が台本の custom にない`); return; }
@@ -395,13 +423,17 @@
     return { errors, warnings, sb, theme, S, timeline, TL, scenes, figs, slides, assets, credits, acts, itemByKey, duration, endCard, credit, title: sb.title || "" };
   };
 
-  // 箱の中の点の位置 → 辺の始まり … 辺の終わり → 次の箱の中、の折れ線（箱の中は縦・横だけで動く）
-  function enterExit(a, pts, b) {
-    const out = [];
-    const s = pts[0], e = pts[pts.length - 1];
-    out.push([s[0], a.dotAt[1]]);
-    out.push(...pts);
-    out.push([e[0], b.dotAt[1]]);
+  // 折れ線の角を、半径 r ぶん手前から曲線でつなぐ
+  function roundCorners(pts, r) {
+    const out = [pts[0]];
+    for (let i = 1; i < pts.length - 1; i++) {
+      const a = pts[i - 1], p = pts[i], b = pts[i + 1];
+      const la = Math.hypot(a[0] - p[0], a[1] - p[1]), lb = Math.hypot(b[0] - p[0], b[1] - p[1]), d = Math.min(r, la / 2, lb / 2);
+      if (d < 1) { out.push(p); continue; }
+      const p1 = [p[0] + (a[0] - p[0]) / la * d, p[1] + (a[1] - p[1]) / la * d], p2 = [p[0] + (b[0] - p[0]) / lb * d, p[1] + (b[1] - p[1]) / lb * d];
+      for (let k = 0; k <= 6; k++) { const u = k / 6, v = 1 - u; out.push([v * v * p1[0] + 2 * v * u * p[0] + u * u * p2[0], v * v * p1[1] + 2 * v * u * p[1] + u * u * p2[1]]); }
+    }
+    out.push(pts[pts.length - 1]);
     return out;
   }
   function dedupe(pts) {
@@ -512,27 +544,47 @@
         case "unmark": { const s = get(a.key); s.show = Math.min(s.show, 1 - p); break; }
         case "note": get(a.key).show = Math.max(get(a.key).show, smooth(p)); break;
         case "trace": {
-          const s = get(a.key);
-          if (a.appear) s.show = smooth(clamp(p * a.dur / 0.3));
-          else s.show = 1;
-          const q = a.appear ? clamp((t - a.start - 0.25) / Math.max(0.1, a.dur - 0.25)) : p;
-          s.pos = UZ.along(a.poly, ease(q));
-          if (a.label != null) s.labelText = a.label;
-          if (a.labelNew) {   // 出て、LABEL_HOLD 秒だけ見せて、消える。出るときに少し大きくして目を引く
-            const u = t - a.start;
-            s.labelShow = smooth(clamp(u / 0.3)) * (1 - smooth(clamp((u - LABEL_HOLD) / 0.5)));
-            s.labelPop = u < 0.7 ? Math.sin(Math.PI * clamp(u / 0.7)) : 0;
+          // 点は辺の上を動く間だけ見える（dotVis）。箱にいる間は、その箱を強調する（heres = 箱ごとの強さ）
+          const s = get(a.key), u0 = t - a.start, n = a.legs.length;
+          s.show = 1; s.heres = {}; s.hereColor = a.color; s.herePop = null;
+          const slice = n ? Math.max(0.1, a.dur - a.hold) / n : 1;
+          const x = n ? clamp((u0 - a.hold) / slice / n) * n : 0;
+          if (!n || x <= 0) {
+            s.pos = a.at.slice(); s.dotVis = 0; s.heres[a.node] = a.appear ? smooth(clamp(u0 / 0.3)) : 1;
+            if (a.labelNew) s.herePop = [a.node, Math.sin(Math.PI * clamp(u0 / 0.8))];   // 札を見せる間に、箱を一度強く見せる
+          } else if (x >= n) { s.pos = a.endAt.slice(); s.dotVis = 0; s.heres[a.legs[n - 1].to] = 1; }
+          else {
+            const i = Math.min(n - 1, Math.floor(x)), lg = a.legs[i], m = clamp((x - i) / 0.9);
+            s.pos = UZ.along(lg.poly, ease(m));
+            s.dotVis = smooth(clamp(m / 0.1)) * (1 - smooth(clamp((m - 0.9) / 0.1)));
+            s.heres[lg.from] = 1 - smooth(clamp(m / 0.3));
+            s.heres[lg.to] = Math.max(s.heres[lg.to] || 0, smooth(clamp((m - 0.75) / 0.25)));
           }
-          s.moving = q > 0 && q < 1;
+          if (a.label != null) s.labelText = a.label;
+          // 札は、止まっている間だけ出る（動き出す前に消える）
+          s.labelShow = a.labelNew ? smooth(clamp(u0 / 0.2)) * (1 - smooth(clamp((u0 - (a.hold - 0.25)) / 0.2))) : 0;
+          s.labelPop = 0;
+          s.moving = s.dotVis > 0;
           break;
         }
         case "reply": get(a.key).show = clamp(p / 0.85); break;
         case "badge": if (a.text) { const was = badge.text; badge = { text: a.text, show: was ? 1 : ease(p), from: was && was !== a.text ? was : "", p: smooth(p) }; } else badge = { text: badge.text, show: Math.min(badge.show, 1 - p), from: "", p: 1 }; break;
         case "relabel": for (const k of a.keys) { const s = get(k); s.textFrom = s.text; s.text = a.text; s.textP = smooth(p); } break;
-        case "tint": for (const k of a.keys) { const s = get(k); s.tintFrom = s.tint; s.tint = a.color; s.tintP = smooth(p); } break;
+        case "tint": for (const k of a.keys) { const s = get(k); s.tintFrom = s.tint; s.tint = a.color; s.tintP = smooth(p); s.tintOff = !!a.off; } break;
         case "move": { const s = get(a.key); const q = ease(p); s.off = [s.off[0] + a.delta[0] * q, s.off[1] + a.delta[1] * q]; break; }
+        case "resize": {
+          const s = get(a.key), q = ease(p);
+          s.rect = p >= 1 ? { ...a.to } : { x: mix(a.from.x, a.to.x, q), y: mix(a.from.y, a.to.y, q), w: mix(a.from.w, a.to.w, q), h: mix(a.from.h, a.to.h, q) };
+          s.textOff = p >= 1 ? a.textTo.slice() : [mix(a.textFrom[0], a.textTo[0], q), mix(a.textFrom[1], a.textTo[1], q)];
+          break;
+        }
         case "custom": customs[a.key] = p; break;
       }
+    }
+    // 点のいる箱の強調（点を消すと、強調も消える）
+    for (const s of Object.values(st)) if (s.heres) {
+      for (const [k, v] of Object.entries(s.heres)) { const ns = get(k); ns.here = Math.max(ns.here || 0, v * s.show); ns.hereColor = s.hereColor; }
+      if (s.herePop) { const ns = get(s.herePop[0]); ns.pulse = Math.max(ns.pulse || 0, s.herePop[1] * s.show); }
     }
     // 場面: 図の出入りと置き場所
     let si = M.scenes.findIndex((sc, i) => t < sc.end || i === M.scenes.length - 1);
@@ -585,6 +637,8 @@
         st[it.key] = { show: 1, dim: 1, blur: 0, pulse: 0, tint: null, tintP: 0, text: null, textFrom: null, textP: 1, mark: null, pos: null, off: [0, 0], labelText: null };
       }
     }
+    // 大きさを変えた箱（resize）は、変えた後の形で出す（中に入れた部品と重ならないように）
+    for (const a of M.acts) if (a.verb === "resize" && sl.scenes.includes(a.scene) && st[a.key]) { st[a.key].rect = { ...a.to }; st[a.key].textOff = a.textTo.slice(); }
     return { t: sc.start, st, figs: figsF, scene: sc, statement: { lines: sc.statement, opacity: 1, prev: null }, captions: [],
       header: { text: sc.header, opacity: 1, prev: null }, sub: null, badge: { text: "", show: 0, from: "" }, customs: {}, end: 0, dark: 0 };
   };

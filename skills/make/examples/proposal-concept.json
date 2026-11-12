@@ -24,6 +24,9 @@
         { "id": "o_center", "of": ["genba", "data", "tool"], "label": "配車係" }
       ]
     },
+    "scope": { "type": "venn", "title": "画面で済む範囲",
+      "sets": [ { "id": "shigoto", "label": "配車係の仕事" },
+                { "id": "wariate", "label": "割り当てと通知", "sub": "画面で済む", "inside": "shigoto" } ] },
     "pyr": {
       "type": "pyramid", "title": "仕組みを支えるもの",
       "levels": [
@@ -44,6 +47,10 @@
       { "id": "l4", "text": "配車係に求められるのは、{a}現場の勘、{b}データ、{c}画面の操作の三つです。", "do": [ { "at": "a", "show": "genba" }, { "at": "b", "show": "data" }, { "at": "c", "show": "tool" } ] },
       { "id": "l5", "text": "{a}勘とデータが重なる所から、改善の案が出てきます。", "do": [ { "at": "a", "show": "o_kaizen" }, { "pulse": ["genba", "data"] } ] },
       { "id": "l6", "text": "{a}三つがそろうのが、これからの配車係です。", "do": [ { "at": "a", "show": "o_center" }, { "pulse": "o_center" } ] }
+    ] },
+    { "id": "s2b", "figure": "scope", "lines": [
+      { "id": "l6a", "text": "{a}配車係の仕事には、{b}画面で済む割り当てと通知が含まれます。", "do": [ { "at": "a", "show": "shigoto" }, { "at": "b", "show": "wariate" } ] },
+      { "id": "l6b", "text": "{a}その外側にある判断は、これからも人が受け持ちます。", "do": [ { "at": "a", "pulse": "shigoto" } ] }
     ] },
     { "id": "s3", "figure": "pyr", "lines": [
       { "id": "l7", "text": "まとめると、{a}土台は受付と連絡の決まりごとです。", "do": [ { "at": "a", "show": "py_rule" } ] },
