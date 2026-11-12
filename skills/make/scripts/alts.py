@@ -23,7 +23,10 @@ alts.json（パスは作業フォルダからの相対）:
       "slides": [{"id": "def-usability", "intent": "…", "link": "…"}, …]}]}]}
   slides を省いた案は、replaces と同じ id のスライドを書き換えた案（意図は構成メモのまま）。
 
-終了コード: 0 = できた、1 = 案を入れられない、2 = 使い方の誤りかファイルがない。
+alts.json の id・key は英数字・_・- だけ。案の storyboard と frames は、上の形（今の台本の案は storyboard.json と frames、
+ほかは storyboard.<組>-<key>.json と alts/<組>/<key>/frames）以外を書けない（片付けで、ほかのファイルを消さないため）。
+
+終了コード: 0 = できた、1 = 案を入れられない・コマを書けない、2 = 使い方の誤りか、ファイルがないか、alts.json の形が違う。
 """
 import argparse
 import json
@@ -78,6 +81,33 @@ def _alts(wd):
     data = _load(path)
     if not isinstance(data, dict) or not isinstance(data.get("groups"), list):
         raise Usage(f"{path} に groups がない")
+    # 形を確かめる。片付けで消すのは、ここで確かめた決まった場所のファイルだけ
+    for g in data["groups"]:
+        gid = g.get("id") if isinstance(g, dict) else None
+        if not isinstance(gid, str) or not NAME_RE.match(gid):
+            raise Usage(f"alts.json: 組の id は英数字・_・- で書く（今は {json.dumps(gid, ensure_ascii=False)}）")
+        reps, opts = g.get("replaces"), g.get("options")
+        if not isinstance(reps, list) or not reps or not all(isinstance(x, str) for x in reps):
+            raise Usage(f"alts.json: 組「{gid}」の replaces は、スライドの id の列で書く")
+        if not isinstance(opts, list) or not 2 <= len(opts) <= 4:
+            raise Usage(f"alts.json: 組「{gid}」の案は 2〜4 つ")
+        for o in opts:
+            key = o.get("key") if isinstance(o, dict) else None
+            if not isinstance(key, str) or not NAME_RE.match(key):
+                raise Usage(f"alts.json: 組「{gid}」の案の key は英数字・_・- で書く（今は {json.dumps(key, ensure_ascii=False)}）")
+            cur = o.get("storyboard") == "storyboard.json"
+            want = ("storyboard.json", "frames") if cur else (f"storyboard.{gid}-{key}.json", f"alts/{gid}/{key}/frames")
+            if (o.get("storyboard"), o.get("frames")) != want:
+                raise Usage(f"alts.json: 組「{gid}」の案「{key}」の storyboard と frames は、{want[0]} と {want[1]} と書く")
+            sl = o.get("slides")
+            if sl is None:
+                continue
+            if not isinstance(sl, list) or not sl or any(not isinstance(x, dict) or not isinstance(x.get("id"), str) for x in sl):
+                raise Usage(f"alts.json: 組「{gid}」の案「{key}」の slides は、id を持つオブジェクトの列で書く")
+            for x in sl:
+                for k in ("intent", "link"):
+                    if k in x and not isinstance(x[k], str):
+                        raise Usage(f"alts.json: 組「{gid}」の案「{key}」のスライド「{x['id']}」の {k} は文字列で書く（構成メモの項目の形ではなく、文だけ）")
     return data
 
 
@@ -172,11 +202,13 @@ def cmd_frames(a):
                 raise Usage(f"案「{o.get('name')}」の台本がない: {sb_path}")
             sb = _load(sb_path)
             if _is_current(o):
-                try:   # 今の台本のコマが今のものなら、そのまま使う
-                    build_sheet._load_frames(out, sb)
-                    continue
+                try:   # 今の台本のコマが今のもので、全部の場面がそろっていれば、そのまま使う
+                    fr = build_sheet._load_frames(out, sb, sb_path)
+                    if {ln.get("scene") for ln in fr["lines"]} >= {sc.get("id") for sc in sb.get("scenes") or []}:
+                        continue
                 except (OSError, ValueError):
-                    scenes = []
+                    pass
+                scenes = []
             else:
                 ids = _option_slides(g, o)
                 scenes = [sc["id"] for sc in sb.get("scenes") or [] if sc.get("slide") in ids]
@@ -192,10 +224,11 @@ def cmd_frames(a):
 
 
 def _find_option(g, name):
+    norm = lambda x: "".join(str(x).split()).casefold()   # 空白と大文字小文字の違いは気にしない（「案B」「B」→「案 B」「b」）
     for o in g.get("options") or []:
-        if name in (o.get("key"), o.get("name")):
+        if norm(name) in (norm(o.get("key")), norm(o.get("name"))):
             return o
-    raise Usage(f"案「{name}」が、組「{g['id']}」にない（{'・'.join(str(o.get('name')) for o in g.get('options') or [])}）")
+    raise Usage(f"案「{name}」が、組「{g['id']}」にない（{'・'.join(str(o.get('key')) + ' = ' + str(o.get('name')) for o in g.get('options') or [])}）")
 
 
 def _merge(sb, osb, g, opt):
@@ -211,6 +244,13 @@ def _merge(sb, osb, g, opt):
         raise Reject(f"案「{opt.get('name')}」の台本に、スライド（{'・'.join(ids)}）を使う場面がない")
     keep = [sc for i, sc in enumerate(sb["scenes"]) if i not in idx]
     scene_ids = {sc.get("id") for sc in keep}
+    outside = [sid for sid in ids if sid in (sb.get("slides") or {}) and sid not in reps]
+    if outside:
+        raise Reject(f"案のスライドの id「{'・'.join(outside)}」は、置き換える範囲の外のスライドと同じ（別の id にする）")
+    # 案の台本にあるのに、どこにも入らない場面（範囲の外の場面でも、slides のスライドの場面でもない）は、黙って捨てない
+    lost = [str(sc.get("id")) for sc in osb.get("scenes") or [] if sc.get("slide") not in ids and sc.get("id") not in scene_ids]
+    if lost:
+        raise Reject(f"案「{opt.get('name')}」の台本の場面「{'・'.join(lost)}」が、どこにも入らない（alts.json の slides に、その場面のスライドを足す）")
     line_ids = {ln.get("id") for sc in keep for ln in sc.get("lines") or []}
     for sc in new_scenes:
         if sc.get("id") in scene_ids:
@@ -231,18 +271,30 @@ def _merge(sb, osb, g, opt):
             slides[sid] = sl
     out["slides"] = slides
     figures = dict(sb.get("figures") or {})
+    # 範囲の外が使っている図（外のスライドの部品と、外の figure の場面）
+    used_outside = set()
+    for sid, sl in slides.items():
+        if sid not in ids:
+            used_outside.update(p.get("figure") for p in sl.get("parts") or [] if isinstance(p, dict) and p.get("figure") is not None)
+    for sc in keep:
+        f = sc.get("figure")
+        used_outside.update(f if isinstance(f, list) else [f] if f is not None else [])
     for nid in ids:   # 案のスライドが figure で指す図は、案の台本のものを写す
         for p in osb["slides"][nid].get("parts") or []:
             fid = p.get("figure") if isinstance(p, dict) else None
-            if fid is not None and fid in (osb.get("figures") or {}):
-                figures[fid] = osb["figures"][fid]
+            if fid is None or fid not in (osb.get("figures") or {}):
+                continue
+            if fid in figures and figures[fid] != osb["figures"][fid] and fid in used_outside:
+                raise Reject(f"案が、範囲の外でも使っている図「{fid}」を書き換えている（案の図を別の id にして、案のスライドからその id を指す）")
+            figures[fid] = osb["figures"][fid]
     if figures or "figures" in sb:
         out["figures"] = figures
     return out
 
 
-def _merge_outline(outline, g, opt):
-    """構成メモ（/2）の、置き換える範囲のスライドを、案のスライドと意図に入れ替える。変えなければ None"""
+def _merge_outline(outline, g, opt, merged):
+    """構成メモ（/2）の、置き換える範囲のスライドを、案のスライドと意図に入れ替える。変えなければ None。
+    案のスライドは、入れた後の台本 merged で最初に使う場面の章（chapter）に入り、章の中は台本に出る順に並ぶ"""
     sl = opt.get("slides")
     if check_outline.version(outline) != 2 or not (isinstance(sl, list) and sl):
         return None
@@ -250,24 +302,27 @@ def _merge_outline(outline, g, opt):
         if not isinstance(x.get("intent"), str) or not x["intent"].strip():
             raise Reject(f"案「{opt.get('name')}」のスライド「{x.get('id')}」に intent がない（alts.json の slides に意図を書く）")
     item = lambda text: {"text": text, "by": "claude", "state": "agreed"}   # 利用者が案を選んだので、合意済み
-    new = [{"id": x["id"], "intent": item(x["intent"]), **({"link": item(x["link"])} if isinstance(x.get("link"), str) and x["link"].strip() else {})} for x in sl]
     out = json.loads(json.dumps(outline))
-    placed = False
-    for ch in out.get("chapters") or []:
+    chapters = {ch.get("id"): ch for ch in out.get("chapters") or [] if isinstance(ch, dict)}
+    first = {}   # スライド → 最初に使う場面の添字
+    for n, sc in enumerate(merged["scenes"]):
+        first.setdefault(sc.get("slide"), n)
+    touched = set()
+    for ch in chapters.values():   # 置き換える範囲のスライドと、案と同じ id のスライドを外す
         cur = ch.get("slides") if isinstance(ch.get("slides"), list) else []
-        if not any(isinstance(s, dict) and s.get("id") in g["replaces"] for s in cur):
-            continue
-        res = []
-        for s in cur:
-            if isinstance(s, dict) and s.get("id") in g["replaces"]:
-                if not placed:
-                    res.extend(new)
-                    placed = True
-            else:
-                res.append(s)
-        ch["slides"] = res
-    if not placed:   # 構成メモにまだ書いていなかったスライド: 最初に使う場面の章に足す
-        return None
+        kept = [x for x in cur if not (isinstance(x, dict) and (x.get("id") in g["replaces"] or x.get("id") in [y["id"] for y in sl]))]
+        if len(kept) != len(cur):
+            ch["slides"] = kept
+            touched.add(ch.get("id"))
+    for x in sl:
+        cid = merged["scenes"][first[x["id"]]].get("chapter")
+        if cid not in chapters:
+            raise Reject(f"案のスライド「{x['id']}」を使う場面の chapter「{cid}」が、構成メモの章にない")
+        chapters[cid].setdefault("slides", []).append(
+            {"id": x["id"], "intent": item(x["intent"]), **({"link": item(x["link"])} if isinstance(x.get("link"), str) and x["link"].strip() else {})})
+        touched.add(cid)
+    for cid in touched:   # 台本に出る順に並べる（まだ場面のないスライドは後ろ）
+        chapters[cid]["slides"].sort(key=lambda x: first.get(x.get("id"), len(merged["scenes"])))
     return out
 
 
@@ -287,29 +342,40 @@ def cmd_pick(a):
     try:
         merged = _merge(sb, _load(opt_path), g, opt)
         outline_path = os.path.join(a.workdir, "outline.json")
-        new_outline = _merge_outline(_load(outline_path), g, opt) if os.path.isfile(outline_path) else None
+        new_outline = _merge_outline(_load(outline_path), g, opt, merged) if os.path.isfile(outline_path) else None
+        if new_outline is not None:
+            errs, _ = check_outline.check(new_outline)
+            if errs:
+                raise Reject("入れた後の構成メモに誤りがある: " + " / ".join(errs))
     except Reject as e:
         print(f"案を入れられない: {e}", file=sys.stderr)
         return 1
-    # 入れた後の台本の形を確かめてから書く（台本と同じフォルダに仮のファイルを置く。画像の相対パスのため）
-    tmp = os.path.join(a.workdir, "storyboard.pick-check.json")
+    # 入れた後の台本（と構成メモ）を確かめてから書く。仮のファイルは台本と同じフォルダに置く（画像の相対パスのため）
+    tmp, tmp_ol = os.path.join(a.workdir, "storyboard.pick-check.json"), os.path.join(a.workdir, "outline.pick-check.json")
     _dump(merged, tmp)
+    cmd = ["node", os.path.join(HERE, "check_storyboard.cjs"), tmp, "--json"]
+    if new_outline is not None:
+        _dump(new_outline, tmp_ol)
+        cmd += ["--outline", tmp_ol]
     try:
-        r = subprocess.run(["node", os.path.join(HERE, "check_storyboard.cjs"), tmp, "--json"], capture_output=True, text=True)
+        r = subprocess.run(cmd, capture_output=True, text=True)
         try:
             errors = json.loads(r.stdout).get("errors")
         except ValueError:
             errors = [(r.stdout + r.stderr).strip() or "check_storyboard.cjs が結果を返さない"]
+        if errors:
+            print("案を入れられない: 入れた後の台本" + ("か構成メモ" if new_outline is not None else "") + "に誤りがある", file=sys.stderr)
+            for e in errors:
+                print("  " + str(e), file=sys.stderr)
+            return 1
+        # 確かめた仮のファイルを、そのまま本物に入れ替える（書きかけの台本を残さない）
+        os.replace(tmp, sb_path)
+        if new_outline is not None:
+            os.replace(tmp_ol, outline_path)
     finally:
-        os.remove(tmp)
-    if errors:
-        print("案を入れられない: 入れた後の台本に誤りがある", file=sys.stderr)
-        for e in errors:
-            print("  " + str(e), file=sys.stderr)
-        return 1
-    _dump(merged, sb_path)
-    if new_outline is not None:
-        _dump(new_outline, outline_path)
+        for t in (tmp, tmp_ol):
+            if os.path.exists(t):
+                os.remove(t)
     _cleanup(a.workdir, data, g)
     print(f"{opt.get('name')} を台本{'と構成メモ' if new_outline is not None else ''}に入れ、組「{g['id']}」を片付けた。frames.cjs を回し直す")
     return 0

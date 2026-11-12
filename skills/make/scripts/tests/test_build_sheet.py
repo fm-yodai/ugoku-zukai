@@ -371,6 +371,72 @@ class BuildSheetTest(unittest.TestCase):
         self.assertEqual(r.returncode, 2)
         self.assertIn("alts.json", r.stderr)
 
+    # ---- レビューで見つかったこと ----
+    def test_stale_slide_content(self):   # 字幕は同じでも、スライドの中身を変えたらコマは古い
+        d = self.newdir(); os.makedirs(d)
+        shutil.copytree(os.path.join(os.path.dirname(SLIDE_SB), "assets"), os.path.join(d, "assets"))
+        path = os.path.join(d, "storyboard.json")
+        shutil.copy(SLIDE_SB, path)
+        fr = self.frames(path)
+        self.assertEqual(self.build(path, fr)[0].returncode, 0)
+        sb = load(path)
+        sb["slides"]["relation"]["statement"] = "言いたいことを変えた。"
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(sb, f, ensure_ascii=False)
+        r, html = self.build(path, fr)
+        self.assertEqual(r.returncode, 2)
+        self.assertIn("frames.cjs を回し直す", r.stderr)
+        self.assertEqual(html, "")
+
+    def test_old_frames_without_hash_still_work(self):
+        d = self.copy_frames(self.frames_seq)
+        fr = load(os.path.join(d, "frames.json"))
+        self.assertIn("storyboard_sha256", fr)
+        fr.pop("storyboard_sha256")
+        with open(os.path.join(d, "frames.json"), "w", encoding="utf-8") as f:
+            json.dump(fr, f, ensure_ascii=False)
+        self.assertEqual(self.build(SEQ, d)[0].returncode, 0)
+
+    def test_chapter_heading_once_and_link(self):
+        # 章の場面が離れても、章の意図とつながりは 1 回だけ。一部の場面だけのページでも「前の章から」は出る
+        r, html = self.build(SLIDE_SB, self.frames(SLIDE_SB, "--scenes", "s3"), "--outline", SLIDE_OUTLINE)
+        ol = load(SLIDE_OUTLINE)
+        self.assertIn("前の章から: " + ol["chapters"][1]["link"]["text"], html)
+        self.assertNotIn("章の順番: ", html)   # 最初の章が出ていないページには、章の順番の意図を出さない
+        sb = load(SLIDE_SB)
+        sc = {x["id"]: x for x in sb["scenes"]}
+        sb["scenes"] = [sc[i] for i in ("s1", "s2", "s3", "s5", "s4", "s6")]
+        path = os.path.join(os.path.dirname(SLIDE_SB), "_tmp_apart.json")
+        try:
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(sb, f, ensure_ascii=False)
+            r, html = self.build(path, self.frames(path), "--outline", SLIDE_OUTLINE)
+        finally:
+            os.remove(path)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        for ch in ol["chapters"]:
+            self.assertEqual(html.count(ch["intent"]["text"]), 1, ch["id"])
+
+    def test_alts_missing_frames_is_error(self):   # 案のスライドを使う場面のコマが欠けている → 空の段を出さずに止まる
+        wd, path = self.alts_setup()
+        subprocess.run(["node", FRAMES, os.path.join(wd, "storyboard.json"), "--theme", "koo", "-o", os.path.join(wd, "frames"), "--scenes", "s1,s2"], capture_output=True)
+        r, html = self.build(os.path.join(wd, "storyboard.json"), os.path.join(wd, "frames"), "--alts", path)
+        self.assertEqual(r.returncode, 2)
+        self.assertIn("案 A", r.stderr)
+        self.assertIn("コマがない", r.stderr)
+
+    def test_alts_intent_shape(self):
+        import alt_fixture
+        wd, path = self.alts_setup()
+        d = load(path)
+        d["groups"][0]["options"][1]["slides"] = [{"id": "def-usability", "intent": {"text": "x"}}, alt_fixture.OPTION_B_SLIDES[1]]
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(d, f, ensure_ascii=False)
+        r, html = self.build_alts(wd, path)
+        self.assertEqual(r.returncode, 2)
+        self.assertIn("intent は文字列", r.stderr)
+        self.assertNotIn("Traceback", r.stderr)
+
     # ---- まだ決めていないこと（構成メモの open）と、時刻の出どころ ----
     def outline_with_open(self, items):
         ol = load(PAIR_OUTLINE)

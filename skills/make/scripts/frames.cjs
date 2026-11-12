@@ -55,7 +55,9 @@ const esc = s => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(
   const UZ = load();
   globalThis.document = makeDocument();
   vm.runInThisContext(fs.readFileSync(path.join(PLAYER, "src", "view_svg.js"), "utf8"), { filename: "view_svg.js" });
-  const sb = JSON.parse(fs.readFileSync(file, "utf8"));
+  const raw = fs.readFileSync(file);
+  const sbHash = require("crypto").createHash("sha256").update(raw).digest("hex");   // コマを書いたときの台本（build_sheet.py が、台本が変わっていないかを見る）
+  const sb = JSON.parse(raw.toString("utf8"));
   let th;   // 構成メモが見た目を決めていたら、そのテーマ（違うテーマを渡したら、何も書かずに止まる）
   try { th = pickTheme(file, opt("--theme")); }
   catch (e) { if (e.code !== "THEME") throw e; console.error(e.message); process.exit(2); }
@@ -165,7 +167,7 @@ const esc = s => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(
 
   const Resvg = loadResvg();
   const writeJson = png => fs.writeFileSync(path.join(outDir, "frames.json"),
-    JSON.stringify({ png, timed: tl ? "voice" : "estimate", sheets: sheets.map(({ file: f, lines }) => ({ file: f, lines })), lines: frames, slides }, null, 2) + "\n");
+    JSON.stringify({ png, timed: tl ? "voice" : "estimate", storyboard_sha256: sbHash, sheets: sheets.map(({ file: f, lines }) => ({ file: f, lines })), lines: frames, slides }, null, 2) + "\n");
   if (!Resvg) {
     writeJson(false);
     console.error(`resvg を読めない（置き場 ${renderHome()}）。PNG は作らず SVG と frames.json だけ書いた。python3 setup_render.py を実行する`);

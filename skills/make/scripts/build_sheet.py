@@ -24,6 +24,7 @@
 """
 import argparse
 import base64
+import hashlib
 import html
 import json
 import os
@@ -42,7 +43,6 @@ STYLE = """
          padding-block: 20px 48px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
   .us-wrap { max-width: 1040px; margin: 0 auto; }
   .us-wrap h1 { font-size: 22px; line-height: 1.4; margin: 0 0 4px; overflow-wrap: anywhere; }
-  .us-note { color: var(--muted); font-size: 13px; margin: 0 0 8px; }
   .us-chapter { margin-top: 32px; }
   .us-chapter h2 { font-size: 17px; line-height: 1.5; margin: 0 0 8px; padding-bottom: 6px; border-bottom: 2px solid var(--line); overflow-wrap: anywhere; }
   .us-flow, .us-intent, .us-link { margin: 0 0 6px; overflow-wrap: anywhere; }
@@ -166,8 +166,9 @@ def _slide_block(storyboard, frames_dir, slide, intents, tag="h3"):
     return "".join(out)
 
 
-def _load_frames(frames_dir, storyboard):
-    """frames.json を読み、コマが台本のものかを確かめて返す。なければ OSError、形が違う・古いなら ValueError"""
+def _load_frames(frames_dir, storyboard, sb_path=None):
+    """frames.json を読み、コマが台本のものかを確かめて返す。なければ OSError、形が違う・古いなら ValueError。
+    sb_path（台本のファイル）を渡すと、コマを書いた後に台本が変わっていないかも見る（字幕は同じでも、スライドの中身を変えたらコマは古い）"""
     with open(os.path.join(frames_dir, "frames.json"), encoding="utf-8") as f:
         frames = json.load(f)
     lines = frames.get("lines")
@@ -181,6 +182,11 @@ def _load_frames(frames_dir, storyboard):
     stale = _stale(storyboard, lines)
     if stale:
         raise ValueError(f"コマが今の台本のものでない（{stale}）。台本を直したら frames.cjs を回し直す")
+    want = frames.get("storyboard_sha256")   # 前の版の frames.cjs が書いたコマにはない（そのときは行の id と字幕だけで見る）
+    if sb_path and isinstance(want, str):
+        with open(sb_path, "rb") as f:
+            if hashlib.sha256(f.read()).hexdigest() != want:
+                raise ValueError("コマが今の台本のものでない（コマを書いた後に、台本が変わった）。台本を直したら frames.cjs を回し直す")
     return frames
 
 
@@ -234,7 +240,7 @@ def load_alts(path, storyboard):
                 osb = json.load(f)
             frames_dir = os.path.join(base, str(o.get("frames")))
             try:
-                frames = _load_frames(frames_dir, osb)
+                frames = _load_frames(frames_dir, osb, sb_path)
             except OSError:
                 raise ValueError(f"{where}: 案「{name}」のコマがない（{o.get('frames')}/frames.json）。frames.cjs を回す")
             except ValueError as e:
@@ -245,8 +251,17 @@ def load_alts(path, storyboard):
             if not isinstance(osl, list) or not osl or any(not isinstance(x, dict) or not isinstance(x.get("id"), str) for x in osl):
                 raise ValueError(f"{where}: 案「{name}」の slides は、id を持つオブジェクトの列で書く")
             for x in osl:
+                for k in ("intent", "link"):
+                    if k in x and not isinstance(x[k], str):
+                        raise ValueError(f"{where}: 案「{name}」のスライド「{x['id']}」の {k} は文字列で書く（構成メモの項目の形ではなく、文だけ）")
                 if x["id"] not in (osb.get("slides") or {}):
                     raise ValueError(f"{where}: スライド「{x['id']}」が、案「{name}」の台本にない")
+            # 案のスライドを使う場面のコマが、全部そろっていること（欠けたまま並べると、空の段になる）
+            have = {ln.get("id") for ln in frames["lines"]}
+            ids = [x["id"] for x in osl]
+            for sc in osb.get("scenes") or []:
+                if sc.get("slide") in ids and any(ln.get("id") not in have for ln in sc.get("lines") or []):
+                    raise ValueError(f"{where}: 案「{name}」のコマがない（場面「{sc.get('id')}」）。alts.py frames を回す")
             options.append({"name": name, "diff": o.get("diff") if isinstance(o.get("diff"), str) else "", "storyboard": osb,
                             "frames_dir": frames_dir, "frames": frames, "slides": osl})
         out.append({"id": gid, "replaces": list(reps), "scenes": [storyboard["scenes"][i]["id"] for i in idx], "options": options})
@@ -284,9 +299,9 @@ def _row(line, frames_dir):
             f'<div><p class="us-ref">{esc(ref)}</p><p class="us-sub">{esc(line["text"])}</p></div></div>')
 
 
-def build(storyboard, frames_dir, outline=None, artifact=False, alts=None):
+def build(storyboard, frames_dir, outline=None, artifact=False, alts=None, sb_path=None):
     """スライドコンテのページの HTML を返す。frames.json やコマの SVG がなければ OSError、形が違えば ValueError"""
-    frames = _load_frames(frames_dir, storyboard)
+    frames = _load_frames(frames_dir, storyboard, sb_path)
     lines = frames["lines"]
     title = storyboard.get("title") or "動く図解"
     body = [f'<h1>{esc(title)}</h1>']
@@ -297,7 +312,8 @@ def build(storyboard, frames_dir, outline=None, artifact=False, alts=None):
     flow = _item_text(outline.get("flow")) if v2 else None
     finals = {sl["id"]: sl for sl in frames.get("slides") or [] if isinstance(sl, dict) and sl.get("id") and sl.get("svg")}
     scene_slide = {sc["id"]: sc.get("slide") for sc in storyboard["scenes"]}
-    done, first = set(), True
+    first_ch = next(iter(och), None)   # 構成メモで最初の章
+    done, seen_ch = set(), set()
     # 案の組が置き換える場面: 最初の場面の位置に案の段を出し、今の台本の段（スライドの段と行の段）は出さない
     alt_at, alt_skip = {}, set()
     for g in alts or []:
@@ -320,15 +336,17 @@ def build(storyboard, frames_dir, outline=None, artifact=False, alts=None):
             parts.extend(rows)
         if not parts:
             continue
-        if first and flow:
+        # 章の意図とつながりは、その章が最初に出るところに 1 回だけ（場面が離れた章は、2 回目から見出しだけ）。
+        # 章の順番の意図は、構成メモで最初の章の前に出す（一部の場面だけのページで、最初の章が出ていなければ出さない）
+        c = och.get(ch["id"]) if ch["id"] not in seen_ch else None
+        seen_ch.add(ch["id"])
+        if c and ch["id"] == first_ch and flow:
             body.append(f'<p class="us-flow">章の順番: {esc(flow)}</p>')
         body.append(f'<section class="us-chapter"><h2>{esc(ch["title"])}</h2>')
-        c = och.get(ch["id"]) or {}
-        if not first and _item_text(c.get("link")):
+        if c and ch["id"] != first_ch and _item_text(c.get("link")):
             body.append(f'<p class="us-link">前の章から: {esc(_item_text(c["link"]))}</p>')
-        if _item_text(c.get("intent")):
+        if c and _item_text(c.get("intent")):
             body.append(f'<p class="us-intent">{esc(_item_text(c["intent"]))}</p>')
-        first = False
         body.extend(parts)
         body.append("</section>")
     head = f"<title>{esc(title)} スライドコンテ</title>\n<style>{STYLE}</style>"
@@ -363,7 +381,7 @@ def main():
                     print("  " + e, file=sys.stderr)
                 return 2
         alts = load_alts(a.alts, sb) if a.alts else None
-        page = build(sb, a.frames, outline, a.artifact, alts)
+        page = build(sb, a.frames, outline, a.artifact, alts, a.storyboard)
     except (OSError, ValueError) as e:
         print(f"スライドコンテを作れない: {e}", file=sys.stderr)
         return 2

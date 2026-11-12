@@ -179,6 +179,7 @@ const UZ_DATA = /*UZ:DATA*/null;
     if (c !== curCh) {
       if (curCh >= 0) marks.chapters[curCh].el.removeAttribute("aria-current");
       if (c >= 0) marks.chapters[c].el.setAttribute("aria-current", "true");
+      if (marks.hideTip) marks.hideTip();   // 行の一覧が入れ替わるので、開いたままの根拠の吹き出しは閉じる
       marks.chapters.forEach((ch, i) => { const panel = ch.panel; panel.hidden = i !== c; });   // 行は、今の章のぶんだけ出す（章の題を押すと、その章の頭に飛んで切り替わる）
       curCh = c;
     }
@@ -263,7 +264,7 @@ const UZ_DATA = /*UZ:DATA*/null;
       ticks.append(sp);
     }
     nav.hidden = false;
-    marks = { chapters: chs, lines };
+    marks = { chapters: chs, lines, hideTip: hide };
     markCurrent(pausedAt);
   }
   // 直したい箇所を指定する。今の位置を「場面 / 行 @時刻」で出す（絵コンテのページの行の表記と同じ）。
