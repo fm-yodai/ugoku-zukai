@@ -2,7 +2,8 @@
 """台本の字幕と読みの機械検査（criteria S-M2〜S-M4）。
 
 使い方: check_text.py <storyboard.json> [--json]
-  S-M2 text と read に禁止語（assets/banned_terms.json）がある
+  S-M2 text と read に禁止語（assets/banned_terms.json）がある。スライドの文字（title・statement・テキストの部品）にもかける。
+       スライドの文字は書き言葉なので、S-M3・S-M4 と警告（話し言葉の規則）はかけない
   S-M3 話者がずんだもんなのに、文末が「のだ」「なのだ」でない（文は「。」「？」「！」で切る。「」の中では切らない。句点の無い最後の文も見る）
   S-M4 読む文（read があれば read、なければ text）に、ユーザー辞書にない英字の語がある
   警告（終了コードに響かない。聞いて分かる文の規則 references/writing/spoken.md）
@@ -110,7 +111,42 @@ def check(sb):
                     seen.add(w)
                     errors.append({"line": lid, "rule": "S-M4",
                                    "msg": f"行 {lid} の `{w}` は read でカタカナにする（ユーザー辞書にもない）"})
+    for where, s in slide_texts(sb):
+        for w in find_banned(s, terms):
+            errors.append({"line": where, "rule": "S-M2", "msg": f"{where} に禁止語「{w}」がある"})
     return errors, warnings
+
+
+def slide_texts(sb):
+    """スライドの文字を (場所, 文) の列で返す。語の強調の ** は外す"""
+    out = []
+
+    def blocks(head, f):
+        for b in f.get("blocks") or []:
+            if not isinstance(b, dict):
+                continue
+            bid = f"{head}{b.get('id', '?')}"
+            if isinstance(b.get("text"), str):
+                out.append((bid, b["text"]))
+            for i, it in enumerate(b.get("items") or []):
+                if isinstance(it, str):
+                    out.append((f"{bid}.{i + 1}", it))
+    slides = sb.get("slides")
+    for sid, sl in (slides.items() if isinstance(slides, dict) else []):
+        if not isinstance(sl, dict):
+            continue
+        head = f"スライド「{sid}」の "
+        for k in ("title", "statement"):
+            if isinstance(sl.get(k), str):
+                out.append((head + k, sl[k]))
+        for p in sl.get("parts") or []:
+            if isinstance(p, dict) and p.get("type") == "text":
+                blocks(f"{head}{p.get('id', '?')}/", p)
+    figures = sb.get("figures")
+    for fid, f in (figures.items() if isinstance(figures, dict) else []):
+        if isinstance(f, dict) and f.get("type") == "text":   # figures に宣言したテキストの部品
+            blocks(f"図「{fid}」の ", f)
+    return [(w, s.replace("**", "")) for w, s in out]
 
 
 def main():
