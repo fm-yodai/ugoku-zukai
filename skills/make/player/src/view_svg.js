@@ -81,6 +81,7 @@
       this.endG = el("g", null, svg);
       this.text(this.endG, UZ.wrap(M.title, 40, 1000, S.bold, 2), 640, 320, 40, { weight: S.bold, color: S.ink });
       this.text(this.endG, ["音声: " + M.credit], 640, 410, 22, { color: S.muted });
+      (M.credits || []).forEach((c, i) => this.text(this.endG, [c], 640, 446 + i * 26, 18, { color: S.muted }));   // 画像のクレジット
     }
 
     text(parent, lines, x, y, size, o = {}) {
@@ -167,6 +168,9 @@
           if (it.glyph) this.glyph(E.g, it.glyph.kind, it.glyph.x, it.glyph.y, it.glyph.color, 0.85);
           E.texts = (it.texts || []).map(T => this.textSpec(E.g, T));
           if (it.staticMark) this.glyph(E.g, it.staticMark.kind, it.staticMark.x, it.staticMark.y, it.staticMark.kind === "cross" ? S.bad : it.staticMark.kind === "question" ? S.warn : S.good, 1);
+        } else if (it.kind === "image") {
+          E.g = el("g", null, L.box);
+          el("image", { x: it.x, y: it.y, width: it.w, height: it.h, href: this.M.assets[it.src].data, preserveAspectRatio: "xMidYMid meet" }, E.g);
         } else if (it.kind === "bar") {
           E.g = el("g", null, L.box);
           E.rect = el("rect", { x: it.x, y: it.y, width: it.w, height: it.h, rx: it.r, fill: it.fill, stroke: it.stroke, "stroke-width": it.solid ? 0 : S.stroke }, E.g);
@@ -283,7 +287,7 @@
         } else if (it.kind === "rect") {
           E.g.style.opacity = op(smooth(show));
           if (it.fill === "none") E.bg.setAttribute("fill", C.rgba(s.tint || S.accent, 0.16 * Math.max(s.pulse || 0, s.tint ? s.tintP : 0)));
-        } else if (it.kind === "band" || it.kind === "frame") {
+        } else if (it.kind === "band" || it.kind === "frame" || it.kind === "image") {
           E.g.style.opacity = op(smooth(show));
         } else if (it.kind === "mark") {
           const kind = s.mark || "check", col = kind === "cross" ? S.bad : kind === "question" ? S.warn : S.good;

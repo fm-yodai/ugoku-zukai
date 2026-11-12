@@ -110,6 +110,13 @@
       return { id: sc.id, figs, header, areas, captions, lines: sc.lines, tone: figs.length === 1 ? tones[0] : "light", slide: P.slide, statement: P.statement };
     });
 
+    // 画像は、道具が先に読み込んで渡す（opts.assets。node は assets.cjs、組み立ては uz_assets.py）
+    const assets = opts.assets || {};
+    for (const [fid, f] of Object.entries(FIGS)) if (f.type === "image" && !assets[f.src]) err(`図「${fid}」: 画像「${f.src}」が読み込まれていない`);
+    if (errors.length) return { errors, warnings };
+    const credits = [];
+    for (const f of Object.values(FIGS)) if (f.type === "image" && typeof f.credit === "string" && f.credit && !credits.includes(f.credit)) credits.push(f.credit);
+
     // ---- 図の配置（最初に出る場面の区画で 1 回だけ）----
     const figs = {};
     for (const sc of scenes) {
@@ -117,7 +124,7 @@
         const fid = sc.figs[i];
         if (figs[fid]) continue;
         const f = FIGS[fid];
-        const L = await UZ.FIG[f.type].layout(f, S, { area: sc.areas[i], tryBoth: !f.direction });
+        const L = await UZ.FIG[f.type].layout(f, S, { area: sc.areas[i], tryBoth: !f.direction, assets });
         const items = {};
         for (const it of L.items) { it.fig = fid; it.key = `${fid}/${it.id}`; items[it.id] = it; }
         figs[fid] = { id: fid, type: f.type, spec: f, w: L.w, h: L.h, items, order: L.order, autoShow: !!L.autoShow, fixed: !!L.fixed, extra: L };
@@ -369,7 +376,7 @@
     }
     const sp = (sb.voice && sb.voice.speaker) ?? UZ.DEFAULT_SPEAKER;
     const credit = sb.credit || (sb.voice && sb.voice.credit) || timeline.credit || `VOICEVOX:${UZ.SPEAKER_NAMES[sp] || "話者 " + sp}`;
-    return { errors, warnings, sb, theme, S, timeline, TL, scenes, figs, slides, acts, itemByKey, duration, endCard, credit, title: sb.title || "" };
+    return { errors, warnings, sb, theme, S, timeline, TL, scenes, figs, slides, assets, credits, acts, itemByKey, duration, endCard, credit, title: sb.title || "" };
   };
 
   // 箱の中の点の位置 → 辺の始まり … 辺の終わり → 次の箱の中、の折れ線（箱の中は縦・横だけで動く）

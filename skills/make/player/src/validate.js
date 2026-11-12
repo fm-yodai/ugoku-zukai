@@ -7,7 +7,7 @@
     sequence: ["participants", "messages"], graph: ["nodes", "edges"], canvas: ["shapes"],
     swimlane: ["lanes", "steps"], beforeafter: ["before", "after"], roadmap: ["periods", "items"], tree: ["root"],
     chart: ["categories", "series"], kpi: ["items"], matrix: ["x", "y"], pyramid: ["levels"], cycle: ["steps"], venn: ["sets"],
-    text: ["blocks"],
+    text: ["blocks"], image: ["src"],
   };
   const ROLES = ["actor", "process", "store", "external", "muted", "added", "removed", "good", "bad", "warn", "accent"];
 
@@ -172,6 +172,11 @@
           if (b.source != null && typeof b.source !== "string" && !(Array.isArray(b.source) && b.source.every(x => typeof x === "string")))
             W(`${where}: ブロック ${b.id} の source は文字列か文字列の配列で書く`);
         }
+      }
+      if (f.type === "image") {
+        if (f.src != null && typeof f.src !== "string") E(`${where}: src は、台本のあるフォルダからの相対パスを文字列で書く`);
+        if (!f.source) W(`${where}: 画像の出どころ（source）がない（利用者から渡されたものなら、そう書く）`);
+        addId("img", "画像");
       }
       if (f.type === "canvas") {
         for (const s of f.shapes || []) {

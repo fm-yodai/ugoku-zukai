@@ -92,4 +92,13 @@
       return { w: W, h: Math.max(y, 1), items, order, maxScale: 1, valign: "top" };
     },
   };
+
+  // ======== 画像（image）========
+  // 画像の大きさ（ctx.assets[src] の w・h）をそのまま図の大きさにし、区画に収まる最大まで伸び縮みさせる
+  FIG.image = {
+    async layout(f, S, ctx) {
+      const a = ctx.assets[f.src];
+      return { w: a.w, h: a.h, items: [{ id: "img", kind: "image", src: f.src, x: 0, y: 0, w: a.w, h: a.h, bbox: { x: 0, y: 0, w: a.w, h: a.h } }], order: ["img"], fixed: true };
+    },
+  };
 })(globalThis.UZ = globalThis.UZ || {});

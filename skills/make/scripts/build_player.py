@@ -97,11 +97,14 @@ def pick_theme(storyboard_path, given):
     return path
 
 
-def build(storyboard, theme, timeline=None, audio_b64=None, artifact=False):
+PAGE_LIMIT = 15 * 1024 * 1024   # Artifact の 1 ページの上限（16MB）より少し手前で止める
+
+
+def build(storyboard, theme, timeline=None, audio_b64=None, artifact=False, assets=None):
     tpl = open(os.path.join(PLAYER, "template.html"), encoding="utf-8").read()
     title = storyboard.get("title", "動く図解")
     font_link = f'<link rel="stylesheet" href="{theme["font"]["css"]}">' if theme.get("font", {}).get("css") else ""
-    data = {"storyboard": storyboard, "theme": theme, "timeline": timeline, "audio": audio_b64}
+    data = {"storyboard": storyboard, "theme": theme, "timeline": timeline, "audio": audio_b64, "assets": assets or {}}
     esc = title.replace("&", "&amp;").replace("<", "&lt;").replace('"', "&quot;")
     html = tpl.replace("__TITLE__", esc).replace("__FONT_LINK__", font_link)
     # 置換文字列にバックスラッシュが含まれても壊れないよう、関数で置き換える
@@ -136,7 +139,18 @@ def main():
         print("build_player: 音声が古い。tts.py をもう一度実行してから組み立てる\n  " + "\n  ".join(stale), file=sys.stderr)
         sys.exit(1)
     au = base64.b64encode(open(a.audio, "rb").read()).decode() if a.audio else None
-    html = build(sb, load_theme(a.theme), tl, au, a.artifact)
+    sys.path.insert(0, HERE)
+    import uz_assets
+    try:
+        assets = uz_assets.load_assets(a.storyboard, sb)   # 画像の部品は、再生ページの中に埋め込む
+    except uz_assets.AssetError as e:
+        print(f"build_player: {e}", file=sys.stderr)
+        sys.exit(1)
+    html = build(sb, load_theme(a.theme), tl, au, a.artifact, assets)
+    limit = int(os.environ.get("UZ_PAGE_LIMIT") or PAGE_LIMIT)
+    if len(html.encode()) > limit:
+        print(f"build_player: 再生ページが 15MB を超える（{len(html.encode()) / 1e6:.1f}MB。画像が大きい）。画像を小さくする", file=sys.stderr)
+        sys.exit(1)
     os.makedirs(os.path.dirname(os.path.abspath(a.out)), exist_ok=True)
     with open(a.out, "w", encoding="utf-8") as f:
         f.write(html)

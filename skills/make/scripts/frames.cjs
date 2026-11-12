@@ -13,6 +13,7 @@
 const fs = require("fs"), path = require("path"), vm = require("vm"), os = require("os"), cp = require("child_process");
 const { load, pickTheme, PLAYER } = require("./uz_node.cjs");
 const { makeDocument, serialize } = require("./svg_dom.cjs");
+const { loadAssets } = require("./assets.cjs");
 
 const args = process.argv.slice(2);
 const VAL = ["--theme", "--timeline", "-o", "--scenes", "--lines"];
@@ -79,7 +80,10 @@ const esc = s => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(
       process.exit(2);
     }
   }
-  const M = await UZ.build(sb, th, tl);
+  let assets;
+  try { assets = loadAssets(file, sb); }
+  catch (e) { if (e.code !== "ASSET") throw e; console.error("誤り: " + e.message); process.exit(1); }
+  const M = await UZ.build(sb, th, tl, { assets });
   if (M.errors && M.errors.length) {
     for (const e of M.errors) console.error("誤り: " + e);
     process.exit(1);

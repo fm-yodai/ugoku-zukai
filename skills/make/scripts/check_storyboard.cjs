@@ -8,6 +8,7 @@
 const fs = require("fs");
 const { load, pickTheme } = require("./uz_node.cjs");
 const { checkAgainstOutline } = require("./outline_check.cjs");
+const { loadAssets } = require("./assets.cjs");
 const args = process.argv.slice(2);
 const VAL = ["--theme", "--timeline", "--outline"];   // 値を取る引数
 const opt = k => { const i = args.indexOf(k); return i >= 0 ? args[i + 1] : null; };
@@ -26,7 +27,10 @@ if (args.includes("--outline")) {
   try { th = pickTheme(file, opt("--theme")); }
   catch (e) { if (e.code !== "THEME") throw e; console.error(e.message); process.exit(2); }
   const tl = opt("--timeline") ? JSON.parse(fs.readFileSync(opt("--timeline"), "utf8")) : null;
-  const M = await UZ.build(sb, th, tl);
+  let assets;   // 画像の部品のファイル（読めなければ、誤りとして知らせる）
+  try { assets = loadAssets(file, sb); }
+  catch (e) { if (e.code !== "ASSET") throw e; console.log(`${file}\n  誤り: ${e.message}`); process.exit(1); }
+  const M = await UZ.build(sb, th, tl, { assets });
   const issues = M.errors.length ? [] : UZ.checkLayout(M);
   const out = { file, theme: th.name, errors: M.errors, warnings: M.warnings, layout: issues, duration: M.duration ? +M.duration.toFixed(1) : null };
   if (outline && !M.errors.length) {   // 台本の形に誤りがあるときは突き合わせない（時刻を計算できていない）

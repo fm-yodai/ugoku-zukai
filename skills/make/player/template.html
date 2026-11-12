@@ -331,7 +331,7 @@ const UZ_DATA = /*UZ:DATA*/null;
   (async () => {
     try {
       if (document.fonts && document.fonts.load) await Promise.race([document.fonts.load(`500 24px ${UZ_DATA.theme.font.family}`), new Promise(r => setTimeout(r, 2500))]);
-      M = await UZ.build(UZ_DATA.storyboard, UZ_DATA.theme, UZ_DATA.timeline);
+      M = await UZ.build(UZ_DATA.storyboard, UZ_DATA.theme, UZ_DATA.timeline, { assets: UZ_DATA.assets || {} });
       if (M.errors.length) { showErr("台本に誤りがあります:\n" + M.errors.join("\n")); return; }
       view = new UZ.View($("uz-stage"), M);
       if (!hasAudio) $("uz-note").textContent = "音声なし（時刻は文字数からの見積もり）";

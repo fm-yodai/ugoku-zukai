@@ -21,6 +21,9 @@ const textDeck = (blocks, acts, area) => deck({ p1: { title: "見出し", parts:
   { figure: "flow", area: { col: [1, 6], row: [1, 6] } },
   { id: "defs", type: "text", blocks, area: area || { col: [7, 12], row: [1, 6] } }] } },
   [SC("s1", "p1", [{ id: "l1", text: "説明します。", do: acts || [] }])], { flow: FLOW });
+const { loadAssets } = require("../assets.cjs");
+const SBP = path.join(__dirname, "storyboard.json");   // 画像の src は、台本のあるフォルダ（ここでは tests/）からの相対パス
+const imgDeck = parts => deck({ p1: { title: "画像", parts } }, [SC("s1", "p1", [{ id: "l1", text: "出します。", do: parts.map(p => ({ show: p.id })) }])]);
 const TWO = { p1: { title: "見出し", parts: [
   { figure: "flow", area: { col: [1, 7], row: [1, 6] } },
   { id: "pts", type: "list", items: LIST, area: { col: [8, 12], row: [1, 6] } }] } };
@@ -156,6 +159,41 @@ const tests = {
     hasErr(await build(textDeck([{ id: "x", kind: "para" }])), /text がない/);
     hasErr(await build(textDeck([{ kind: "para", text: "あ" }])), /id がない/);
     hasWarn(await build(textDeck([{ id: "x", kind: "para", text: "あ", source: 3 }])), /source は文字列か文字列の配列/);
+  },
+
+  // ---- Task 3: 画像の部品 ----
+  async image_part_fits() {
+    const sb = imgDeck([{ id: "im", type: "image", src: "assets/dot.svg", source: "検査用", area: { col: [1, 6], row: [1, 6] } }, { id: "pts", type: "list", items: LIST, area: { col: [7, 12], row: [1, 6] } }]);
+    const M = await build(sb, { assets: loadAssets(SBP, sb) });
+    assert.deepStrictEqual(M.errors, []);
+    const b = M.figs.im.items.img.bbox, pl = M.scenes[0].place.im, ar = M.scenes[0].areas[0];
+    assert.ok(Math.abs(b.w / b.h - 2) < 0.001, "縦横比を保つ");
+    assert.ok(Math.abs(b.w * pl.s - ar.w) < 0.5, "区画の幅いっぱい");
+    assert.ok(pl.oy >= ar.y - 0.01 && pl.oy + b.h * pl.s <= ar.y + ar.h + 0.01, "区画の中");
+    assert.ok(showAt(M, "im/img", M.duration) > 0.99);
+    assert.deepStrictEqual(UZ.checkLayout(M), []);
+  },
+  async image_missing_is_error() {
+    const sb = imgDeck([{ id: "im", type: "image", src: "assets/dot.svg", source: "検査用" }]);
+    hasErr(await build(sb), /画像「assets\/dot.svg」が読み込まれていない/);
+    hasErr(await build(imgDeck([{ id: "im", type: "image", source: "検査用" }])), /src がない/);
+  },
+  async image_unsupported_is_error() {
+    for (const src of ["assets/x.webp", "assets/nai.png", "../x.png"]) {
+      const sb = imgDeck([{ id: "im", type: "image", src }]);
+      assert.throws(() => loadAssets(SBP, sb), e => e.code === "ASSET" && e.message.includes(`画像「${src}」が読めない`));
+    }
+  },
+  async image_credit_and_source() {
+    const sb = imgDeck([
+      { id: "im1", type: "image", src: "assets/dot.svg", source: "検査用", credit: "写真: A", area: { col: [1, 4], row: [1, 6] } },
+      { id: "im2", type: "image", src: "assets/dot.svg", source: "検査用", credit: "写真: A", area: { col: [5, 8], row: [1, 6] } },
+      { id: "im3", type: "image", src: "assets/dot.svg", area: { col: [9, 12], row: [1, 6] } }]);
+    const M = await build(sb, { assets: loadAssets(SBP, sb) });
+    assert.deepStrictEqual(M.errors, []);
+    assert.deepStrictEqual(M.credits, ["写真: A"]);
+    hasWarn(M, /図「im3」: 画像の出どころ（source）がない/);
+    assert.ok(!M.warnings.some(w => /im1.*出どころ/.test(w)));
   },
 };
 
