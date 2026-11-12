@@ -252,5 +252,91 @@ class ChapterTest(unittest.TestCase):
         self.assertNotIn("chapters", out)
 
 
+class CheckOutlineV2Test(unittest.TestCase):
+    """3 段の意図で書く形（ugoku-zukai-outline/2）"""
+
+    def check(self, name, ready=False):
+        return check_outline.check(load(os.path.join(DIR, "v2", name)), ready=ready)
+
+    def test_v2_ok(self):
+        self.assertEqual(self.check("ok_ux.json"), ([], []))
+        self.assertEqual(self.check("ok_ux.json", ready=True), ([], []))
+        self.assertEqual(check_outline.version(load(os.path.join(DIR, "v2", "ok_ux.json"))), 2)
+        self.assertEqual(check_outline.version(load(os.path.join(DIR, "ok_ux.json"))), 1)
+        self.assertIsNone(check_outline.version({"format": "x"}))
+
+    def test_v2_says_is_error(self):
+        errors, _ = self.check("bad_says.json")
+        self.assertTrue(any("says" in e and "/2" in e for e in errors), errors)
+        self.assertTrue(any("shows" in e and "/2" in e for e in errors), errors)
+
+    def test_v2_slide_ids(self):
+        errors, _ = self.check("bad_slide_dup.json")
+        self.assertTrue(any("スライド「ux-def」" in e and "重複" in e for e in errors), errors)
+        self.assertTrue(any("スライド「definitions」" in e and "intent がない" in e for e in errors), errors)
+        self.assertTrue(any("スライド「a/b」" in e and "使えない文字" in e for e in errors), errors)
+
+    def test_v2_ready(self):
+        self.assertEqual(self.check("bad_not_ready.json")[0], [])
+        errors, _ = self.check("bad_not_ready.json", ready=True)
+        self.assertTrue(any("章の順番の意図（flow）" in e for e in errors), errors)
+        self.assertTrue(any("章「c2」" in e and "意図（intent）" in e for e in errors), errors)
+        self.assertEqual(len(errors), 2, errors)   # スライドの意図が proposed でも、台本に進める
+
+    def test_v2_single_chapter_needs_no_flow(self):
+        o = load(os.path.join(DIR, "v2", "ok_ux.json"))
+        o.pop("flow"); o["chapters"] = o["chapters"][:1]
+        self.assertEqual(check_outline.check(o, ready=True)[0], [])
+
+    def test_v2_first_chapter_link(self):
+        o = load(os.path.join(DIR, "v2", "ok_ux.json"))
+        o["chapters"][0]["link"] = {"text": "つながり", "by": "claude", "state": "agreed"}
+        errors, warnings = check_outline.check(o)
+        self.assertEqual(errors, [])
+        self.assertTrue(any("最初の章" in w and "link" in w for w in warnings), warnings)
+
+    def test_v2_item_shape(self):
+        o = load(os.path.join(DIR, "v2", "ok_ux.json"))
+        o["flow"] = "文字列"
+        o["chapters"][0]["intent"] = {"text": "x", "by": "user", "state": "proposed"}
+        o["chapters"][1]["slides"] = {"id": "x"}
+        errors, _ = check_outline.check(o)
+        self.assertTrue(any(e.startswith("flow") for e in errors), errors)
+        self.assertTrue(any("章「c1」の intent" in e and "agreed" in e for e in errors), errors)
+        self.assertTrue(any("章「c2」" in e and "slides" in e for e in errors), errors)
+
+    def test_v2_proposed_and_agree_all(self):
+        o = load(os.path.join(DIR, "v2", "ok_ux.json"))
+        labels = [p["label"] for p in check_outline.proposed_items(o)]
+        for want in ("見た目", "章の順番の意図", "スライド relation の意図", "スライド ux-def の意図", "スライド ux-def のつながり"):
+            self.assertIn(want, labels)
+        self.assertNotIn("章 c1 の意図", labels)
+        with tempfile.TemporaryDirectory() as d:
+            p = os.path.join(d, "outline.json")
+            shutil.copy(os.path.join(DIR, "v2", "ok_ux.json"), p)
+            r = subprocess.run([sys.executable, CHECK, d, "--agree-all"], capture_output=True, text=True)
+            self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+            after = load(p)
+            self.assertEqual(check_outline.proposed_items(after), [])
+            self.assertEqual(after["chapters"][0]["slides"][0]["intent"]["by"], "claude")
+            self.assertEqual(after["chapters"][0]["intent"]["by"], "user")
+
+    def test_v2_slide_intents(self):
+        got = check_outline.slide_intents(load(os.path.join(DIR, "v2", "ok_ux.json")))
+        self.assertEqual(list(got), ["relation", "definitions", "ux-def"])
+        self.assertEqual(got["relation"], {"chapter": "c1", "intent": "二つの語の包含関係が、図ひとつで分かる", "link": None})
+        self.assertEqual(got["ux-def"]["link"], "二つを比べた後で、UX のほうを詳しく見る")
+        self.assertEqual(check_outline.slide_intents(load(os.path.join(DIR, "ok_ux.json"))), {})
+
+    def test_v1_unchanged(self):
+        o = load(os.path.join(DIR, "ok_ux.json"))
+        self.assertEqual(check_outline.check(o, ready=True), ([], []))
+        self.assertEqual([p["where"] for p in check_outline.proposed_items(o)], ["basics.look", "basics.voice", "c2.shows", "c3.shows", "c4.2"])
+        errors, _ = check_outline.check(load(os.path.join(DIR, "bad_not_ready.json")), ready=True)
+        self.assertEqual(errors, ["台本に進む前に basics.knows（視聴者が知っている前提）が要る"])
+        o["chapters"][0]["says"] = []
+        self.assertTrue(any("says（言うこと）" in e for e in check_outline.check(o, ready=True)[0]))
+
+
 if __name__ == "__main__":
     unittest.main()
