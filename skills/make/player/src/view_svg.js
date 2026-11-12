@@ -49,6 +49,12 @@
       this.headerBar = el("rect", { x: H.x, y: H.y + 12, width: 5, height: 32, rx: 2, fill: S.accent }, this.header);
       this.headerT = this.text(this.header, [""], H.x + 20, H.y + H.h / 2, 30, { weight: S.bold, color: S.ink, anchor: "start" });
       this.headerT2 = this.text(this.header, [""], H.x + 20, H.y + H.h / 2, 30, { weight: S.bold, color: S.ink, anchor: "start" });
+      // 言いたいこと（スライドの見出しの下の 1 文。頭に ▶）
+      const ST = UZ.STATEMENT, SB = UZ.AREA.body;
+      this.stG = el("g", null, svg);
+      this.stMark = this.text(this.stG, ["▶"], H.x + 2, SB.y + ST.lineH / 2, 16, { color: S.accent, anchor: "start" });
+      const stText = () => this.text(this.stG, [""], H.x + 26, SB.y, ST.size, { weight: ST.weight, color: S.ink, anchor: "start", lineH: ST.lineH });
+      this.stT = stText(); this.stT2 = stText();
       // 図
       this.figG = {};
       for (const F of Object.values(M.figs)) this.buildFig(F);
@@ -292,7 +298,7 @@
         if (this._dark !== on) {
           this._dark = on;
           this.creditT.setAttribute("fill", on ? (ch.muted || ch.ink) : S.muted);
-          for (const tx of [this.headerT, this.headerT2]) tx.setAttribute("fill", on ? ch.ink : S.ink);
+          for (const tx of [this.headerT, this.headerT2, this.stT, this.stT2]) tx.setAttribute("fill", on ? ch.ink : S.ink);
           if (on && ch.line) { this.subR.setAttribute("stroke", ch.line); this.subR.setAttribute("stroke-width", 1); } else this.subR.setAttribute("stroke", "none");
         }
       }
@@ -301,6 +307,16 @@
       this.setLines(this.headerT, [h.text]); this.headerT.style.opacity = h.opacity;
       this.headerBar.style.opacity = h.text ? Math.max(h.opacity, h.prev ? h.prev.opacity : 0) : (h.prev && h.prev.text ? h.prev.opacity : 0);
       if (h.prev) { this.setLines(this.headerT2, [h.prev.text]); this.headerT2.style.opacity = h.prev.opacity; } else this.headerT2.style.opacity = 0;
+      // 言いたいこと
+      const stt = fr.statement || { lines: [], opacity: 0, prev: null };
+      const putSt = (tx, lines, o) => {
+        const key = lines.join("\n");
+        if (tx._key !== key) { tx._key = key; tx._y = UZ.AREA.body.y + lines.length * UZ.STATEMENT.lineH / 2; this.setLines(tx, lines); }
+        tx.style.opacity = lines.length ? o : 0;
+      };
+      putSt(this.stT, stt.lines, stt.opacity);
+      putSt(this.stT2, stt.prev ? stt.prev.lines : [], stt.prev ? stt.prev.opacity : 0);
+      this.stMark.style.opacity = Math.max(stt.lines.length ? stt.opacity : 0, stt.prev && stt.prev.lines.length ? stt.prev.opacity : 0);
       // 図の題（2 つ並べるとき）
       for (const k in this.capEls) this.capEls[k].style.opacity = 0;
       for (const c of fr.captions) { const e = this.capEls[fr.scene.id + c.fig]; if (e) e.style.opacity = c.opacity; }

@@ -14,12 +14,16 @@
     const errors = [], warnings = [];
     const E = m => errors.push(m), W = m => warnings.push(m);
     if (!sb || typeof sb !== "object") return { errors: ["台本が JSON のオブジェクトでない"], warnings };
-    if (sb.format !== UZ.FORMAT) E(`format は "${UZ.FORMAT}" と書く（今は ${JSON.stringify(sb.format)}）`);
-    if (!sb.figures || typeof sb.figures !== "object") E("figures（図の宣言）がない");
+    if (!UZ.FORMATS.includes(sb.format)) E(`format は "${UZ.FORMAT}" と書く（今は ${JSON.stringify(sb.format)}）`);
+    if (sb.figures != null && typeof sb.figures !== "object") E("figures（図の宣言）はオブジェクトで書く");
+    if (sb.figures == null && sb.slides == null) E("figures（図の宣言）がない");
     if (!Array.isArray(sb.scenes) || !sb.scenes.length) E("scenes（場面の列）がない");
     if (errors.length) return { errors, warnings };
+    UZ.validateSlides(sb, E, W, ID_RE);
+    if (errors.length) return { errors, warnings };
+    const FIGS = UZ.figuresOf(sb);
 
-    for (const [fid, f] of Object.entries(sb.figures)) {
+    for (const [fid, f] of Object.entries(FIGS)) {
       const where = `図「${fid}」`;
       if (!ID_RE.test(fid)) E(`${where}: id に使えない文字がある（/ : 空白は不可）`);
       if (!TYPES[f.type]) { E(`${where}: type は ${Object.keys(TYPES).join(" / ")} のどれか（今は ${f.type}）`); continue; }
@@ -169,9 +173,14 @@
       if (sceneIds.has(sc.id)) E(`${where}: id が重複している`);
       sceneIds.add(sc.id);
       if (sc.chapter != null && (typeof sc.chapter !== "string" || !ID_RE.test(sc.chapter))) E(`${where}: chapter は構成メモの章の id を文字列で書く`);
-      const figs = Array.isArray(sc.figure) ? sc.figure : [sc.figure];
-      if (!figs.length || figs.length > 2) E(`${where}: figure は 1 つか 2 つ`);
-      for (const f of figs) if (!sb.figures[f]) E(`${where}: 図「${f}」が figures にない`);
+      if (sc.slide != null) {
+        if (sc.figure != null) E(`${where}: slide か figure のどちらか 1 つを書く`);
+        if (!sb.slides || !sb.slides[sc.slide]) E(`${where}: スライド「${sc.slide}」が slides にない`);
+      } else {
+        const figs = Array.isArray(sc.figure) ? sc.figure : [sc.figure];
+        if (!figs.length || figs.length > 2) E(`${where}: figure は 1 つか 2 つ`);
+        for (const f of figs) if (!FIGS[f]) E(`${where}: 図「${f}」が figures にない`);
+      }
       if (!Array.isArray(sc.lines) || !sc.lines.length) { E(`${where}: lines がない`); continue; }
       for (const ln of sc.lines) {
         const lw = `行「${ln.id}」`;
@@ -204,9 +213,9 @@
     // 題の無い場面が 2 つ以上続くと、チャプター一覧で 1 つの章にまとまって見出しにならない。
     // 題があるとみなすのは engine の header と同じ: 場面の title か、図が 1 つでその図の title（title 型の図は「はじめに」）
     const titled = sc => {
-      if (sc.title) return true;
+      if (sc.title || sc.slide != null) return true;
       const figs = Array.isArray(sc.figure) ? sc.figure : [sc.figure];
-      const f = figs.length === 1 && sb.figures[figs[0]];
+      const f = figs.length === 1 && FIGS[figs[0]];
       return !!(f && (f.type === "title" || f.title));
     };
     let run = [];

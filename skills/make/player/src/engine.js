@@ -3,7 +3,8 @@
   "use strict";
   const { clamp, mix, smooth, ease } = UZ;
 
-  UZ.FORMAT = "ugoku-zukai/2";
+  UZ.FORMATS = ["ugoku-zukai/2", "ugoku-zukai/3"];   // /2 = 場面が図を指す形だけ。/3 = スライドも使える
+  UZ.FORMAT = "ugoku-zukai/3";
   UZ.VERBS = ["show", "hide", "focus", "unfocus", "pulse", "mark", "unmark", "trace", "reply", "note", "badge", "relabel", "tint", "move", "custom"];
   const MARK_RE = /\{([A-Za-z0-9_]+)\}/g;
 
@@ -85,25 +86,28 @@
     if (errors.length) return { errors, warnings };
 
     // ---- 場面ごとの配置区画 ----
+    const FIGS = UZ.figuresOf(sb);   // figures と、スライドの中で宣言した部品
+    const slides = {};
     const scenes = sb.scenes.map(sc => {
-      const figs = asList(sc.figure);
-      const header = sc.title || (figs.length === 1 && sb.figures[figs[0]].type !== "title" ? sb.figures[figs[0]].title : "") || "";
-      const B = UZ.AREA.body;
-      const ratio = sc.split || 0.56, gap = 40;
-      const areas = figs.length === 1 ? [{ ...B }]
-        : [{ x: B.x, y: B.y, w: (B.w - gap) * ratio, h: B.h }, { x: B.x + (B.w - gap) * ratio + gap, y: B.y, w: (B.w - gap) * (1 - ratio), h: B.h }];
+      const P = UZ.sceneParts(sb, sc);   // スライドを指す場面は、部品 = 図、区画 = 区画の矩形
+      const figs = P.figs, header = P.header, areas = P.areas;
+      if (P.slide) {
+        const sl = slides[P.slide] || (slides[P.slide] = { id: P.slide, figs, transient: P.parts.filter(p => p.transient).map(p => p.id), complete: sb.slides[P.slide].start === "complete", scenes: [] });
+        sl.scenes.push(sc.id);
+      }
       const captions = [];
       figs.forEach((fid, i) => {
-        const f = sb.figures[fid];
-        if (f.title && f.title !== header && f.type !== "title") {
+        const f = FIGS[fid];
+        // スライドでは、図の題を図の上に出さない（見出しとテキストの部品がその役をする）
+        if (!P.slide && f.title && f.title !== header && f.type !== "title") {
           captions.push({ fig: fid, text: f.title, x: areas[i].x + areas[i].w / 2, y: areas[i].y + 12 });
           areas[i] = { ...areas[i], y: areas[i].y + 36, h: areas[i].h - 36 };
         }
       });
       // 場面の地: 題の札だけの場面は、テーマに chapter があれば暗い地（章扉）。それ以外は通常の地
-      const tones = figs.map(fid => UZ.titleTone(sb.figures[fid], theme));
+      const tones = figs.map(fid => UZ.titleTone(FIGS[fid], theme));
       if (figs.length > 1 && tones.includes("dark")) err(`場面 ${sc.id}: 題の札を他の図と並べるときは、題の札に tone: "light" と書く（暗い地は題の札だけの場面で使う）`);
-      return { id: sc.id, figs, header, areas, captions, lines: sc.lines, tone: figs.length === 1 ? tones[0] : "light" };
+      return { id: sc.id, figs, header, areas, captions, lines: sc.lines, tone: figs.length === 1 ? tones[0] : "light", slide: P.slide, statement: P.statement };
     });
 
     // ---- 図の配置（最初に出る場面の区画で 1 回だけ）----
@@ -112,7 +116,7 @@
       for (let i = 0; i < sc.figs.length; i++) {
         const fid = sc.figs[i];
         if (figs[fid]) continue;
-        const f = sb.figures[fid];
+        const f = FIGS[fid];
         const L = await UZ.FIG[f.type].layout(f, S, { area: sc.areas[i], tryBoth: !f.direction });
         const items = {};
         for (const it of L.items) { it.fig = fid; it.key = `${fid}/${it.id}`; items[it.id] = it; }
@@ -363,7 +367,7 @@
     }
     const sp = (sb.voice && sb.voice.speaker) ?? UZ.DEFAULT_SPEAKER;
     const credit = sb.credit || (sb.voice && sb.voice.credit) || timeline.credit || `VOICEVOX:${UZ.SPEAKER_NAMES[sp] || "話者 " + sp}`;
-    return { errors, warnings, sb, theme, S, timeline, TL, scenes, figs, acts, itemByKey, duration, endCard, credit, title: sb.title || "" };
+    return { errors, warnings, sb, theme, S, timeline, TL, scenes, figs, slides, acts, itemByKey, duration, endCard, credit, title: sb.title || "" };
   };
 
   // 箱の中の点の位置 → 辺の始まり … 辺の終わり → 次の箱の中、の折れ線（箱の中は縦・横だけで動く）
@@ -526,7 +530,9 @@
     const toneOf = s => (s && s.tone === "dark" ? 1 : 0);
     const dark = mix(prev ? toneOf(prev) : toneOf(sc), toneOf(sc), k) * (1 - endP);
     const header = { text: sc.header, opacity: (prev && prev.header !== sc.header ? k : 1) * (1 - endP), prev: prev && prev.header !== sc.header ? { text: prev.header, opacity: 1 - k } : null };
-    return { t, st, figs: figsF, scene: sc, captions: sc.captions.map(c => ({ ...c, opacity: (prev && prev.figs.includes(c.fig) && prev.captions.some(x => x.text === c.text) ? 1 : k) * (1 - endP) })), header, sub, badge, customs, end: endP, dark };
+    const stSame = prev && prev.statement.join("\n") === sc.statement.join("\n");
+    const statement = { lines: sc.statement, opacity: (prev && !stSame ? k : 1) * (1 - endP), prev: prev && !stSame && prev.statement.length ? { lines: prev.statement, opacity: 1 - k } : null };
+    return { t, st, figs: figsF, scene: sc, statement, captions: sc.captions.map(c => ({ ...c, opacity: (prev && prev.figs.includes(c.fig) && prev.captions.some(x => x.text === c.text) ? 1 : k) * (1 - endP) })), header, sub, badge, customs, end: endP, dark };
   };
   const lineCache = new WeakMap();
   function findLine(sb, id) {
