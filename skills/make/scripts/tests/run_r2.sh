@@ -15,12 +15,15 @@ grep -qE 'responses\.json|rebutted|disputed|"severity"|"line_id"' $f && ng "revi
 c=references/criteria
 [ -f $c/contract.md ] && ng "criteria/contract.md が残っている"
 [ -f references/loop-protocol.md ] && ng "loop-protocol.md が残っている"
-for id in O-M1 O-F1 O-F2 O-F3 O-D1 O-D2 O-D3 O-D4 O-D5; do grep -q "^| $id " $c/outline.md || ng "outline.md に $id がない"; done
-for id in A-M1 A-1 A-2 A-3 A-4; do grep -q "^| $id " $c/agreement.md || ng "agreement.md に $id がない"; done
-for id in S-M1 S-W1 S-W5 S-W10 S-F1 S-F2 S-F4 S-D1 S-D2 S-D4; do grep -q "^| $id " $c/script.md || ng "script.md に $id がない"; done
+for id in O-M1 O-F1 O-F2 O-D1 O-D2 O-D3 O-D4 O-D5 O-D6 O-D7 O-D8 O-D9; do grep -q "^| $id " $c/outline.md || ng "outline.md に $id がない"; done
+# O-F3（意図に出どころを求めていた基準）は R4 第 3 部で欠番にした。表には残さず、欠番の一覧に移り先を書く
+grep -q "^| O-F3 " $c/outline.md && ng "outline.md に O-F3 が残っている"
+grep -q "^| O-F3 " $c/README.md || ng "criteria/README.md の欠番の一覧に O-F3 がない"
+for id in A-M1 A-1 A-2 A-3 A-4 A-5; do grep -q "^| $id " $c/agreement.md || ng "agreement.md に $id がない"; done
+for id in S-M1 S-W1 S-W5 S-W10 S-W12 S-W13 S-F1 S-F2 S-F4 S-F5 S-D1 S-D2 S-D4; do grep -q "^| $id " $c/script.md || ng "script.md に $id がない"; done
 for id in S-F3 S-D3; do grep -q "^| $id " $c/script.md && ng "script.md に $id が残っている"; done
-for id in G-D1 G-D2 G-D8; do grep -q "^| $id " $c/structure.md || ng "structure.md に $id がない"; done
-for id in V-1 V-5; do grep -q "^| $id " $c/screen.md || ng "screen.md に $id がない"; done
+for id in G-D1 G-D2 G-D8 G-D11 G-D12; do grep -q "^| $id " $c/structure.md || ng "structure.md に $id がない"; done
+for id in V-1 V-5 V-6; do grep -q "^| $id " $c/screen.md || ng "screen.md に $id がない"; done
 grep -q "start" $c/screen.md || ng "screen.md の frames.json の説明に start がない"
 grep -rnE "contract|契約|interview\.md|フェーズ|[0-9] (台本|画面|音声|取材)" $c && ng "criteria/ に契約・フェーズの語が残っている"
 for t in outline script screen voice; do grep -q "\`$t\`" $c/README.md || ng "criteria/README.md に target $t がない"; done
@@ -40,10 +43,10 @@ for f in fact-checker writing-reviewer director; do
 done
 grep -q "brief.md" $A/researcher.md || ng "researcher.md が brief.md を書かない"
 grep '^tools:' $A/researcher.md | grep -q "check_contract" && ng "researcher の tools: に check_contract.py が残っている"
-for w in "outline.json" "chapter" "tone" "knows" "機械検査の差し戻し"; do grep -q "$w" $A/writer.md || ng "writer.md に $w がない"; done
-for id in O-F1 O-F2 O-F3 S-F1 S-F2 S-F4; do grep -q "$id" $A/fact-checker.md || ng "fact-checker.md に $id がない"; done
-for id in O-D1 O-D5 A-1 A-4 S-D1 G-D1 V-1; do grep -q "$id" $A/director.md || ng "director.md に $id がない"; done
-for id in S-W1 S-W10 S-W8 S-W9; do grep -q "$id" $A/writing-reviewer.md || ng "writing-reviewer.md に $id がない"; done
+for w in "outline.json" "chapter" "tone" "knows" "機械検査の差し戻し" "意図" "完成形"; do grep -q "$w" $A/writer.md || ng "writer.md に $w がない"; done
+for id in O-F1 O-F2 S-F1 S-F2 S-F4 S-F5; do grep -q "$id" $A/fact-checker.md || ng "fact-checker.md に $id がない"; done
+for id in O-D1 O-D5 O-D6 O-D8 A-1 A-4 A-5 S-D1 G-D1 G-D12 V-1 V-6; do grep -q "$id" $A/director.md || ng "director.md に $id がない"; done
+for id in S-W1 S-W10 S-W12 S-W13 S-W8 S-W9; do grep -q "$id" $A/writing-reviewer.md || ng "writing-reviewer.md に $id がない"; done
 grep -q "読みモード" $A/writing-reviewer.md || ng "writing-reviewer.md に読みモードがない"
 # SKILL.md（原則・道具の一覧・必ず守る条件。番号の付いたフェーズは置かない）
 s=SKILL.md
@@ -109,15 +112,14 @@ for f in researcher writer fact-checker writing-reviewer director; do
   done
 done
 # 利用者が言っていない事実は、利用者の章でも S-F4 で見る
-grep "^| S-F4 " references/criteria/script.md | grep -q "言い換え" || ng "script.md の S-F4 が、利用者の言うことを言い換えた行だけを除く形になっていない"
+grep "^| S-F4 " references/criteria/script.md | grep -q "言い換え" || ng "script.md の S-F4 が、利用者の意図に書かれた内容を言い換えた行だけを除く形になっていない"
 grep "^| A-2 " references/criteria/agreement.md | grep -q "S-F4" || ng "agreement.md の A-2 が、事実を述べる具体例を S-F4 に回していない"
-grep -q "言い換え" $A/fact-checker.md || ng "fact-checker.md が、利用者の言うことを言い換えた行だけを除く形になっていない"
+grep -q "言い換え" $A/fact-checker.md || ng "fact-checker.md が、利用者の意図に書かれた内容を言い換えた行だけを除く形になっていない"
 # 先に直す範囲（最初のスライドコンテの前の評価と、原稿の初稿の評価。読みは別に 1 回）が、文書の間でそろっている
-# （review-protocol.md は R4 第 3 部で直すので、前の呼び名「絵コンテ」のまま確かめる）
-for f in SKILL.md references/run-chat.md references/run-code.md; do
+for f in SKILL.md references/run-chat.md references/run-code.md references/review-protocol.md; do
   grep -q "最初のスライドコンテ" $f || ng "$f に、最初のスライドコンテの指摘も先に直す対象だという記述がない"
+  grep -q "原稿の初稿" $f || ng "$f に、原稿の初稿の指摘も先に直す対象だという記述がない"
 done
-grep -q "最初の絵コンテ" references/review-protocol.md || ng "references/review-protocol.md に、最初の絵コンテの指摘も先に直す対象だという記述がない"
 grep -q "読みの一覧" SKILL.md && grep -q "同じ場所・同じ基準" references/writing/review-format.md || ng "SKILL.md の読みの扱いか、review-format.md の同じキーの扱いがない"
 grep -q "設計書から広げた判断" ../../docs/design.md || ng "docs/design.md に、設計書から広げた判断の記録がない"
 [ $fail = 0 ] && echo "R2 の検査: すべて OK" || echo "R2 の検査: NG あり"

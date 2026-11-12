@@ -16,7 +16,7 @@
 | エージェント | 仕事 | 足して渡すもの | 出力 |
 |---|---|---|---|
 | `ugoku-zukai:researcher` | 調べる | 題材の場所（手元のファイル・フォルダ・リポジトリは絶対パス。リポジトリの URL なら URL と clone 先 `<workdir>/repo`。PR 番号、Web ページの URL）、**調べてほしいこと** | `<workdir>/brief.md`（出どころ付きの取材メモ）と `<workdir>/sources/` |
-| `ugoku-zukai:writer` | 台本（スライドと原稿）の初稿、章単位の書き直し、指摘の直し | テーマ（`koo`・`<workdir>/theme.json`）、書く範囲（「全部」か章の id）、直す指摘のキー（あれば） | `<workdir>/storyboard.json` |
+| `ugoku-zukai:writer` | 台本（スライドと原稿）の初稿、章単位の書き直し、指摘の直し | テーマ（`koo`・`<workdir>/theme.json`）、書く範囲（「全部」か章の id）、直す指摘のキー（あれば） | `<workdir>/storyboard.json` と、`<workdir>/outline.json` の章の `slides`（自分が切ったスライドの意図を `proposed` で書く。ほかの欄は書き換えない）。迷ったスライドは、案を並べてほしいこととほかの案を報告で返す |
 | `ugoku-zukai:fact-checker` | 事実（`outline`・`script`） | `target`、題材の場所（researcher に渡したのと同じ絶対パス。資料のない題材なら「資料なし」）、出力先、再確認するキー、見る範囲。`brief.md` は渡さない | 出力先の JSON |
 | `ugoku-zukai:director` | 構成メモ・意図との照合・スライド・画面（`outline`・`script`・`screen`） | `target`、出力先、再確認するキー、見る範囲。`script` では `check_storyboard.cjs --outline` の出力。`screen` で一部の場面だけを見てもらうときは、コマの場所（`<workdir>/frames-part`） | 出力先の JSON |
 | `ugoku-zukai:writing-reviewer` | 文章と読み（`script`・`voice`） | `target`、出力先、再確認するキー、見る範囲 | 出力先の JSON |
@@ -34,7 +34,7 @@
 （researcher に調べてもらう）
 作業フォルダ: /home/u/.claude/plugins/data/ugoku-zukai/runs/20261110-1530-ux
 題材の場所: なし（題目だけ）
-調べてほしいこと: UX とユーザビリティの定義の違い。標準や原典を出どころにして。視聴者は自社の開発部
+調べてほしいこと: UX とユーザビリティの定義の違い。標準や原典を出どころにして。聴衆は自社の開発部
 ```
 
 ```text
@@ -42,7 +42,7 @@
 作業フォルダ: /home/u/.claude/plugins/data/ugoku-zukai/runs/20261110-1530-ux
 テーマ: koo
 書く範囲: c3
-直す指摘のキー: c3.1:A-1 l14:S-W5
+直す指摘のキー: s4:A-3 l14:S-W5
 ```
 
 ```text
@@ -50,7 +50,7 @@
 作業フォルダ: /home/u/.claude/plugins/data/ugoku-zukai/runs/20261110-1530-ux
 target: script
 出力先: /home/u/.claude/plugins/data/ugoku-zukai/runs/20261110-1530-ux/review/04-script/director.json
-再確認するキー: c3.1:A-1 l9:G-D3
+再確認するキー: s4:A-3 s4:G-D11
 見る範囲: 章 c3
 ```
 
@@ -232,7 +232,7 @@ python3 ${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/ledger.py list <workdir> --ful
 2. 合意した内容を変えない指摘（言い回し、読み、スライドの見やすさ、出どころを調べて付けること）を選び、記録してから直す（小さな直しは進行役、まとまった直しは writer にキーを渡す）。構成メモの意図（`flow`・`intent`・`link`）・章の順・利用者が見て決めたスライドの切り方を変えることになる指摘は選ばない
 
 ```sh
-python3 ${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/ledger.py decide <workdir> --by lead --fix l7:S-W1 l9:G-D3
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/ledger.py decide <workdir> --by lead --fix l7:S-W1 s4:G-D14
 ```
 
 3. 機械検査を通し、指摘を出した評価役に、直したキーの再確認を 1 回だけ頼んで `ingest` する。通らなかったものは `open` に戻るので、そのまま利用者に見せる
@@ -248,7 +248,7 @@ python3 ${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/ledger.py list <workdir> --by 
 利用者がどれを直すかを選んだら、記録してから直す。直したら、指摘を出した評価役に、直したキーと変えた章・行だけを渡して再確認を頼み、`ingest` する。
 
 ```sh
-python3 ${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/ledger.py decide <workdir> --by user --fix c3.1:A-1 --keep l12:S-D4
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/ledger.py decide <workdir> --by user --fix s4:A-3 --keep l12:S-D4
 python3 ${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/ledger.py status <workdir>
 ```
 
@@ -259,6 +259,7 @@ python3 ${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/ledger.py status <workdir>
 ```sh
 python3 ${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/ledger.py decide <workdir> --by lead --close l18:S-W4 --note "read は前から付いていた"
 ```
+- スライドへの指摘のキーは、そのスライドを最初に使う場面の id で始まる（`s4:A-3`）。どのスライドのどの部品かは、指摘の本文の頭に書いてある（`review-format.md` の「`where` の書き方」）
 - どの評価役の指摘かは、`list --full` と `--json` の `reviewer` で分かる（`--reviewer director` で絞れる）
 - `*` で始まるキー（場所の決まらない指摘）は、シェルに展開されないよう引用符で囲む（`--fix '*:V-1'`）
 - 直しが合意に関わるなら、先に構成メモを直して検査し、それから台本を直す
@@ -332,6 +333,11 @@ python3 ${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/workdir.py publish <workdir> -
 ## 公開した後の直し
 
 直しの受け方、流れ、直すものごとの作り直すものと評価役は、SKILL.md の「公開した後の直し」のとおり。ここには、コマンドと、別のセッションから直すときの手順を書く。
+
+利用者が箇所を伝える方法は、再生ページの開き方で変わる。
+
+- **「直したい箇所を指定する」は、Artifact を編集できる人にだけ出る。** 見るだけの人には出ない。再生ページが、開いている人が編集できるかを判定できないとき（claude.ai のチャットのプレビューなど）にも出ない。手元で開いた HTML（`--artifact` を付けずに組み立てたページ）では出る
+- 「直したい箇所を指定する」が出ないとき、作った本人は、動画の下のチャプターの行に出ている時刻と章で、直したい箇所を伝える（例「2 UX の定義 の 0:39 の行」）。進行役は、時刻と章から場面と行を引く。声を合成してあれば `<workdir>/voice/timeline.json` の `lines`（行の `id`・`scene`・始まりの時刻 `start`）、なければ `<workdir>/frames/frames.json` の `lines` で、その章の場面のうち、始まりの時刻がその時刻に当たる行を探す。引いた行を「s3 / l6 のことですか」と字幕の文と一緒に返して、合っていることを確認してから直す
 
 **1. 作業フォルダを決める。** 公開したのと同じセッションなら、今の `<workdir>` を使う。別のセッションなら、過去の作業フォルダを一覧する。
 

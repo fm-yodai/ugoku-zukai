@@ -21,7 +21,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 #   run_r1.sh: 構成メモ・台本の章・スライドコンテのページ
 #   run_r2.sh: 指摘の一覧・成功基準・エージェントの定義・進行役の文書
 #   run_r3.sh: 再生ページの位置の表示・公開先の記録と作業フォルダの一覧・声の試聴・直しの文書（VOICEVOX があれば、試聴と声の使い回しも）
-#   run_r4.sh: スライド（区画・テキスト・画像・フレーム・完成形のコマ・blur）、スライドの文字の検査、構成メモと台本のスライドの照合、案の見比べ（alts.py）、進行役の文書
+#   run_r4.sh: スライド（区画・テキスト・画像・フレーム・完成形のコマ・blur）、スライドの文字の検査、構成メモと台本のスライドの照合、案の見比べ（alts.py）、進行役の文書、評価役と基準の文書（物差しが意図になっているか。前の進め方の言葉が残っていないか）
 bash skills/make/scripts/tests/run_r4.sh
 
 # 台本 1 本の検査（形・id の解決・配置）。--timeline で実際の声の長さでも検査する
@@ -101,7 +101,7 @@ python3 tools/build_voice_check.py
 
 **テーマ**（`player/themes/*.json`、`references/themes.md`）: 色・文字・線の定義。同梱は `koo` の 1 つで、「空 提案書デザインシステム」（テーマの `derived_from` の Artifact）のトークンから作ってある。そこにない色を足さない（例外は、線と文字に使う暗くした Blue だけ。テーマの `tokens` に対応がある）。緑と赤はなく、良い・悪いは Gold とグレーアウトで言い分ける。`colors.boxes` が役割ごとの箱の面・枠・文字、`chapter` が章扉（`title` 図だけの場面）の地と文字を決める。字幕の帯と章扉は Navy。別のデザインを渡されたときは、進行役がそのデザインの色から決める。決めたテーマは構成メモの `basics.look.theme` に書く。台本と同じフォルダに構成メモがあれば、`check_storyboard.cjs`・`frames.cjs`・`build_player.py` は `--theme` を省くとそのテーマを使い、違うテーマを渡すと終了コード 2 で止まる（`uz_node.cjs` の `pickTheme` と `build_player.py` の `pick_theme`。2 か所を同じ約束に保つ）。`extract_design.py` が手持ちのデザイン（トークン・CSS・HTML・Tailwind・Office・画像・PDF）からテーマを作り、`check_theme.py` で検査する。
 
-**作り手と評価役**: Claude Code では `agents/` のサブエージェントを使う（作り手は researcher = 調べる、writer = 台本の初稿と章単位の書き直し。評価役は fact-checker / writing-reviewer / director。animator は保留中で呼ばない）。チャットでは 1 会話で役を順に演じる。評価役は決まった関門ではなく、章の意図が固まったとき・最初のスライドコンテを見せる前（スライド）・スライドが固まったとき（原稿）・直した後・合成の前に呼ぶ（評価役の定義と基準の文書は、R4 第 3 部で意図に合わせて直す。それまでは前の進め方の言葉のまま）。成功基準は `references/criteria/`（構成メモ O-、合意との照合 A-、台本 S-、図 G-、画面 V-。文章の規則は `references/writing/` の TW- と SP-。SP-11〜SP-14 は行と章のつながり）、評価役の約束と指摘の扱いは `references/review-protocol.md`、評価役の出力の形は `references/writing/review-format.md`。指摘にはレベル（must / should / nits）が付き、`scripts/ledger.py` の指摘の一覧に入る。どれを直すかは利用者が選ぶ（台本の初稿に限り、合意した内容を変えない指摘は進行役が 1 回だけ先に直す）。自動で合格まで回すことはしない。
+**作り手と評価役**: Claude Code では `agents/` のサブエージェントを使う（作り手は researcher = 調べる、writer = 台本の初稿と章単位の書き直し。評価役は fact-checker / writing-reviewer / director。animator は保留中で呼ばない）。チャットでは 1 会話で役を順に演じる。作り手も評価役も、物差しは構成メモの意図である。writer は、章ごとにスライド → 1 枚ごとの意図（構成メモの `slides` に `proposed` で書く）→ 原稿の順に書き、迷ったスライドは、案を並べてほしいことを進行役に返す。researcher が調べた事実は取材メモ（`brief.md`）に置き、構成メモには書かない。評価役は「意図どおりのスライド・原稿になっているか」と、意図そのものが聴衆の側から書いてあるかを見る。director はスライド（完成形のコマ `svg/slide-<id>.svg` と行ごとのコマ）、writing-reviewer は原稿（スライドを説明しているか。字幕には TW- と SP-、スライドのテキストには TW- だけ）、fact-checker は出どころ（原稿の行の `source` と、スライドのテキストの事実。意図は照合しない）を受け持つ。評価役は決まった関門ではなく、章の意図が固まったとき・最初のスライドコンテを見せる前（スライド）・スライドが固まった後（原稿）・直した後・合成の前に呼ぶ。成功基準は `references/criteria/`（構成メモ O-、意図との照合 A-、スライドと図 G-、原稿 S-、画面 V-。文章の規則は `references/writing/` の TW- と SP-。SP-11〜SP-14 は行と章のつながり）。意図に照らす基準は数で決まらず、判定がぶれることは受け入れる（利用者が決めた）。その代わり、評価役は、意図のどの文に照らしたかを指摘の `evidence` に書く。評価役の約束と指摘の扱いは `references/review-protocol.md`、評価役の出力の形は `references/writing/review-format.md`。指摘にはレベル（must / should / nits）が付き、`scripts/ledger.py` の指摘の一覧に入る。スライドへの指摘の場所（`where`）は、そのスライドを最初に使う場面の id で書く（`ledger.py` がスライドの id をまだ知らないため）。どれを直すかは利用者が選ぶ（スライドと原稿の初稿に限り、意図を変えない指摘は進行役が 1 回だけ先に直す）。自動で合格まで回すことはしない。
 
 ## 守ること
 
