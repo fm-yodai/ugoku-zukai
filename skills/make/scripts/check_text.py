@@ -4,9 +4,10 @@
 使い方: check_text.py <storyboard.json> [--json]
   S-M2 text と read に禁止語（assets/banned_terms.json）がある。スライドの文字（title・statement・テキストの部品）にもかける。
        スライドの文字は書き言葉なので、S-M3・S-M4 と警告（話し言葉の規則）はかけない
-  S-M3 話者がずんだもんなのに、文末が「のだ」「なのだ」でない（文は「。」「？」「！」で切る。「」の中では切らない。句点の無い最後の文も見る）
+  S-M3 話者がずんだもんなのに、文末が「のだ」「なのだ」でない（文は「。」「？」「！」で切る。「」の中では切らない。句点の無い最後の文も見る）。
+       「〜のだ」は既定の口調で、台本と同じフォルダの構成メモの口調（basics.tone.text）に「のだ」がなく、口調が書いてあれば見ない（利用者が別の口調を望んだ）
   S-M4 読む文（read があれば read、なければ text）に、ユーザー辞書にない英字の語がある
-  警告（終了コードに響かない。聞いて分かる文の規則 references/writing/spoken.md）
+  警告（終了コードに響かない。聞いて分かる文の規則 references/writing/spoken.md。数は目安で、聞いて分かれば直さなくてよい）
   SP-4 1 文が 50 字を超える。または 1 文に「・」が 3 つ以上（項目 4 つ以上）並ぶ
   SP-6 1 文に助詞の「の」が 3 つ以上ある（「のだ」「のです」「のか」と、この・その・あの・どの・ものの「の」は数えない）
   SP-18 読む文（read があれば read）で、「です」「ます」の直前か、文末の短い述語（6 字まで）の直前に読点がある（声に間が入る）
@@ -77,7 +78,18 @@ def sentences(text):
     return [t.strip() for t in out if t.strip()]
 
 
-def check(sb):
+def tone_of(path):
+    """台本と同じフォルダの構成メモの口調（basics.tone.text）。なければ None"""
+    try:
+        with open(os.path.join(os.path.dirname(os.path.abspath(path)), "outline.json"), encoding="utf-8") as f:
+            t = json.load(f)["basics"]["tone"]
+        t = t.get("text") if isinstance(t, dict) else t
+        return t.strip() if isinstance(t, str) and t.strip() else None
+    except (OSError, ValueError, KeyError, TypeError, AttributeError):
+        return None
+
+
+def check(sb, tone=None):
     errors, warnings = [], []
     terms = banned()
     surfaces = user_surfaces()
@@ -92,7 +104,7 @@ def check(sb):
                     for w in find_banned(s, terms):
                         errors.append({"line": lid, "rule": "S-M2",
                                        "msg": f"行 {lid} の {label} に禁止語「{w}」がある"})
-            if speaker in ZUNDA:
+            if speaker in ZUNDA and (tone is None or "のだ" in tone):
                 for sent in sentences(text):
                     if not sent.endswith("のだ"):
                         errors.append({"line": lid, "rule": "S-M3",
@@ -100,15 +112,15 @@ def check(sb):
             for sent in sentences(text):
                 if len(sent) > MAX_LEN:
                     warnings.append({"line": lid, "rule": "SP-4",
-                                     "msg": f"行 {lid} の文が {len(sent)} 字（{MAX_LEN} 字以内に分ける）"})
+                                     "msg": f"行 {lid} の文が {len(sent)} 字（目安は {MAX_LEN} 字。聞きにくければ分ける）"})
                 items = sent.count("・") + 1
                 if items - 1 >= MAX_ITEMS:
                     warnings.append({"line": lid, "rule": "SP-4",
-                                     "msg": f"行 {lid} の文に項目が {items} つ並ぶ（{MAX_ITEMS} つまで）"})
+                                     "msg": f"行 {lid} の文に項目が {items} つ並ぶ（目安は {MAX_ITEMS} つ。聞きにくければ分けるか束ねる）"})
                 n_no = len(NO.findall(sent))
                 if n_no >= MAX_NO:
                     warnings.append({"line": lid, "rule": "SP-6",
-                                     "msg": f"行 {lid} の文に「の」が {n_no} つある（{MAX_NO - 1} つまで）"})
+                                     "msg": f"行 {lid} の文に「の」が {n_no} つある（目安は {MAX_NO - 1} つまで。聞きにくければ言い換える）"})
             spoken = read if read is not None else text
             for sent in sentences(spoken):
                 m = COMMA_COPULA.search(sent)
@@ -165,7 +177,7 @@ def main():
     args = [a for a in sys.argv[1:] if a != "--json"]
     if len(args) != 1:
         sys.exit(__doc__)
-    errors, warnings = check(json.load(open(args[0], encoding="utf-8")))
+    errors, warnings = check(json.load(open(args[0], encoding="utf-8")), tone_of(args[0]))
     if "--json" in sys.argv:
         print(json.dumps({"errors": errors, "warnings": warnings}, ensure_ascii=False, indent=2))
     else:

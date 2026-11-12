@@ -41,6 +41,13 @@ done
 out=$(python3 scripts/check_text.py scripts/tests/text/warn.json 2>&1) || { echo "NG: text/warn.json が誤りになった（警告だけのはず）"; fail=1; }
 for l in l1 l2; do echo "$out" | grep -q "^警告 SP-4: 行 $l " || { echo "NG: text/warn.json の $l で SP-4 が出ない"; fail=1; }; done
 echo "$out" | grep -q "^警告 SP-6: 行 l3 " || { echo "NG: text/warn.json の l3 で SP-6 が出ない"; fail=1; }
+# ずんだもんの「〜のだ」は既定の口調。構成メモの口調（basics.tone）で利用者が別の口調を決めたら、S-M3 はかけない
+zd=$(mktemp -d)
+printf '%s' '{"format":"ugoku-zukai/3","title":"t","voice":{"speaker":3},"figures":{"f":{"type":"title","text":"t"}},"scenes":[{"id":"s1","figure":"f","lines":[{"id":"l1","text":"説明します。"}]}]}' >"$zd/storyboard.json"
+python3 scripts/check_text.py "$zd/storyboard.json" >/dev/null 2>&1 && { echo "NG: ずんだもんで「のだ」のない文が通ってしまう"; fail=1; }
+printf '%s' '{"basics":{"tone":{"text":"です・ます","by":"user","state":"agreed"}}}' >"$zd/outline.json"
+python3 scripts/check_text.py "$zd/storyboard.json" >/dev/null 2>&1 || { echo "NG: 構成メモの口調が「です・ます」なのに S-M3 が出る"; fail=1; }
+rm -rf "$zd"
 # 述語の直前の読点（SP-18）。読む文（read があれば read）で見る。普通の読点（l6）には出さない
 for l in l4 l5; do echo "$out" | grep -q "^警告 SP-18: 行 $l " || { echo "NG: text/warn.json の $l で SP-18 が出ない"; fail=1; }; done
 echo "$out" | grep -q "^警告 SP-18: 行 l6 " && { echo "NG: text/warn.json の l6 で SP-18 が出た"; fail=1; }

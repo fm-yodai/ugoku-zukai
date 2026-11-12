@@ -111,7 +111,7 @@ metadata:
 
 ## 検査
 
-**機械検査**は、題材を問わず、構成メモと台本を変えるたびに回す（`check_outline.py`、`check_storyboard.cjs`、`check_text.py`。テーマを作ったら `check_theme.py`）。答えが一つに決まる不具合（図のはみ出し・重なり、id の解決、印の誤り、禁止語、古くなった音声）は、利用者に聞かずに直し、直したことを報告する。Claude Code では「機械検査の差し戻し」として、検査の出力だけを writer に渡して直させてもよい。`check_storyboard.cjs` の警告「辺 … に label がない」は、終了コードが 0 でも誤りと同じに直す。
+**機械検査**は、題材を問わず、構成メモと台本を変えるたびに回す（`check_outline.py`、`check_storyboard.cjs`、`check_text.py`。テーマを作ったら `check_theme.py`）。答えが一つに決まる不具合（図のはみ出し・重なり、id の解決、印の誤り、禁止語、古くなった音声）は、利用者に聞かずに直し、直したことを報告する。Claude Code では「機械検査の差し戻し」として、検査の出力だけを writer に渡して直させてもよい。`check_storyboard.cjs` の警告「辺 … に label がない」は、意図して省いた辺でなければ label を付ける。
 
 **評価役**（fact-checker・writing-reviewer・director）は、決まった関門ではなく、次の場面で呼ぶ。担当の基準は `references/criteria/README.md` の表にある。
 
