@@ -4,6 +4,7 @@
 (function (UZ) {
   "use strict";
   UZ.GRID = { cols: 12, rows: 6, gap: 24 };
+  UZ.FRAME_PAD = 20; UZ.FRAME_TITLE = 30;   // フレームの内側の余白と、題のぶんの高さ
   const ST = { size: 24, weight: 500, maxW: 1120, lineH: 34, pad: 14 };   // 言いたいことの文字
   UZ.STATEMENT = ST;
   const asList = v => (v == null ? [] : Array.isArray(v) ? v : [v]);
@@ -57,7 +58,17 @@
     const statement = UZ.statementLines(sl.statement).lines;
     const body = UZ.slideBody(statement.length);
     const parts = sl.parts.map(p => ({ id: partId(p), transient: !!p.transient, frame: FIGS[partId(p)].type === "frame", area: p.area }));
-    return { slide: sc.slide, figs: parts.map(p => p.id), areas: parts.map(p => UZ.cellRect(body, p.area)), header: sc.title || sl.title || "", statement, parts };
+    // フレームの区画の中に入る部品は、枠の内側に余白を取る（枠に題があれば、その下から）
+    const frames = parts.filter(p => p.frame);
+    const within = (a, b) => !a || !b ? !b : a.col[0] >= b.col[0] && a.col[1] <= b.col[1] && a.row[0] >= b.row[0] && a.row[1] <= b.row[1];
+    const areas = parts.map(p => {
+      const r = UZ.cellRect(body, p.area);
+      const fr = !p.frame && frames.find(q => within(p.area, q.area));
+      if (!fr) return r;
+      const pad = UZ.FRAME_PAD, top = pad + (FIGS[fr.id].title ? UZ.FRAME_TITLE : 0);
+      return { x: r.x + pad, y: r.y + top, w: r.w - pad * 2, h: r.h - top - pad };
+    });
+    return { slide: sc.slide, figs: parts.map(p => p.id), areas, header: sc.title || sl.title || "", statement, parts };
   };
 
   // ---- 形の検査（validate から呼ぶ）----

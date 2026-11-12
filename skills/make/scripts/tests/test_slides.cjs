@@ -208,6 +208,9 @@ const tests = {
     const b = M.figs.fr.items.box.bbox, ar = M.scenes[0].areas[1];
     assert.ok(Math.abs(b.w - ar.w) < 0.01 && Math.abs(b.h - ar.h) < 0.01, "枠は区画の大きさ");
     assert.strictEqual(M.scenes[0].place.fr.s, 1);
+    const inner = M.scenes[0].areas[2];   // 枠の区画の中の部品は、内側に余白（20）と題のぶん（30）を取る
+    assert.ok(Math.abs(inner.x - (ar.x + 20)) < 0.01 && Math.abs(inner.y - (ar.y + 50)) < 0.01 && Math.abs(inner.w - (ar.w - 40)) < 0.01 && Math.abs(inner.h - (ar.h - 70)) < 0.01);
+    assert.deepStrictEqual(M.scenes[0].areas[0], UZ.cellRect(UZ.slideBody(0), { col: [1, 6], row: [1, 6] }), "枠の外の部品はそのまま");
     assert.ok(M.figs.fr.items.title.texts[0].lines.join("") === "定義");
     assert.ok(showAt(M, "fr/box", M.duration) > 0.99 && showAt(M, "fr/title", M.duration) > 0.99);
     assert.ok(M.scenes[0].figs.indexOf("fr") < M.scenes[0].figs.indexOf("defs"), "宣言の順が描く順");
@@ -237,6 +240,35 @@ const tests = {
     assert.deepStrictEqual(M.errors, []);
     assert.ok(showAt(M, "pts/a", M.duration) < 0.01, "戻っても、消した部品は消えたまま");
     assert.ok(showAt(M, "flow/app", M.duration) > 0.99);
+  },
+
+  // ---- Task 5: 完成形のコマ ----
+  async final_frame_shows_parts() {
+    const M = await build(deck({ p1: { ...TWO.p1, statement: "言いたいこと。" } }, [SC("s1", "p1")], { flow: FLOW }));
+    assert.deepStrictEqual(M.errors, []);
+    const fr = UZ.finalFrame(M, "p1");
+    for (const k of ["flow/app", "flow/app>sys", "pts/a", "pts/b"]) assert.strictEqual(fr.st[k].show, 1, k);
+    assert.strictEqual(fr.figs.flow.opacity, 1); assert.deepStrictEqual(fr.figs.flow.place, M.scenes[0].place.flow);
+    assert.strictEqual(fr.sub, null); assert.strictEqual(fr.end, 0); assert.strictEqual(fr.dark, 0);
+    assert.strictEqual(fr.header.text, "見出し"); assert.strictEqual(fr.header.opacity, 1);
+    assert.deepStrictEqual(fr.statement.lines, ["言いたいこと。"]); assert.strictEqual(fr.statement.opacity, 1);
+    assert.strictEqual(UZ.finalFrame(M, "nai"), null);
+  },
+  async final_frame_excludes() {
+    const slides = { p1: { title: "t", parts: [
+      { figure: "flow", area: { col: [1, 12], row: [1, 6] } },
+      { id: "pts", type: "list", items: LIST, area: { col: [1, 12], row: [1, 6] }, transient: true }] },
+      p2: { title: "別", parts: [{ id: "other", type: "list", items: [{ id: "x", text: "別の話" }] }] } };
+    const M = await build(deck(slides, [
+      SC("s1", "p1", [{ id: "l1", text: "{a}出します。", do: [{ show: "flow" }, { at: "a", trace: ["app", "sys"], label: "申請書" }, { note: "sys", text: "注記" }, { mark: "app", as: "check" }] }]),
+      SC("s2", "p2")], { flow: FLOW }));
+    assert.deepStrictEqual(M.errors, []);
+    const fr = UZ.finalFrame(M, "p1");
+    const show = k => (fr.st[k] ? fr.st[k].show : 0);
+    assert.strictEqual(show("flow/app"), 1);
+    for (const k of ["pts/a", "flow/dot:dot", "flow/note:sys", "flow/mark:app", "other/x"]) assert.strictEqual(show(k), 0, `${k} は完成形に出ない`);
+    assert.strictEqual(fr.figs.pts.opacity, 0, "完成形に含めない部品の図は出さない");
+    assert.strictEqual(fr.figs.other.opacity, 0);
   },
 };
 

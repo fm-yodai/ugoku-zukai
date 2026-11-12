@@ -4,7 +4,7 @@
 //   --lines   カンマで区切った行の id。その行のある場面を --scenes で選んだのと同じになる（直しは行の id で来るため）
 //   --scenes  カンマで区切った場面の id。その場面の行だけを書く（配置と時刻は台本全体で計算するので、コマの中身は全体のときと同じ）。
 //             出力先にある前の回のコマは消えるので、全体のコマを残したいときは出力先を分ける
-// 書くもの: <出力先>/svg/<行 id>.svg、<出力先>/sheet-NN.png、<出力先>/frames.json（始めに、前の回のこの 3 つだけを消す）
+// 書くもの: <出力先>/svg/<行 id>.svg、台本にスライドがあれば <出力先>/svg/slide-<スライドの id>.svg（完成形のコマ。frames.json の slides[] に id・svg・使う場面）、<出力先>/sheet-NN.png、<出力先>/frames.json（始めに、前の回のこの 3 つだけを消す）
 // シート: 1280×1170。1 コマは 640×390（上に 30 の帯「行 id ＋字幕の頭 20 字」、その下に 640×360 のコマ）を 2 列 × 3 行
 // frames.json の timed = 時刻の出どころ（voice = --timeline で渡した合成した声の時刻表、estimate = 文字数からの見積もり）
 // frames.json の lines[].start = その行の始まりの時刻、t = コマを取った時刻、sub_forced = 再生ではその時刻に字幕が出ていない（または薄い）ので補った、settled = その行の動作がすべて終わっている
@@ -91,8 +91,8 @@ const esc = s => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(
 
   // コマには必ずその行の字幕を出す（動きが行の声より長いと、frame() では字幕が消えている時刻になるため）
   const frameOrig = UZ.frame;
-  let forceSub = null;
-  UZ.frame = (m, t) => { const fr = frameOrig(m, t); if (forceSub) fr.sub = { ...forceSub, opacity: 1 }; return fr; };
+  let forceSub = null, forceFrame = null;   // forceFrame = スライドの完成形のコマを描くとき、frame() の代わりに返すコマ
+  UZ.frame = (m, t) => { if (forceFrame) return forceFrame; const fr = frameOrig(m, t); if (forceSub) fr.sub = { ...forceSub, opacity: 1 }; return fr; };
 
   const textOf = {};
   for (const sc of sb.scenes) for (const ln of sc.lines) textOf[ln.id] = UZ.parseText(ln.text).text;
@@ -129,6 +129,19 @@ const esc = s => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(
     frames.push({ id: ln.id, scene: ln.scene, start: +ln.start.toFixed(3), t: +t.toFixed(3), text: textOf[ln.id], svg: rel, sub_forced: subForced, settled });
   });
 
+  // スライドの完成形のコマ（svg/slide-<id>.svg）。--scenes・--lines のときは、選んだ場面が使うスライドだけ。PNG のシートには入れない
+  const slides = [];
+  for (const sl of Object.values(M.slides || {})) {
+    if (only && !sl.scenes.some(id => only.includes(id))) continue;
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    forceFrame = UZ.finalFrame(M, sl.id);
+    new UZ.View(svg, M).render(forceFrame.t);
+    forceFrame = null;
+    const rel = `svg/slide-${sl.id}.svg`;
+    fs.writeFileSync(path.join(outDir, rel), serialize(svg, { xmlns: "http://www.w3.org/2000/svg", width: W, height: H }));
+    slides.push({ id: sl.id, svg: rel, scenes: sl.scenes });
+  }
+
   // シート: 6 コマずつ、帯の下に入れ子の <svg>（はみ出しを切る）を置き、<g transform> で並べる
   const fonts = jpFonts();
   const famList = fonts.map(f => `"${f}"`).join(", ");
@@ -152,7 +165,7 @@ const esc = s => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(
 
   const Resvg = loadResvg();
   const writeJson = png => fs.writeFileSync(path.join(outDir, "frames.json"),
-    JSON.stringify({ png, timed: tl ? "voice" : "estimate", sheets: sheets.map(({ file: f, lines }) => ({ file: f, lines })), lines: frames }, null, 2) + "\n");
+    JSON.stringify({ png, timed: tl ? "voice" : "estimate", sheets: sheets.map(({ file: f, lines }) => ({ file: f, lines })), lines: frames, slides }, null, 2) + "\n");
   if (!Resvg) {
     writeJson(false);
     console.error(`resvg を読めない（置き場 ${renderHome()}）。PNG は作らず SVG と frames.json だけ書いた。python3 setup_render.py を実行する`);

@@ -143,5 +143,32 @@ node scripts/frames.cjs examples/mixed.json --theme koo -o "$out/none" --scenes 
 grep -q "s999" "$out/none.log" || ng "台本にない場面の id が表示されない"
 [ "$(cat "$out/none/frames.json")" = x ] || ng "台本にない場面なのに出力先を書き換えた"
 
+# スライドの完成形のコマ: svg/slide-<id>.svg と frames.json の slides[]。スライドのない台本では slides は空
+cat >"$out/slide.json" <<'EOF'
+{ "format": "ugoku-zukai/3", "title": "検査",
+  "slides": { "p1": { "title": "見出し", "statement": "言いたいことの文。", "parts": [
+    { "id": "pts", "type": "list", "items": [{ "id": "a", "text": "一つ目の項目" }, { "id": "b", "text": "二つ目の項目" }], "area": { "col": [1, 6], "row": [1, 6] } },
+    { "id": "defs", "type": "text", "blocks": [{ "id": "p", "kind": "para", "text": "段落の**強調**の文。" }], "area": { "col": [7, 12], "row": [1, 6] } } ] },
+    "p2": { "title": "別", "parts": [{ "id": "o", "type": "list", "items": [{ "id": "x", "text": "別の話" }] }] } },
+  "scenes": [ { "id": "s1", "slide": "p1", "lines": [{ "id": "l1", "text": "一つ目だけ出します。", "do": [{ "show": "a" }] }] },
+              { "id": "s2", "slide": "p2", "lines": [{ "id": "l2", "text": "別の話です。", "do": [{ "show": "o" }] }] } ] }
+EOF
+node scripts/frames.cjs "$out/slide.json" --theme koo -o "$out/sl" >"$out/sl.log" 2>&1
+code=$?
+[ $code = 0 ] || [ $code = 4 ] || { ng "スライドのある台本で終了コードが $code"; cat "$out/sl.log"; }
+node -e '
+const fs = require("fs"), [dir, legacy] = process.argv.slice(1);
+const fr = JSON.parse(fs.readFileSync(dir + "/frames.json", "utf8"));
+let ok = JSON.stringify(fr.slides) === JSON.stringify([{ id: "p1", svg: "svg/slide-p1.svg", scenes: ["s1"] }, { id: "p2", svg: "svg/slide-p2.svg", scenes: ["s2"] }]);
+const fin = fs.readFileSync(dir + "/svg/slide-p1.svg", "utf8"), line = fs.readFileSync(dir + "/svg/l1.svg", "utf8");
+// 完成形には、行でまだ出していない部品（二つ目の項目・段落）も出ていて、字幕は出ていない
+ok = ok && fin.includes("二つ目の項目") && fin.includes("強調") && fin.includes("言いたいことの文。") && !fin.includes("一つ目だけ出します。");
+ok = ok && !line.includes("二つ目の項目") && line.includes("一つ目だけ出します。");
+ok = ok && JSON.stringify(JSON.parse(fs.readFileSync(legacy + "/frames.json", "utf8")).slides) === "[]";
+process.exit(ok ? 0 : 1);
+' "$out/sl" "$out/a" 2>/dev/null || ng "スライドの完成形のコマ（svg/slide-<id>.svg と frames.json の slides）が正しくない"
+node scripts/frames.cjs "$out/slide.json" --theme koo -o "$out/sl2" --scenes s2 >/dev/null 2>&1
+[ -f "$out/sl2/svg/slide-p2.svg" ] && [ ! -e "$out/sl2/svg/slide-p1.svg" ] || ng "--scenes のとき、選んだ場面が使うスライドの完成形だけになっていない"
+
 [ $fail = 0 ] && echo "frames の検査: すべて OK" || echo "frames の検査: NG あり"
 exit $fail

@@ -549,6 +549,26 @@
     const statement = { lines: sc.statement, opacity: (prev && !stSame ? k : 1) * (1 - endP), prev: prev && !stSame && prev.statement.length ? { lines: prev.statement, opacity: 1 - k } : null };
     return { t, st, figs: figsF, scene: sc, statement, captions: sc.captions.map(c => ({ ...c, opacity: (prev && prev.figs.includes(c.fig) && prev.captions.some(x => x.text === c.text) ? 1 : k) * (1 - endP) })), header, sub, badge, customs, end: endP, dark };
   };
+  // ================= スライドの完成形のコマ =================
+  // 完成形 = 宣言した部品がすべて出た状態。完成形に含めない部品（transient）と、動作で足したもの（印・注記・点・戻りの矢印）は出さない。
+  // 字幕・札はなし。frame() と同じ形で返す（そのスライドを最初に使う場面の区画）。スライドがなければ null
+  UZ.finalFrame = function (M, slideId) {
+    const sl = M.slides && M.slides[slideId];
+    if (!sl) return null;
+    const sc = M.scenes.find(s => s.id === sl.scenes[0]);
+    const st = {}, figsF = {};
+    for (const fid of Object.keys(M.figs)) figsF[fid] = { opacity: 0, place: null };
+    for (const fid of sl.figs) {
+      if (sl.transient.includes(fid)) continue;
+      figsF[fid] = { opacity: 1, place: sc.place[fid] };
+      for (const it of Object.values(M.figs[fid].items)) {
+        if (it.kind === "mark" || it.kind === "note" || it.kind === "dot" || it.isReply) continue;
+        st[it.key] = { show: 1, dim: 1, pulse: 0, tint: null, tintP: 0, text: null, textFrom: null, textP: 1, mark: null, pos: null, off: [0, 0], labelText: null };
+      }
+    }
+    return { t: sc.start, st, figs: figsF, scene: sc, statement: { lines: sc.statement, opacity: 1, prev: null }, captions: [],
+      header: { text: sc.header, opacity: 1, prev: null }, sub: null, badge: { text: "", show: 0, from: "" }, customs: {}, end: 0, dark: 0 };
+  };
   const lineCache = new WeakMap();
   function findLine(sb, id) {
     let m = lineCache.get(sb);
