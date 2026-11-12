@@ -1,41 +1,123 @@
 {
-  "format": "ugoku-zukai-outline/1",
+  "format": "ugoku-zukai-outline/2",
   "title": "経費精算の進め方を選ぶ",
   "basics": {
-    "audience": { "text": "総務部の担当者", "by": "user", "state": "agreed" },
-    "knows": { "text": "いまの経費精算の手順は知っている。クラウドの精算サービスは使ったことがない", "by": "claude", "state": "agreed" },
-    "takeaway": { "text": "費用はかかるが、クラウドの精算サービスのほうが課題の多くを解消できる", "by": "user", "state": "agreed" },
-    "length": { "text": "1 分くらい", "seconds": 60, "by": "user", "state": "agreed" },
-    "look": { "text": "空 提案書デザイン（既定）", "theme": "koo", "by": "claude", "state": "proposed" }
+    "audience": {
+      "text": "総務部の担当者",
+      "by": "user",
+      "state": "agreed"
+    },
+    "knows": {
+      "text": "いまの経費精算の手順は知っている。クラウドの精算サービスは使ったことがない",
+      "by": "claude",
+      "state": "agreed"
+    },
+    "takeaway": {
+      "text": "費用はかかるが、クラウドの精算サービスのほうが課題の多くを解消できる",
+      "by": "user",
+      "state": "agreed"
+    },
+    "length": {
+      "text": "1 分くらい",
+      "seconds": 60,
+      "by": "user",
+      "state": "agreed"
+    },
+    "look": {
+      "text": "空 提案書デザイン（既定）",
+      "theme": "koo",
+      "by": "claude",
+      "state": "proposed"
+    }
+  },
+  "flow": {
+    "text": "困りごとを先に共有し、案を比べ、選んだ案の段取りで終える。聴衆が、なぜその案かを納得してから予定を聞ける",
+    "by": "claude",
+    "state": "agreed"
   },
   "chapters": [
     {
       "id": "c1",
       "title": "現状の課題",
-      "says": [
-        { "id": "c1.1", "text": "課題は三つあり、いちばん大きいのは進み具合が分からないこと", "by": "user", "state": "agreed" }
-      ],
-      "shows": { "text": "課題を番号付きで並べる", "figure": "list", "by": "user", "state": "agreed" },
-      "seconds": 10
+      "intent": {
+        "text": "ここで聴衆は、今の経費精算の課題が三つあり、いちばん大きいのは進み具合が分からないことだと分かる",
+        "by": "user",
+        "state": "agreed"
+      },
+      "seconds": 10,
+      "slides": [
+        {
+          "id": "issues",
+          "intent": {
+            "text": "三つの課題を番号付きで読める",
+            "by": "claude",
+            "state": "agreed"
+          }
+        }
+      ]
     },
     {
       "id": "c2",
       "title": "案の比較",
-      "says": [
-        { "id": "c2.1", "text": "サービスの導入と表計算の改良を、長所と短所で比べる", "by": "user", "state": "agreed" },
-        { "id": "c2.2", "text": "課題ごとに並べると、サービスの導入が三つすべてに対応できる", "by": "claude", "state": "agreed" }
-      ],
-      "shows": { "text": "二案を左右に置き、続けて課題ごとの一覧にする", "figure": "compare", "by": "claude", "state": "proposed" },
-      "seconds": 30
+      "intent": {
+        "text": "ここで聴衆は、サービスの導入と表計算の改良を長所と短所で比べ、サービスの導入が三つの課題すべてに対応できると分かる",
+        "by": "user",
+        "state": "agreed"
+      },
+      "link": {
+        "text": "課題が分かったので、それを解く二つの案を比べる",
+        "by": "claude",
+        "state": "agreed"
+      },
+      "seconds": 30,
+      "slides": [
+        {
+          "id": "plans",
+          "intent": {
+            "text": "二つの案の長所と短所を、左右に並べて読める",
+            "by": "claude",
+            "state": "agreed"
+          }
+        },
+        {
+          "id": "fit",
+          "intent": {
+            "text": "課題ごとに、どちらの案が対応できるかを一覧で読める",
+            "by": "claude",
+            "state": "agreed"
+          },
+          "link": {
+            "text": "長所と短所を見た後で、課題に照らして選ぶ",
+            "by": "claude",
+            "state": "agreed"
+          }
+        }
+      ]
     },
     {
       "id": "c3",
       "title": "導入の段取り",
-      "says": [
-        { "id": "c3.1", "text": "来月に試験導入し、三か月後に全社へ広げる", "by": "user", "state": "agreed" }
-      ],
-      "shows": { "text": "月ごとの予定を横に並べる", "figure": "roadmap", "by": "user", "state": "agreed" },
-      "seconds": 20
+      "intent": {
+        "text": "ここで聴衆は、来月に試験導入し、三か月後に全社へ広げる予定だと分かる",
+        "by": "user",
+        "state": "agreed"
+      },
+      "link": {
+        "text": "案が決まったので、いつ何をするかを伝える",
+        "by": "claude",
+        "state": "agreed"
+      },
+      "seconds": 20,
+      "slides": [
+        {
+          "id": "plan",
+          "intent": {
+            "text": "月ごとの予定を、左から右に読める",
+            "by": "claude",
+            "state": "agreed"
+          }
+        }
+      ]
     }
   ]
 }
