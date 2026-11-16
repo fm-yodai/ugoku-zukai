@@ -42,7 +42,7 @@
     ] },
     { "id": "s3", "figure": "funnel", "lines": [
       { "id": "l7", "text": "荷主の切り替えも見ておきます。{a}案内した百二十社のうち、{b}八十四社が登録しました。", "do": [ { "at": "a", "show": "f_annai" }, { "at": "b", "show": ["f_touroku", "f_touroku.rate"] } ] },
-      { "id": "l8", "text": "{a}一度使ったのは六十三社、{b}毎回 Web で依頼するのは四十一社です。", "do": [ { "at": "a", "show": ["f_riyou", "f_riyou.rate"] }, { "at": "b", "show": ["f_teichaku", "f_teichaku.rate"] } ] },
+      { "id": "l8", "text": "{a}一度使ったのは六十三社、{b}毎回 Web で依頼するのは四十一社です。", "read": "{a}一度使ったのは六十三社、{b}毎回 ウェブ で依頼するのは四十一社です。", "do": [ { "at": "a", "show": ["f_riyou", "f_riyou.rate"] }, { "at": "b", "show": ["f_teichaku", "f_teichaku.rate"] } ] },
       { "id": "l9", "text": "{a}一度使った荷主を、毎回の利用につなげるのが次の課題です。", "do": [ { "at": "a", "tint": "f_teichaku.rate", "as": "warn" }, { "pulse": "f_teichaku" } ] }
     ] }
   ]

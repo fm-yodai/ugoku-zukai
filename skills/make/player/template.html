@@ -18,10 +18,51 @@ __FONT_LINK__
   .uz-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
   .uz-bar button { font: inherit; font-weight: 700; color: var(--ink); background: transparent; border: 1px solid var(--line); border-radius: 999px; padding: 6px 16px; cursor: pointer; min-width: 96px; }
   .uz-bar button:hover, .uz-bar button:focus-visible { border-color: var(--accent); outline: none; }
-  .uz-bar input[type=range] { flex: 1; min-width: 160px; accent-color: var(--accent); }
+  .uz-bar input[type=range] { accent-color: var(--accent); }
+  .uz-bar select { font: inherit; color: var(--ink); background: transparent; border: 1px solid var(--line); border-radius: 8px; padding: 4px 6px; cursor: pointer; }
+  .uz-bar select option { color: #111; background: #fff; }
   .uz-bar output { font-variant-numeric: tabular-nums; color: var(--muted); min-width: 92px; text-align: right; }
   .uz-bar label { color: var(--muted); display: flex; align-items: center; gap: 6px; cursor: pointer; }
   .uz-note { color: var(--muted); font-size: 12px; }
+  /* 直したい箇所を指定する（ふだんは畳んでおく。視聴者には要らない表示のため） */
+  .uz-point { color: var(--muted); font-size: 12px; }
+  .uz-point summary { cursor: pointer; width: fit-content; border-radius: 4px; }
+  .uz-point summary:hover, .uz-point summary:focus-visible { color: var(--accent); outline: none; }
+  .uz-point-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 6px 0 4px; }
+  #uz-pos { font-size: 14px; font-variant-numeric: tabular-nums; color: var(--ink); padding: 2px 8px; border: 1px solid var(--line); border-radius: 6px;
+            user-select: all; -webkit-user-select: all; overflow-wrap: anywhere; min-width: 0; }
+  .uz-point button { font: inherit; color: var(--ink); background: transparent; border: 1px solid var(--line); border-radius: 999px; padding: 3px 12px; cursor: pointer; }
+  .uz-point button:hover, .uz-point button:focus-visible, .uz-point button[aria-pressed="true"] { border-color: var(--accent); outline: none; }
+  .uz-point button[aria-pressed="true"] { color: var(--accent); }
+  .uz-point p { margin: 0; }
+  /* 再生バーの刻み（チャプターの始まり）。つまみの半径ぶん内側に寄せる */
+  .uz-seek { position: relative; flex: 1; min-width: 160px; display: flex; align-items: center; }
+  .uz-seek input[type=range] { flex: 1; min-width: 0; margin: 0; }
+  #uz-ticks { position: absolute; left: 8px; right: 8px; top: 0; bottom: 0; pointer-events: none; }
+  #uz-ticks span { position: absolute; top: 50%; width: 2px; height: 12px; margin-left: -1px; transform: translateY(-50%); background: var(--muted); opacity: .6; border-radius: 1px; }
+  /* チャプター一覧。動画の下に、章の題を横に並べ（多ければ折り返す）、その下に今の章の行だけを出す */
+  #uz-chapters { border-top: 1px solid var(--line); padding-top: 8px; }
+  #uz-chapters ol { list-style: none; margin: 0; padding: 0; }
+  #uz-chapter-tabs { display: flex; flex-wrap: wrap; gap: 6px; }
+  #uz-chapter-tabs .uz-chapter { border: 1px solid var(--line); border-radius: 999px; }
+  #uz-chapter-tabs .uz-chapter[aria-current="true"] { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, transparent); }
+  #uz-chapter-lines { margin-top: 8px; }
+  #uz-chapter-lines ol { padding-left: 10px; border-left: 2px solid var(--line); margin-left: 6px; }
+  #uz-chapters button { font: inherit; color: var(--ink); background: none; border: 0; border-radius: 4px; text-align: left; cursor: pointer; }
+  #uz-chapters button:hover, #uz-chapters button:focus-visible { color: var(--accent); outline: none; }
+  #uz-chapters button:focus-visible { box-shadow: 0 0 0 2px var(--accent); }
+  #uz-chapters time { font-variant-numeric: tabular-nums; color: var(--muted); margin-right: 8px; font-size: 12px; }
+  #uz-chapters .uz-chapter { display: block; padding: 4px 12px; font-weight: 700; overflow-wrap: anywhere; }
+  .uz-row { display: flex; align-items: flex-start; gap: 2px; }
+  #uz-chapters .uz-line { flex: 1; min-width: 0; padding: 2px 6px; font-size: 13px; overflow-wrap: anywhere; }
+  #uz-chapters .uz-src-btn { flex: none; padding: 2px 6px; color: var(--muted); font-size: 12px; }
+  #uz-chapters .uz-src-btn:hover, #uz-chapters .uz-src-btn:focus-visible, #uz-chapters .uz-src-btn[aria-expanded="true"] { color: var(--accent); }
+  #uz-chapters button[aria-current="true"] { color: var(--accent); }
+  #uz-chapters .uz-line[aria-current="true"] { background: color-mix(in srgb, var(--accent) 12%, transparent); }
+  .uz-line[aria-current="true"] time { color: var(--accent); }
+  .uz-tip { position: fixed; z-index: 10; max-width: min(320px, calc(100vw - 32px)); padding: 6px 10px; font-size: 12px; line-height: 1.5;
+            color: var(--ink); background: var(--page); border: 1px solid var(--line); border-radius: 6px; box-shadow: 0 4px 12px rgba(0, 0, 0, .18); overflow-wrap: anywhere; }
+  .uz-tip div { white-space: pre-wrap; }
   .uz-err { color: var(--err); white-space: pre-wrap; }
 </style>
 <!--UZ:HEAD_END-->
@@ -32,11 +73,20 @@ __FONT_LINK__
   <svg class="uz-stage" id="uz-stage" role="img" aria-label="__TITLE__"></svg>
   <div class="uz-bar">
     <button id="uz-play" type="button">▶ 再生</button>
-    <input id="uz-seek" type="range" min="0" max="1000" value="0" aria-label="再生位置">
+    <div class="uz-seek"><input id="uz-seek" type="range" min="0" max="1000" value="0" aria-label="再生位置"><div id="uz-ticks" aria-hidden="true"></div></div>
     <output id="uz-clock">0:00 / 0:00</output>
+    <label>速さ <select id="uz-rate" aria-label="再生の速さ"><option value="0.75">0.75 倍</option><option value="1" selected>1 倍</option><option value="1.25">1.25 倍</option><option value="1.5">1.5 倍</option><option value="2">2 倍</option></select></label>
     <label><input id="uz-subs" type="checkbox" checked> 字幕</label>
   </div>
   <div class="uz-note" id="uz-note"></div>
+  <nav id="uz-chapters" aria-label="チャプター" hidden><ol id="uz-chapter-tabs"></ol><div id="uz-chapter-lines"></div></nav>
+  <details class="uz-point" id="uz-point" hidden>
+    <summary>直したい箇所を指定する</summary>
+    <div class="uz-point-row"><output id="uz-pos"></output>
+      <button id="uz-pos-copy" type="button">コピー</button>
+      <button id="uz-pos-from" type="button" aria-pressed="false">範囲指定</button></div>
+    <p class="uz-note" id="uz-pos-note">止めた位置の、場面と行の番号と時刻です。コピーして Claude に伝えると、その箇所を直せます。範囲で伝えるときは、始まりの位置で「範囲指定」を押し、終わりの位置まで進めてからコピーします。</p>
+  </details>
   <div class="uz-err" id="uz-err" hidden></div>
 </div>
 <script>/*UZ:ELK*/</script>
@@ -49,10 +99,11 @@ const UZ_DATA = /*UZ:DATA*/null;
   const fmt = s => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
   const showErr = m => { const e = $("uz-err"); e.textContent = m; e.hidden = false; };
   UZ.ELK = window.ELK;
-  let M, view, ctx = null, buffer = null, src = null, t0 = 0, pausedAt = 0, playing = false, wallT0 = 0;
+  let M, view, ctx = null, buffer = null, src = null, t0 = 0, pausedAt = 0, playing = false, wallT0 = 0, rate = 1;
   const hasAudio = !!UZ_DATA.audio;
   // 時計: 音声があれば WebAudio の時計、なければ performance.now()（チャットのプレビューでは audio 要素が使えないため）
-  const now = () => !playing ? pausedAt : hasAudio ? ctx.currentTime - t0 : (performance.now() - wallT0) / 1000;
+  // 速さ（rate）を変えても、時刻は台本の時刻のまま（声の再生と時計を同じ倍率で進める。声の高さも一緒に変わる）
+  const now = () => !playing ? pausedAt : hasAudio ? (ctx.currentTime - t0) * rate : (performance.now() - wallT0) / 1000 * rate;
   async function ensureAudio() {
     if (!hasAudio || ctx) return;
     ctx = new (window.AudioContext || window.webkitAudioContext)();
@@ -64,9 +115,10 @@ const UZ_DATA = /*UZ:DATA*/null;
     if (hasAudio) {
       if (src) { src.onended = null; try { src.stop(); } catch (e) {} }
       src = ctx.createBufferSource(); src.buffer = buffer; src.connect(ctx.destination);
+      src.playbackRate.value = rate;
       if (off < buffer.duration) src.start(0, off);
-      t0 = ctx.currentTime - off;
-    } else wallT0 = performance.now() - off * 1000;
+      t0 = ctx.currentTime - off / rate;
+    } else wallT0 = performance.now() - off * 1000 / rate;
     playing = true; $("uz-play").textContent = "❚❚ 一時停止";
     requestAnimationFrame(tick);
   }
@@ -76,11 +128,14 @@ const UZ_DATA = /*UZ:DATA*/null;
     $("uz-play").textContent = "▶ 再生";
   }
   function tick() {
+    if (!M || !view) return;
     const D = M.duration, t = Math.min(now(), D);
     if (playing && now() >= D) { pause(); pausedAt = D; $("uz-play").textContent = "▶ もう一度"; }
     view.render(t);
     $("uz-seek").value = Math.round(t / D * 1000);
     $("uz-clock").textContent = `${fmt(t)} / ${fmt(D)}`;
+    markCurrent(t);
+    showPos(t);
     if (playing) requestAnimationFrame(tick);
   }
   $("uz-play").onclick = async () => {
@@ -90,14 +145,212 @@ const UZ_DATA = /*UZ:DATA*/null;
       if (playing) pause(); else startAt(pausedAt >= M.duration - 0.05 ? 0 : pausedAt);
     } catch (e) { showErr("音声を再生できませんでした: " + e.message); }
   };
-  $("uz-seek").oninput = () => { const t = $("uz-seek").value / 1000 * M.duration; if (playing) startAt(t); else { pausedAt = t; tick(); } };
+  function seekTo(t) { if (playing) startAt(t); else { pausedAt = t; $("uz-play").textContent = "▶ 再生"; tick(); } }
+  $("uz-seek").oninput = () => seekTo($("uz-seek").value / 1000 * M.duration);
+  $("uz-rate").onchange = () => { const t = now(); rate = +$("uz-rate").value || 1; if (playing) startAt(t); };
   $("uz-subs").onchange = () => { view.subtitles = $("uz-subs").checked; view._sub = null; tick(); };
   document.addEventListener("keydown", e => { if (e.code === "Space" && e.target === document.body) { e.preventDefault(); $("uz-play").click(); } });
-  UZ.player = { seek(t) { pausedAt = t; tick(); }, get model() { return M; } };
+  UZ.player = { seek: seekTo, get model() { return M; } };
+  // チャプター一覧（build_sheet.py の chapters と同じ決め方）。
+  // 場面の chapter（構成メモの章の id）が構成メモ（UZ_DATA.chapters）にあれば、同じ章の続く場面を 1 つにまとめ、題は構成メモの章の題。
+  // それ以外の場面は、場面の題（engine の header。題の札だけの場面は札の文の 1 行目）が変わるところで区切り、題の無い場面は直前のチャプターに入れる。
+  // 行の字幕は全文を出す（長い行は折り返す）
+  function chapterData() {
+    const start = {};
+    for (const l of M.timeline.lines) start[l.id] = l.start;
+    const names = (typeof UZ_DATA !== "undefined" && UZ_DATA && UZ_DATA.chapters) || {};
+    const sceneTitle = sc => {
+      if (sc.header) return sc.header;
+      const f = sc.figs.length === 1 && M.figs[sc.figs[0]];
+      return f && f.type === "title" ? String(f.text || "").split("\n")[0].trim() : "";
+    };
+    const out = [];
+    for (const sc of M.scenes) {
+      const title = sceneTitle(sc);
+      let ch = out[out.length - 1];
+      const named = sc.chapter != null && Object.prototype.hasOwnProperty.call(names, sc.chapter) ? names[sc.chapter] : "";
+      if (named) {
+        const key = "c:" + sc.chapter;
+        if (!ch || ch.key !== key) { ch = { key, title: named, start: sc.start, lines: [] }; out.push(ch); }
+      } else if (!ch || (title && title !== ch.title)) { ch = { key: "t:" + title, title: title || "はじめに", start: sc.start, lines: [] }; out.push(ch); }
+      for (const ln of sc.lines || []) {
+        const sources = (typeof ln.source === "string" ? [ln.source] : Array.isArray(ln.source) ? ln.source : []).filter(x => typeof x === "string" && x);
+        ch.lines.push({ id: ln.id, start: ln.id in start ? start[ln.id] : sc.start, text: UZ.parseText(ln.text).text, sources });
+      }
+    }
+    return out.map(({ key, ...ch }) => ch);
+  }
+  let marks = null, curCh = -1, curLn = -1;
+  // 今の時刻に当たるチャプターと行に aria-current を付ける（一覧が無ければ何もしない）
+  function markCurrent(t) {
+    if (!marks) return;
+    // 最初の行より前（0:00 の直後）は最初のチャプターと行を今とみなす
+    const find = arr => { let k = arr.length ? 0 : -1; for (let i = 0; i < arr.length; i++) if (arr[i].start <= t + 0.01) k = i; return k; };
+    const c = find(marks.chapters), l = find(marks.lines);
+    if (c !== curCh) {
+      if (curCh >= 0) marks.chapters[curCh].el.removeAttribute("aria-current");
+      if (c >= 0) marks.chapters[c].el.setAttribute("aria-current", "true");
+      if (marks.hideTip) marks.hideTip();   // 行の一覧が入れ替わるので、開いたままの根拠の吹き出しは閉じる
+      marks.chapters.forEach((ch, i) => { const panel = ch.panel; panel.hidden = i !== c; });   // 行は、今の章のぶんだけ出す（章の題を押すと、その章の頭に飛んで切り替わる）
+      curCh = c;
+    }
+    if (l !== curLn) {
+      if (curLn >= 0) marks.lines[curLn].el.removeAttribute("aria-current");
+      if (l >= 0) {
+        marks.lines[l].el.setAttribute("aria-current", "true");
+      }
+      curLn = l;
+    }
+  }
+  // 一覧の描画。データは textContent だけで入れる
+  function buildChapters() {
+    const chapters = chapterData(), nav = $("uz-chapters"), tabs = $("uz-chapter-tabs"), panels = $("uz-chapter-lines");
+    const btn = (cls, start, text) => {
+      const b = document.createElement("button"), tm = document.createElement("time");
+      b.type = "button"; b.className = cls; tm.textContent = fmt(start);
+      b.append(tm, text); b.onclick = () => UZ.player.seek(start);
+      return b;
+    };
+    // 根拠の吹き出しは 1 つだけ。行に重ねると下に出し、※ を押すと開いたままにする
+    const tip = document.createElement("div");
+    tip.className = "uz-tip"; tip.id = "uz-tip"; tip.setAttribute("role", "tooltip"); tip.hidden = true;
+    document.body.append(tip);
+    let pinned = null;
+    // マウスを乗せて出すのはポインタで重ねられる端末だけ。タッチでは ※ を押して出す。
+    // フォーカスで出すのはキーボードで移ったとき（:focus-visible）だけ（タップでのフォーカスでは出さない）
+    const canHover = !!(window.matchMedia && window.matchMedia("(hover: hover)").matches);
+    const byKeyboard = el => { try { return el.matches(":focus-visible"); } catch (e) { return true; } };
+    // 吹き出しは 1 つを使い回すので、aria-describedby は今出している行にだけ付ける
+    let described = null;
+    const describe = el => { if (described) described.removeAttribute("aria-describedby"); described = el; if (el) el.setAttribute("aria-describedby", "uz-tip"); };
+    const conceal = () => { tip.hidden = true; describe(null); };
+    const show = (row, sources, lb) => {
+      describe(lb);
+      tip.replaceChildren(...sources.map(s => { const d = document.createElement("div"); d.textContent = s; return d; }));
+      tip.hidden = false;
+      const r = row.getBoundingClientRect(), w = tip.offsetWidth, h = tip.offsetHeight;
+      const left = Math.max(8, Math.min(r.left, window.innerWidth - w - 8));
+      const top = r.bottom + 4 + h > window.innerHeight ? Math.max(8, r.top - h - 4) : r.bottom + 4;
+      tip.style.left = left + "px"; tip.style.top = top + "px";
+    };
+    const hide = () => { conceal(); if (pinned) { pinned.setAttribute("aria-expanded", "false"); pinned = null; } };
+    const lines = [], chs = [];
+    for (const ch of chapters) {
+      const li = document.createElement("li"), cb = btn("uz-chapter", ch.start, ch.title), ol = document.createElement("ol");
+      ol.hidden = true;
+      chs.push({ start: ch.start, el: cb, panel: ol });
+      ch.lines.forEach((ln, i) => {
+        const lli = document.createElement("li"), row = document.createElement("div"), lb = btn("uz-line", ln.start, ln.text);
+        row.className = "uz-row"; row.append(lb);
+        // チャプターの頭の行は、チャプターの始まり（行の少し前）から今とみなす
+        lines.push({ start: i === 0 ? Math.min(ch.start, ln.start) : ln.start, el: lb });
+        if (ln.sources.length) {
+          const sb = document.createElement("button");
+          sb.type = "button"; sb.className = "uz-src-btn"; sb.textContent = "※";
+          sb.setAttribute("aria-label", "根拠"); sb.setAttribute("aria-expanded", "false"); sb.setAttribute("aria-controls", "uz-tip");
+          const enter = () => { if (!pinned) show(row, ln.sources, lb); };
+          const leave = () => { if (!pinned) conceal(); };
+          if (canHover) { lb.addEventListener("mouseenter", enter); lb.addEventListener("mouseleave", leave); }
+          lb.addEventListener("focus", () => { if (byKeyboard(lb)) enter(); });
+          lb.addEventListener("blur", () => { if (!canHover || !lb.matches(":hover")) leave(); });
+          sb.addEventListener("click", e => {
+            e.stopPropagation();
+            if (pinned === sb) { hide(); return; }
+            hide(); pinned = sb; sb.setAttribute("aria-expanded", "true"); show(row, ln.sources, lb);
+          });
+          row.append(sb);
+        }
+        lli.append(row); ol.append(lli);
+      });
+      li.append(cb); tabs.append(li); panels.append(ol);
+    }
+    document.addEventListener("click", e => { if (pinned && !tip.contains(e.target)) hide(); });
+    document.addEventListener("keydown", e => { if (e.key === "Escape" && !tip.hidden) hide(); });
+    window.addEventListener("resize", () => { if (!tip.hidden) hide(); });
+    // 再生バーの刻み（最初のチャプターは 0:00 なので置かない）
+    const ticks = $("uz-ticks");
+    for (const ch of chapters.slice(1)) {
+      const sp = document.createElement("span");
+      sp.style.left = (ch.start / M.duration * 100) + "%";
+      ticks.append(sp);
+    }
+    nav.hidden = false;
+    marks = { chapters: chs, lines, hideTip: hide };
+    markCurrent(pausedAt);
+  }
+  // 直したい箇所を指定する。今の位置を「場面 / 行 @時刻」で出す（絵コンテのページの行の表記と同じ）。
+  // 場面は始まっている最後の場面。行は、その場面で始まっている最後の行（まだ 1 行も始まっていなければ場面の最初の行）
+  function posAt(t) {
+    let sc = M.scenes[0];
+    for (const s of M.scenes) if (s.start <= t + 0.01) sc = s;
+    const ids = new Set((sc.lines || []).map(l => l.id));
+    const own = M.timeline.lines.filter(l => ids.has(l.id));
+    let ln = own[0];
+    for (const l of own) if (l.start <= t + 0.01) ln = l;
+    return { scene: sc.id, line: ln ? ln.id : "", t };
+  }
+  // 1 点は「s2 / l2 @0:14」。2 点は時刻の早い順に「〜」でつなぐ（同じ表記になる 2 点は 1 点として出す）
+  function posText(a, b) {
+    const one = p => `${p.scene} / ${p.line} @${fmt(p.t)}`;
+    if (!b || one(a) === one(b)) return one(a);
+    return a.t <= b.t ? `${one(a)} 〜 ${one(b)}` : `${one(b)} 〜 ${one(a)}`;
+  }
+  // 「直したい箇所を指定する」を出してよいか。Artifact では、開いている人が編集できるか（claude.use("user") の canEdit）を聞く。
+  // 聞く仕組みがなく、Artifact 用に組み立てたページでもなければ、手元で開いた HTML（開いているのは作った本人）なので出す。
+  // 答えが分からない（仕組みが null を返す・誤りになる・ms ミリ秒返らない）ときは出さない
+  function canPoint(data, win, ms = 12000) {
+    const use = win.claude && typeof win.claude.use === "function" ? win.claude.use : null;
+    if (!use) return Promise.resolve(!(data && data.artifact));
+    const ask = new Promise(resolve => {
+      try {
+        Promise.resolve(use.call(win.claude, "user"))
+          .then(u => (u && typeof u.canEdit === "function" ? u.canEdit() : false))
+          .then(ok => resolve(ok === true), () => resolve(false));
+      } catch (e) { resolve(false); }
+    });
+    return Promise.race([ask, new Promise(resolve => setTimeout(() => resolve(false), ms))]);
+  }
+  let posFrom = null, pointOk = false;
+  function showPos(t) {
+    if (!pointOk) return;
+    const s = posText(posAt(t), posFrom), el = $("uz-pos");
+    if (el.textContent !== s) el.textContent = s;
+  }
+  function buildPoint() {
+    const note = $("uz-pos-note"), help = note.textContent, from = $("uz-pos-from");
+    const cur = () => Math.min(now(), M.duration);
+    let timer = 0;
+    // 成功の知らせは 2 秒で元の説明に戻す。失敗の知らせは、次に押すまで残す
+    const say = (m, keep) => { clearTimeout(timer); note.textContent = m; if (!keep) timer = setTimeout(() => { note.textContent = help; }, 2000); };
+    const select = () => { const r = document.createRange(), s = window.getSelection(); r.selectNodeContents($("uz-pos")); s.removeAllRanges(); s.addRange(r); };
+    from.onclick = () => {
+      posFrom = posFrom ? null : posAt(cur());
+      from.textContent = posFrom ? "範囲指定解除" : "範囲指定";
+      from.setAttribute("aria-pressed", posFrom ? "true" : "false");
+      clearTimeout(timer); note.textContent = help;
+      showPos(cur());
+    };
+    // コピーは 3 段: クリップボードの API → 文字を選択して execCommand → 選択だけ残して手でコピーしてもらう
+    // （Artifact は iframe の中で動くので、クリップボードが拒否されることがある）
+    $("uz-pos-copy").onclick = async () => {
+      const text = $("uz-pos").textContent;
+      try { await navigator.clipboard.writeText(text); say("コピーしました"); return; } catch (e) {}
+      select();
+      let ok = false;
+      try { ok = document.execCommand("copy"); } catch (e) {}
+      if (ok) { say("コピーしました"); return; }
+      // 再生中は位置の文字が書き換わって選択が消えるので、止めてから選択し直す
+      if (playing) { pause(); tick(); }
+      select();
+      say("コピーできませんでした。選択された文字をコピーしてください", true);
+    };
+    pointOk = true;
+    showPos(pausedAt);
+  }
   (async () => {
     try {
       if (document.fonts && document.fonts.load) await Promise.race([document.fonts.load(`500 24px ${UZ_DATA.theme.font.family}`), new Promise(r => setTimeout(r, 2500))]);
-      M = await UZ.build(UZ_DATA.storyboard, UZ_DATA.theme, UZ_DATA.timeline);
+      M = await UZ.build(UZ_DATA.storyboard, UZ_DATA.theme, UZ_DATA.timeline, { assets: UZ_DATA.assets || {} });
       if (M.errors.length) { showErr("台本に誤りがあります:\n" + M.errors.join("\n")); return; }
       view = new UZ.View($("uz-stage"), M);
       if (!hasAudio) $("uz-note").textContent = "音声なし（時刻は文字数からの見積もり）";
@@ -105,6 +358,15 @@ const UZ_DATA = /*UZ:DATA*/null;
       const firstFull = M.scenes.length > 1 ? M.scenes[1].start + 0.01 : M.duration / 2;
       pausedAt = M.scenes[0].figs.some(f => !M.figs[f].autoShow) ? (M.timeline.lines[0].start + M.timeline.lines[0].dur) : Math.min(firstFull - 0.4, 3);
       tick(); pausedAt = 0; $("uz-seek").value = 0; $("uz-clock").textContent = `0:00 / ${fmt(M.duration)}`;
+      // 一覧が壊れても再生は止めない（一覧は出さずにコンソールへ）
+      try { buildChapters(); } catch (e) { console.error("チャプター一覧を作れなかった:", e); marks = null; $("uz-chapters").hidden = true; $("uz-ticks").replaceChildren(); }
+      // 位置の表示が壊れても再生は止めない
+      // 編集できる人にだけ出す。答えを待たずにページを出し、分かってから現れる
+      canPoint(UZ_DATA, window).then(ok => {
+        if (!ok) return;
+        $("uz-point").hidden = false;
+        try { buildPoint(); } catch (e) { console.error("位置の表示を用意できなかった:", e); pointOk = false; $("uz-point").hidden = true; }
+      });
       document.dispatchEvent(new CustomEvent("uz-ready"));
     } catch (e) { showErr("準備に失敗しました: " + e.message); console.error(e); }
   })();

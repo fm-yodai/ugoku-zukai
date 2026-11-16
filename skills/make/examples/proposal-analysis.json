@@ -23,7 +23,7 @@
         "tl": { "id": "sugu", "label": "すぐやる", "role": "good" },
         "tr": { "id": "keikaku", "label": "計画してやる" },
         "bl": { "id": "tsuide", "label": "ついでにやる" },
-        "br": { "id": "yamenai", "label": "後回し", "role": "muted" }
+        "br": { "id": "yamenai", "label": "後回し", "off": true }
       },
       "items": [
         { "id": "p_uketsuke", "label": "受付の一本化", "x": 0.42, "y": 0.82, "role": "actor" },

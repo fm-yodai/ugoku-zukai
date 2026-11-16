@@ -52,6 +52,7 @@
         { "id": "roll", "track": "ops", "from": "q3", "to": "q4", "label": "全営業所に広げる", "role": "store" },
         { "id": "go", "track": "ops", "at": "q4", "pos": 0.75, "label": "FAX 終了", "role": "accent" }
       ],
+      "links": [ { "from": "pilot", "to": "roll" } ],
       "now": { "period": "q1", "pos": 0.1, "label": "いま" }
     }
   },
@@ -72,7 +73,7 @@
     { "id": "s3", "figure": "road", "lines": [
       { "id": "l10", "text": "進め方です。{a}まず四月から、荷主向けの依頼画面を作ります。", "do": [ { "show": ["grid", "now"] }, { "at": "a", "show": "web" } ] },
       { "id": "l11", "text": "夏には{a}一つの営業所で試し、{b}並行してドライバーのアプリを作ります。", "do": [ { "at": "a", "show": "pilot" }, { "at": "b", "show": "app" } ] },
-      { "id": "l12", "text": "秋から{a}全営業所に広げ、{b}三月で FAX の受付を終えます。", "do": [ { "at": "a", "show": "roll" }, { "at": "b", "show": "go" }, { "pulse": "go" } ] }
+      { "id": "l12", "text": "秋から{a}全営業所に広げ、{b}三月で FAX の受付を終えます。", "read": "秋から{a}全営業所に広げ、{b}三月で ファックス の受付を終えます。", "do": [ { "at": "a", "show": ["pilot>roll", "roll"] }, { "at": "b", "show": "go" }, { "pulse": "go" } ] }
     ] }
   ]
 }

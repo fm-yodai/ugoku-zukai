@@ -1,0 +1,144 @@
+{
+  "format": "ugoku-zukai-outline/1",
+  "title": "UX とは結局何か",
+  "basics": {
+    "audience": {
+      "text": "自社の開発部",
+      "by": "user",
+      "state": "agreed"
+    },
+    "knows": {
+      "text": "UI/UX という言葉は聞いたことがある。受託開発の工程は知っている",
+      "by": "claude",
+      "state": "agreed"
+    },
+    "takeaway": {
+      "text": "UX は画面の話に限らず、受託開発では提案の前から要る",
+      "by": "user",
+      "state": "agreed"
+    },
+    "length": {
+      "text": "5 分くらい",
+      "seconds": 300,
+      "by": "user",
+      "state": "agreed"
+    },
+    "look": {
+      "text": "空 提案書デザイン（既定）",
+      "theme": "koo",
+      "by": "claude",
+      "state": "proposed"
+    },
+    "voice": {
+      "text": "落ち着いた声",
+      "speaker": 8,
+      "speed": 1.1,
+      "by": "claude",
+      "state": "proposed"
+    },
+    "tone": {
+      "text": "です・ます。一般的なビジネスの語り口",
+      "by": "user",
+      "state": "agreed"
+    }
+  },
+  "chapters": [
+    {
+      "id": "c1",
+      "title": "この動画で話すこと",
+      "says": [
+        {
+          "id": "c1.1",
+          "text": "UX とは何かと、受託開発のどの段階で要るかを話す",
+          "by": "user",
+          "state": "agreed"
+        }
+      ],
+      "shows": {
+        "text": "話す順の箇条",
+        "figure": "list",
+        "by": "claude",
+        "state": "agreed"
+      },
+      "seconds": 30
+    },
+    {
+      "id": "c2",
+      "title": "UX の定義",
+      "says": [
+        {
+          "id": "c2.1",
+          "text": "UX は、製品やサービスを使う前から使った後までに利用者が得る体験の全体を指す",
+          "by": "source",
+          "source": [
+            "https://example.com/ux-definition 「利用の前・最中・後の知覚と反応」"
+          ],
+          "state": "agreed"
+        },
+        {
+          "id": "c2.2",
+          "text": "UI/UX と並べて語られるが、画面の中だけの話ではない",
+          "by": "user",
+          "state": "agreed"
+        }
+      ],
+      "shows": {
+        "text": "使う前・使っている間・使った後を左から右に並べる",
+        "figure": "roadmap",
+        "by": "claude",
+        "state": "proposed"
+      },
+      "seconds": 80
+    },
+    {
+      "id": "c3",
+      "title": "ユーザビリティとの違い",
+      "says": [
+        {
+          "id": "c3.1",
+          "text": "ユーザビリティは使いやすさで、UX の一部である",
+          "by": "source",
+          "source": [
+            "https://example.com/ux 「…」"
+          ],
+          "state": "agreed"
+        }
+      ],
+      "shows": {
+        "text": "UX の円の内側にユーザビリティの円",
+        "figure": "piechart",
+        "by": "claude",
+        "state": "proposed"
+      },
+      "seconds": 50
+    },
+    {
+      "id": "c4",
+      "title": "受託開発のどの段階で要るか",
+      "says": [
+        {
+          "id": "c4.1",
+          "text": "提案の前の段階から、誰のどんな体験を良くするのかを決めておく",
+          "by": "user",
+          "state": "agreed"
+        },
+        {
+          "id": "c4.2",
+          "text": "案件の種類ごとに、どの工程で何を確かめるかが変わる",
+          "by": "claude",
+          "state": "proposed"
+        }
+      ],
+      "shows": {
+        "text": "工程を横、案件の種類を縦に置いた表",
+        "figure": "table",
+        "by": "user",
+        "state": "agreed"
+      },
+      "seconds": 140
+    }
+  ],
+  "open": [
+    "受託の工程の区切り方は、社内の呼び名に合わせるか"
+  ]
+}

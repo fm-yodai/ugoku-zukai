@@ -29,12 +29,18 @@
       const S = this.S, th = M.theme;
       this.font = S.font;
       el("rect", { x: 0, y: 0, width: 1280, height: 720, fill: S.bg }, svg);
+      // 章扉の地（テーマの chapter）。題の札だけの場面で重ねる
+      this.chap = th.chapter || null;
+      this.bgDark = this.chap ? el("rect", { x: 0, y: 0, width: 1280, height: 720, fill: this.chap.bg }, svg) : null;
+      if (this.bgDark) this.bgDark.style.opacity = 0;
       const defs = el("defs", null, svg);
       if (th.shape.glow) {
         const f = el("filter", { id: "uz-glow", x: "-40%", y: "-40%", width: "180%", height: "180%" }, defs);
         el("feGaussianBlur", { stdDeviation: 5, result: "b" }, f);
         const mg = el("feMerge", null, f); el("feMergeNode", { in: "b" }, mg); el("feMergeNode", { in: "SourceGraphic" }, mg);
       }
+      // ぼかしのフィルタの id は、View ごとに分ける（コマのシートは、いくつもの View の SVG を 1 枚に並べる。id が重なると範囲が入れ替わる）
+      this.defs = defs; this.blurN = 0; this.viewN = UZ._viewSeq = (UZ._viewSeq || 0) + 1;
       if (th.shape.shadow) {
         const f = el("filter", { id: "uz-shadow", x: "-20%", y: "-20%", width: "140%", height: "160%" }, defs);
         el("feDropShadow", { dx: 0, dy: 2, stdDeviation: 3, "flood-color": "#1d2433", "flood-opacity": 0.12 }, f);
@@ -45,6 +51,12 @@
       this.headerBar = el("rect", { x: H.x, y: H.y + 12, width: 5, height: 32, rx: 2, fill: S.accent }, this.header);
       this.headerT = this.text(this.header, [""], H.x + 20, H.y + H.h / 2, 30, { weight: S.bold, color: S.ink, anchor: "start" });
       this.headerT2 = this.text(this.header, [""], H.x + 20, H.y + H.h / 2, 30, { weight: S.bold, color: S.ink, anchor: "start" });
+      // 言いたいこと（スライドの見出しの下の 1 文。頭に ▶）
+      const ST = UZ.STATEMENT, SB = UZ.AREA.body;
+      this.stG = el("g", null, svg);
+      this.stMark = this.text(this.stG, ["▶"], H.x + 2, SB.y + ST.lineH / 2, 16, { color: S.accent, anchor: "start" });
+      const stText = () => this.text(this.stG, [""], H.x + 26, SB.y, ST.size, { weight: ST.weight, color: S.ink, anchor: "start", lineH: ST.lineH });
+      this.stT = stText(); this.stT2 = stText();
       // 図
       this.figG = {};
       for (const F of Object.values(M.figs)) this.buildFig(F);
@@ -66,11 +78,12 @@
       this.subR = el("rect", { rx: 10, fill: sub.bg || "rgba(0,0,0,0.6)" }, this.sub);
       this.subT = this.text(this.sub, [""], 640, 0, 27, { color: sub.ink || S.ink, weight: 500 });
       // クレジット（常に出す）
-      this.text(svg, [M.credit], 1262, 711, 13, { color: S.muted, anchor: "end" });
+      this.creditT = this.text(svg, [M.credit], 1262, 711, 13, { color: S.muted, anchor: "end" });
       // 終わりの札
       this.endG = el("g", null, svg);
       this.text(this.endG, UZ.wrap(M.title, 40, 1000, S.bold, 2), 640, 320, 40, { weight: S.bold, color: S.ink });
       this.text(this.endG, ["音声: " + M.credit], 640, 410, 22, { color: S.muted });
+      (M.credits || []).forEach((c, i) => this.text(this.endG, [c], 640, 446 + i * 26, 18, { color: S.muted }));   // 画像のクレジット
     }
 
     text(parent, lines, x, y, size, o = {}) {
@@ -88,11 +101,22 @@
       lines.forEach((s, i) => { const sp = el("tspan", { x: t._x, y: t._y - (n - 1) * t._lineH / 2 + i * t._lineH }, t); sp.textContent = s; });
     }
     textSpec(parent, T, o = {}) {
-      return this.text(parent, T.lines, T.x, T.y, T.size, { weight: T.weight, color: o.color || T.color, anchor: T.anchor, lineH: T.lineH, halo: o.halo });
+      const t = this.text(parent, T.lines, T.x, T.y, T.size, { weight: T.weight, color: o.color || T.color, anchor: T.anchor, lineH: T.lineH, halo: o.halo });
+      if (T.spans) this.setSpans(t, T.spans, T.emColor);
+      return t;
+    }
+    // 強調の語のある文: 行ごとの tspan の中に、区切りごとの tspan を入れる（強調は太字と強調色）
+    setSpans(t, spans, emColor) {
+      while (t.firstChild) t.removeChild(t.firstChild);
+      const n = spans.length;
+      spans.forEach((row, i) => {
+        const line = el("tspan", { x: t._x, y: t._y - (n - 1) * t._lineH / 2 + i * t._lineH }, t);
+        for (const seg of row) { const sp = el("tspan", seg.em ? { "font-weight": this.S.bold, fill: emColor || this.S.accent } : null, line); sp.textContent = seg.t; }
+      });
     }
 
     buildFig(F) {
-      const S = this.S, g = el("g", null, this.svg);
+      const S = F.dark ? (this.SD || (this.SD = UZ.darkStyleOf(this.S))) : this.S, g = el("g", null, this.svg);   // 暗い地のスライドで組んだ部品は、暗い地の色
       const L = { back: el("g", null, g), edge: el("g", null, g), box: el("g", null, g), fx: el("g", null, g) };
       this.figG[F.id] = g;
       const glow = this.M.theme.shape.glow, shadow = this.M.theme.shape.shadow;
@@ -100,6 +124,11 @@
         const E = { it };
         if (it.kind === "box") {
           E.g = el("g", null, L.box);
+          // 点がいる箱の強調（trace）: 外側に、点の色の薄い輪（四角と楕円。ひし形などは枠だけ）
+          if (it.dotAt && !["diamond", "poly", "store"].includes(it.shape)) {
+            E.hereR = it.shape === "ellipse" ? el("ellipse", { cx: it.x + it.w / 2, cy: it.y + it.h / 2, rx: it.w / 2 + 6, ry: it.h / 2 + 6, fill: "none", "stroke-width": 5, opacity: 0 }, E.g)
+              : el("rect", { x: it.x - 6, y: it.y - 6, width: it.w + 12, height: it.h + 12, rx: it.r + 6, fill: "none", "stroke-width": 5, opacity: 0 }, E.g);
+          }
           const sw = S.stroke;
           const mk = (fill, stroke, extra) => {
             if (it.shape === "diamond") return el("path", { d: `M${it.x + it.w / 2},${it.y} L${it.x + it.w},${it.y + it.h / 2} L${it.x + it.w / 2},${it.y + it.h} L${it.x},${it.y + it.h / 2} Z`, fill, stroke, "stroke-width": sw, "stroke-linejoin": "round", ...extra }, E.g);
@@ -134,6 +163,7 @@
           if (it.label) E.label = this.textSpec(it.isReply ? E.g : L.fx, it.label, { halo: true });
         } else if (it.kind === "text") {
           E.g = el("g", null, L.box);
+          if (it.panel) el("rect", { x: it.panel.x, y: it.panel.y, width: it.panel.w, height: it.panel.h, rx: it.panel.r, fill: it.panel.fill, stroke: it.panel.stroke, "stroke-width": 1.2 }, E.g);
           if (it.rowBox) E.hl = el("rect", { x: it.rowBox.x, y: it.rowBox.y, width: it.rowBox.w, height: it.rowBox.h, rx: 8, fill: C.rgba(S.accent, 0.12), opacity: 0 }, E.g);
           if (it.bullet) {
             if (it.bullet.kind === "num") {
@@ -145,6 +175,9 @@
           if (it.glyph) this.glyph(E.g, it.glyph.kind, it.glyph.x, it.glyph.y, it.glyph.color, 0.85);
           E.texts = (it.texts || []).map(T => this.textSpec(E.g, T));
           if (it.staticMark) this.glyph(E.g, it.staticMark.kind, it.staticMark.x, it.staticMark.y, it.staticMark.kind === "cross" ? S.bad : it.staticMark.kind === "question" ? S.warn : S.good, 1);
+        } else if (it.kind === "image") {
+          E.g = el("g", null, L.box);
+          el("image", { x: it.x, y: it.y, width: it.w, height: it.h, href: this.M.assets[it.src].data, preserveAspectRatio: "xMidYMid meet" }, E.g);
         } else if (it.kind === "bar") {
           E.g = el("g", null, L.box);
           E.rect = el("rect", { x: it.x, y: it.y, width: it.w, height: it.h, rx: it.r, fill: it.fill, stroke: it.stroke, "stroke-width": it.solid ? 0 : S.stroke }, E.g);
@@ -154,6 +187,7 @@
         } else if (it.kind === "rect") {
           E.g = el("g", null, L.back);
           E.bg = el("rect", { x: it.x, y: it.y, width: it.w, height: it.h, rx: it.r, fill: it.fill === "none" ? C.rgba(S.accent, 0) : it.fill }, E.g);
+          if (it.quad) E.tintR = el("rect", { x: it.x, y: it.y, width: it.w, height: it.h, opacity: 0 }, E.g);   // 象限を途中で塗る（tint）ための面
           if (it.rule) E.rule = el("path", { d: `M${it.x},${it.y + it.h} H${it.x + it.w}`, stroke: S.line, "stroke-width": 1.2 }, E.g);
           E.texts = (it.texts || []).map(T => this.textSpec(E.g, T));
         } else if (it.kind === "band") {
@@ -174,8 +208,8 @@
           E.texts = it.texts.map(T => this.textSpec(E.g, T, { halo: true }));
         } else if (it.kind === "dot") {
           E.g = el("g", null, L.fx);
-          el("circle", { r: it.r, fill: it.color, filter: glow ? "url(#uz-glow)" : null, stroke: glow ? null : S.bg, "stroke-width": glow ? null : 2 }, E.g);
-          E.pill = el("g", { transform: "translate(0,-30)" }, E.g);
+          E.dotC = el("circle", { r: it.r, fill: it.color, filter: glow ? "url(#uz-glow)" : null, stroke: glow ? null : S.bg, "stroke-width": glow ? null : 2 }, E.g);
+          E.pill = el("g", { transform: "translate(0,30)" }, E.g);
           E.pillR = el("rect", { y: -15, height: 30, rx: 15, fill: S.bg, stroke: it.color, "stroke-width": 1.6 }, E.pill);
           E.pillT = this.text(E.pill, [""], 0, 0, 17, { weight: S.bold, color: S.ink });
         } else {
@@ -201,7 +235,25 @@
       }
       for (const [key, E] of Object.entries(this.els)) {
         const it = E.it, s = fr.st[key] || { show: 0, dim: 1, pulse: 0, off: [0, 0] };
-        const show = s.show, dim = s.dim;
+        const show = s.show, blur = s.blur || 0, dim = s.dim * (1 - 0.35 * blur);
+        // ぼかし（blur）: 部品ごとのフィルタを、初めてぼかすときに作る。範囲は部品の外枠から座標で決める
+        // （外枠の割合で取ると、水平な線は高さ 0 で消える。広く取りすぎると PNG にするのが遅い）
+        const bl = blur > 0.02 && E.g && it.bbox ? +(blur * 4).toFixed(2) : 0;
+        if (E.g && E._bl !== bl) {
+          E._bl = bl;
+          const blurEls = E.label && E.label.parentNode !== E.g ? [E.g, E.label] : [E.g];   // 辺のラベルは別の層にある
+          if (bl) {
+            if (!E.blurF) {
+              let x0 = it.bbox.x, y0 = it.bbox.y, x1 = x0 + it.bbox.w, y1 = y0 + it.bbox.h;
+              for (const b of [it.label && it.label.bbox, ...(it.texts || []).map(T => T.bbox)]) if (b) { x0 = Math.min(x0, b.x); y0 = Math.min(y0, b.y); x1 = Math.max(x1, b.x + b.w); y1 = Math.max(y1, b.y + b.h); }
+              const f = el("filter", { id: `uz-bl-${this.viewN}-${++this.blurN}`, filterUnits: "userSpaceOnUse", x: x0 - 28, y: y0 - 28, width: x1 - x0 + 56, height: y1 - y0 + 56 }, this.defs);
+              E.blurF = el("feGaussianBlur", { stdDeviation: bl }, f);
+              E.blurId = f.getAttribute("id");
+            }
+            E.blurF.setAttribute("stdDeviation", bl);
+            for (const g of blurEls) g.setAttribute("filter", `url(#${E.blurId})`);
+          } else for (const g of blurEls) g.removeAttribute("filter");
+        }
         const op = (x) => (x * dim).toFixed(3);
         const off = s.off || [0, 0];
         if (it.kind === "box") {
@@ -220,11 +272,25 @@
           }
           if (E.life) E.life.style.opacity = op(smooth((show - 0.5) / 0.5) * 0.9);
           const sc = 1 + 0.07 * (s.pulse || 0);
-          const cx = it.x + it.w / 2, cy = it.y + it.h / 2;
+          // 大きさを変えた箱（resize）: 面と枠の形を書き換え、文字は箱に付いていく
+          const R = s.rect || it, geo = s.rect ? [R.x, R.y, R.w, R.h].map(v => v.toFixed(2)).join(",") : "";
+          if ((E._geo || "") !== geo) {
+            E._geo = geo;
+            for (const e of [E.fill, E.stroke]) {
+              if (it.shape === "ellipse") { e.setAttribute("cx", R.x + R.w / 2); e.setAttribute("cy", R.y + R.h / 2); e.setAttribute("rx", R.w / 2); e.setAttribute("ry", R.h / 2); }
+              else { e.setAttribute("x", R.x); e.setAttribute("y", R.y); e.setAttribute("width", R.w); e.setAttribute("height", R.h); }
+            }
+            const to = s.rect && s.textOff ? `translate(${s.textOff[0].toFixed(2)},${s.textOff[1].toFixed(2)})` : null;
+            for (const tx of [...E.texts, E.smark].filter(Boolean)) { if (to) tx.setAttribute("transform", to); else tx.removeAttribute("transform"); }
+          }
+          const cx = R.x + R.w / 2, cy = R.y + R.h / 2;
           E.g.setAttribute("transform", `translate(${off[0]},${off[1]}) translate(${cx},${cy}) scale(${sc}) translate(${-cx},${-cy})`);
           const col = s.tint ? C.mix(s.tintFrom || it.stroke, s.tint, s.tintP) : (s.pulse > 0.01 ? C.mix(it.stroke, S.accent, s.pulse) : it.stroke);
-          E.stroke.setAttribute("stroke", col);
-          E.stroke.setAttribute("stroke-width", S.stroke + 1.6 * (s.pulse || 0));
+          // 点がいる箱（here）: 枠を点の色で太くする
+          const here = s.here || 0;
+          E.stroke.setAttribute("stroke", here > 0.01 ? C.mix(col, s.hereColor || S.warn, here) : col);
+          E.stroke.setAttribute("stroke-width", S.stroke + 1.6 * (s.pulse || 0) + 2.4 * here);
+          if (E.hereR) { E.hereR.setAttribute("stroke", s.hereColor || S.warn); E.hereR.setAttribute("opacity", (0.3 * here).toFixed(3)); }
           if (s.text != null && E.texts[0]) this.relabel(E.texts[0], it.texts[0], s);
         } else if (it.kind === "edge") {
           if (it.dashed) E.line.style.opacity = op(smooth(show));
@@ -261,7 +327,15 @@
         } else if (it.kind === "rect") {
           E.g.style.opacity = op(smooth(show));
           if (it.fill === "none") E.bg.setAttribute("fill", C.rgba(s.tint || S.accent, 0.16 * Math.max(s.pulse || 0, s.tint ? s.tintP : 0)));
-        } else if (it.kind === "band" || it.kind === "frame") {
+          if (E.tintR) {
+            // 塗り替えは、元の面を消しながら新しい面を重ねる。題の色も、塗りに合わせる
+            const p = s.tint ? s.tintP : 0;
+            E.bg.style.opacity = (1 - p).toFixed(3);
+            E.tintR.setAttribute("opacity", p.toFixed(3));
+            if (s.tint) E.tintR.setAttribute("fill", s.tintOff ? UZ.QUAD_OFF(S) : UZ.QUAD_ON(s.tint));
+            if (E.texts[0]) E.texts[0].setAttribute("fill", C.mix(it.texts[0].color || S.ink, s.tint ? (s.tintOff ? S.muted : s.tint) : it.texts[0].color || S.ink, p));
+          }
+        } else if (it.kind === "band" || it.kind === "frame" || it.kind === "image") {
           E.g.style.opacity = op(smooth(show));
         } else if (it.kind === "mark") {
           const kind = s.mark || "check", col = kind === "cross" ? S.bad : kind === "question" ? S.warn : S.good;
@@ -273,12 +347,26 @@
           E.g.style.opacity = op(smooth(show));
         } else if (it.kind === "dot") {
           E.g.style.opacity = op(show);
+          E.dotC.style.opacity = s.dotVis == null ? 1 : s.dotVis.toFixed(3);
           if (s.pos) E.g.setAttribute("transform", `translate(${s.pos[0].toFixed(1)},${s.pos[1].toFixed(1)})`);
           const label = s.labelText || "";
           if (E._label !== label) { E._label = label; this.setLines(E.pillT, [label]); const w = UZ.textW(label, 17, 700) + 22; E.pillR.setAttribute("x", -w / 2); E.pillR.setAttribute("width", w); }
-          // 札は箱の外を動いている間だけ出す
-          const inBox = s.pos && Object.values(M.figs[it.fig].items).some(o => o.kind === "box" && UZ.inside(s.pos, o.bbox, -2));
-          E.pill.style.opacity = label && !inBox ? 1 : 0;
+          // 札は、点が何を表すかを最初に 1 回だけ見せる（engine.js の labelShow。点が箱で止まっている間だけ出る。箱の文字に重ならないよう、点の位置の下に出す）
+          E.pill.style.opacity = label ? op(s.labelShow || 0) : 0;
+          E.pill.setAttribute("transform", `translate(0,30) scale(${(1 + 0.14 * (s.labelPop || 0)).toFixed(3)})`);
+        }
+      }
+      // 地（章扉は暗い地）。暗い地の上に残る文字（章の題・クレジット）と字幕の帯の枠は、章扉の色に替える
+      if (this.bgDark) {
+        const d = fr.dark || 0, on = d > 0.5, ch = this.chap;
+        this.bgDark.style.opacity = d.toFixed(3);
+        if (this._dark !== on) {
+          this._dark = on;
+          this.creditT.setAttribute("fill", on ? (ch.muted || ch.ink) : S.muted);
+          for (const tx of [this.headerT, this.headerT2, this.stT, this.stT2]) tx.setAttribute("fill", on ? ch.ink : S.ink);
+          this.headerBar.setAttribute("fill", on ? (ch.accent || S.accent) : S.accent);
+          this.stMark.setAttribute("fill", on ? (ch.accent || S.accent) : S.accent);
+          if (on && ch.line) { this.subR.setAttribute("stroke", ch.line); this.subR.setAttribute("stroke-width", 1); } else this.subR.setAttribute("stroke", "none");
         }
       }
       // 章の題
@@ -286,6 +374,16 @@
       this.setLines(this.headerT, [h.text]); this.headerT.style.opacity = h.opacity;
       this.headerBar.style.opacity = h.text ? Math.max(h.opacity, h.prev ? h.prev.opacity : 0) : (h.prev && h.prev.text ? h.prev.opacity : 0);
       if (h.prev) { this.setLines(this.headerT2, [h.prev.text]); this.headerT2.style.opacity = h.prev.opacity; } else this.headerT2.style.opacity = 0;
+      // 言いたいこと
+      const stt = fr.statement || { lines: [], opacity: 0, prev: null };
+      const putSt = (tx, lines, o) => {
+        const key = lines.join("\n");
+        if (tx._key !== key) { tx._key = key; tx._y = UZ.AREA.body.y + lines.length * UZ.STATEMENT.lineH / 2; this.setLines(tx, lines); }
+        tx.style.opacity = lines.length ? o : 0;
+      };
+      putSt(this.stT, stt.lines, stt.opacity);
+      putSt(this.stT2, stt.prev ? stt.prev.lines : [], stt.prev ? stt.prev.opacity : 0);
+      this.stMark.style.opacity = Math.max(stt.lines.length ? stt.opacity : 0, stt.prev && stt.prev.lines.length ? stt.prev.opacity : 0);
       // 図の題（2 つ並べるとき）
       for (const k in this.capEls) this.capEls[k].style.opacity = 0;
       for (const c of fr.captions) { const e = this.capEls[fr.scene.id + c.fig]; if (e) e.style.opacity = c.opacity; }

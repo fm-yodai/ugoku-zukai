@@ -1,0 +1,150 @@
+{
+  "format": "ugoku-zukai-outline/2",
+  "title": "UX とは結局何か",
+  "basics": {
+    "audience": {
+      "text": "自社の開発部",
+      "by": "user",
+      "state": "agreed"
+    },
+    "knows": {
+      "text": "UI/UX という言葉は聞いたことがある。受託開発の工程は知っている",
+      "by": "claude",
+      "state": "agreed"
+    },
+    "takeaway": {
+      "text": "UX は画面の話に限らず、受託開発では提案の前から要る",
+      "by": "user",
+      "state": "agreed"
+    },
+    "length": {
+      "text": "5 分くらい",
+      "seconds": 300,
+      "by": "user",
+      "state": "agreed"
+    },
+    "look": {
+      "text": "空 提案書デザイン（既定）",
+      "theme": "koo",
+      "by": "claude",
+      "state": "proposed"
+    },
+    "voice": {
+      "text": "落ち着いた声",
+      "speaker": 8,
+      "speed": 1.1,
+      "by": "claude",
+      "state": "proposed"
+    },
+    "tone": {
+      "text": "です・ます。一般的なビジネスの語り口",
+      "by": "user",
+      "state": "agreed"
+    }
+  },
+  "flow": {
+    "text": "言葉の意味を先にそろえ、よく混ざる語との違いを片づけてから、自社の仕事の話に入る。聴衆が、定義で迷わずに本題を聞ける",
+    "by": "claude",
+    "state": "agreed"
+  },
+  "chapters": [
+    {
+      "id": "c1",
+      "title": "この動画で話すこと",
+      "intent": {
+        "text": "ここで聴衆は、この動画が UX の意味と、受託開発のどの段階で要るかの二つを扱うと分かる",
+        "by": "user",
+        "state": "agreed"
+      },
+      "seconds": 30,
+      "slides": [
+        {
+          "id": "agenda",
+          "intent": {
+            "text": "話の順番が 2 項目で読める",
+            "by": "claude",
+            "state": "agreed"
+          }
+        }
+      ]
+    },
+    {
+      "id": "c2",
+      "title": "UX の定義",
+      "intent": {
+        "text": "ここで聴衆は、UX が画面の中だけの話ではなく、使う前から使った後までの体験の全体だと分かる。UI/UX と並べて語られることにも触れる",
+        "by": "user",
+        "state": "agreed"
+      },
+      "link": {
+        "text": "扱う範囲が分かったので、まず言葉の意味をそろえる",
+        "by": "claude",
+        "state": "agreed"
+      },
+      "seconds": 80,
+      "slides": [
+        {
+          "id": "ux-def",
+          "intent": {
+            "text": "UX の定義の文そのものを読み、範囲が使う前・使っている間・使った後に及ぶと分かる",
+            "by": "claude",
+            "state": "proposed"
+          }
+        }
+      ]
+    },
+    {
+      "id": "c3",
+      "title": "ユーザビリティとの違い",
+      "intent": {
+        "text": "ここで聴衆は、ユーザビリティが使いやすさを指し、UX の一部だと分かる",
+        "by": "claude",
+        "state": "agreed"
+      },
+      "link": {
+        "text": "定義を押さえたので、よく混ざる語との違いを片づける",
+        "by": "claude",
+        "state": "agreed"
+      },
+      "seconds": 50,
+      "slides": [
+        {
+          "id": "relation",
+          "intent": {
+            "text": "二つの語の包含関係が、図ひとつで分かる",
+            "by": "claude",
+            "state": "proposed"
+          }
+        }
+      ]
+    },
+    {
+      "id": "c4",
+      "title": "受託開発のどの段階で要るか",
+      "intent": {
+        "text": "ここで聴衆は、提案の前の段階から、誰のどんな体験を良くするのかを決めておく必要があると分かる。案件の種類ごとに、どの工程で何を確かめるかが変わることも分かる",
+        "by": "user",
+        "state": "agreed"
+      },
+      "link": {
+        "text": "言葉の意味がそろったので、自社の受託開発の工程に当てはめる",
+        "by": "claude",
+        "state": "agreed"
+      },
+      "seconds": 140,
+      "slides": [
+        {
+          "id": "when",
+          "intent": {
+            "text": "工程と案件の種類の表で、自分の案件がどこで UX を扱うかを引ける",
+            "by": "claude",
+            "state": "proposed"
+          }
+        }
+      ]
+    }
+  ],
+  "open": [
+    "受託の工程の区切り方は、社内の呼び名に合わせるか"
+  ]
+}

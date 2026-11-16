@@ -19,6 +19,10 @@
     for (const a of M.acts) times.add(a.end + 0.01);
     const B = UZ.AREA.body;
     const bounds = { x: B.x - 16, y: B.y - 40, w: B.w + 32, h: B.h + 52 };
+    // テキストの部品は縮めない約束なので、区画に収まらなければ知らせる
+    for (const sc of M.scenes) for (const fid of sc.figs) {
+      if (M.figs[fid].type === "text" && sc.place[fid].s < 0.999) add("はみ出し", `${fid} のテキストが区画に収まらない（文を減らすか、区画を広げる）`, sc.start);
+    }
     for (const t of [...times].sort((a, b) => a - b)) {
       if (t >= M.endCard) continue;
       const fr = UZ.frame(M, t);
@@ -29,7 +33,7 @@
         for (const it of Object.values(F.items)) {
           if (it.kind === "group" || it.kind === "dot") continue;
           const s = fr.st[it.key];
-          if (!s || s.show < 0.95 || s.dim < 0.5) continue;
+          if (!s || s.show < 0.95 || s.dim < 0.5 || s.blur > 0.5) continue;
           vis.push({ it, pl: ff.place, s });
         }
       }
@@ -38,17 +42,30 @@
         const off = v.s.off || [0, 0];
         const pl = { ...v.pl, ox: v.pl.ox + off[0] * v.pl.s, oy: v.pl.oy + off[1] * v.pl.s };
         const name = `${v.it.fig}/${v.it.id}`;
-        if (v.it.bbox && v.it.kind !== "band") {
-          const b = tf(v.it.bbox, pl);
+        // 大きさを変えた箱（resize）は、変えた後の形と、付いていった文字の位置で調べる
+        const rz = v.s.rect || null, tOff = (rz && v.s.textOff) || [0, 0];
+        const bbox = rz || v.it.bbox;
+        if (bbox && v.it.kind !== "band") {
+          const b = tf(bbox, pl);
           if (b.x < bounds.x || b.y < bounds.y || b.x + b.w > bounds.x + bounds.w || b.y + b.h > bounds.y + bounds.h) add("はみ出し", `${name} が図の区画からはみ出す`, t);
         }
         for (const tb of textBoxes(v.it)) {
-          const b = tf(tb.box, pl);
+          const b = tf(tb.what === "text" ? { ...tb.box, x: tb.box.x + tOff[0], y: tb.box.y + tOff[1] } : tb.box, pl);
           if (tb.size * pl.s < UZ.MIN_FONT - 0.01) add("小さい", `${name} の文字が ${(tb.size * pl.s).toFixed(1)}px（${UZ.MIN_FONT}px 未満）`, t);
           if (b.x < bounds.x || b.y < bounds.y || b.x + b.w > bounds.x + bounds.w || b.y + b.h > bounds.y + bounds.h) add("はみ出し", `${name} の文字が図の区画からはみ出す`, t);
           texts.push({ name, b, it: v.it, what: tb.what });
         }
-        if ((v.it.kind === "box" || v.it.kind === "frame") && v.it.bbox) boxes.push({ name, b: tf(v.it.bbox, pl), it: v.it });
+        if ((v.it.kind === "box" || v.it.kind === "frame") && bbox) boxes.push({ name, b: tf(bbox, pl), it: v.it, resized: !!rz });
+      }
+      // 大きくした箱が、他の箱にかかる（中にすっぽり入る・入れるのは構わない）
+      const insideOf = (a, b) => a.x >= b.x - 1 && a.y >= b.y - 1 && a.x + a.w <= b.x + b.w + 1 && a.y + a.h <= b.y + b.h + 1;
+      for (const A of boxes) {
+        if (!A.resized) continue;
+        for (const Bx of boxes) {
+          if (Bx === A || Bx.it.kind === "frame" || A.it.fig !== Bx.it.fig) continue;
+          if (insideOf(A.b, Bx.b) || insideOf(Bx.b, A.b)) continue;
+          if (UZ.rectOverlap(A.b, Bx.b) > 20) add("重なり", `${A.name} の箱が、大きさを変えた後に ${Bx.name} の箱に重なる`, t);
+        }
       }
       // 文字どうしの重なり
       for (let i = 0; i < texts.length; i++) for (let j = i + 1; j < texts.length; j++) {

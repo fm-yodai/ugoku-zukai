@@ -9,19 +9,34 @@
   UZ.styleOf = function (theme) {
     const col = theme.colors, sh = theme.shape;
     const role = r => (col.roles && col.roles[r]) || (r && col[r]) || col.accent;
+    // 箱の面・枠・中の文字は、テーマの colors.boxes に役割ごとに書ければそれを使う（デザインにある色をそのまま当てる）。
+    // 書いていない役割は、役割の色を背景に混ぜた面・役割の色の枠・本文の色の文字になる
+    const boxes = col.boxes || {};
+    const border = r => (boxes[r] && boxes[r].border) || role(r);
+    const label = r => (boxes[r] && boxes[r].label) || col.ink;
     const fill = r => {
       const c = role(r);
+      if (boxes[r] && boxes[r].fill) return boxes[r].fill;
       if (sh.fill === "none") return "none";
       if (sh.fill === "solid") return C.mix(col.bg, c, sh.fillMix ?? 0.16);
       return C.rgba(c, sh.fillAlpha ?? 0.14);
     };
     return {
-      role, fill, theme,
+      role, fill, border, label, theme, chapter: theme.chapter || null,
       ink: col.ink, muted: col.muted, line: col.line, bg: col.bg, surface: col.surface || C.mix(col.bg, col.ink, 0.06),
       accent: col.accent, good: col.good, bad: col.bad, warn: col.warn,
       font: theme.font.family, weight: theme.font.weight || 400, bold: theme.font.bold || 700,
       radius: sh.radius ?? 10, stroke: sh.stroke ?? 2.4, edgeW: sh.edgeWidth ?? 2.2,
     };
+  };
+
+  // 暗い地（章扉の色）のスライドで部品を組むときの色。文字は章扉の文字、補足は sub、線は line、強調は chapter.accent。
+  // 箱の面・枠・中の文字（役割の色）は、明るい面の上に乗るのでそのまま
+  UZ.darkStyleOf = function (S) {
+    const ch = S.chapter;
+    if (!ch) return S;
+    return { ...S, dark: true, ink: ch.ink, muted: ch.sub || ch.ink, line: ch.line || ch.sub || ch.ink, bg: ch.bg,
+      surface: C.rgba("#ffffff", 0.08), accent: ch.accent || S.accent };
   };
 
   // 文字の塊。y は塊の縦の中心。
@@ -37,47 +52,100 @@
 
   const FIG = UZ.FIG = {};
 
+  // 題の札と目次の地: テーマに chapter があれば "dark"（章扉の色）。図に tone: "light" と書けば通常の地
+  UZ.titleTone = (f, theme) => (f && (f.type === "title" || f.type === "toc") && theme && theme.chapter && f.tone !== "light" ? "dark" : "light");
+
   // ======== 題の札（title）========
   FIG.title = {
     async layout(f, S) {
       const W = 1184, H = 470;
+      // 題の札は、テーマに chapter（章扉の色）があれば暗い地に出す。tone: "light" で通常の地に戻せる
+      const dark = UZ.titleTone(f, S.theme) === "dark" ? S.chapter : null;
       const main = UZ.wrap(f.text, 46, 1000, S.bold, 3);
-      const t = UZ.mkText(main, W / 2, H / 2 - (f.sub ? 30 : 0), 46, { weight: S.bold, color: S.ink, lineH: 64 });
+      const t = UZ.mkText(main, W / 2, H / 2 - (f.sub ? 30 : 0), 46, { weight: S.bold, color: dark ? dark.ink : S.ink, lineH: 64 });
       const items = [{ id: "text", kind: "text", texts: [t], bbox: { ...t.bbox } }];
       if (f.sub) {
-        const s = UZ.mkText(UZ.wrap(f.sub, 28, 1000), W / 2, t.bbox.y + t.bbox.h + 40, 28, { color: S.accent });
+        const s = UZ.mkText(UZ.wrap(f.sub, 28, 1000), W / 2, t.bbox.y + t.bbox.h + 40, 28, { color: dark ? (dark.sub || dark.ink) : S.accent });
         items.push({ id: "sub", kind: "text", texts: [s], bbox: { ...s.bbox } });
       }
       return { w: W, h: H, items, order: items.map(i => i.id), autoShow: true };
     },
   };
 
-  // ======== 箇条（list）========
-  FIG.list = {
+  // ======== 目次（toc）========
+  // 見出し（既定「目次」）と、章の番号と題を左揃えで並べる。current（項目の id）を書くと、その章を強調し、ほかを控えめにする。
+  // 地は題の札と同じ（テーマに chapter があれば暗い地。tone: "light" で通常の地）
+  FIG.toc = {
     async layout(f, S) {
-      const n = f.items.length, size = n > 6 ? 22 : 26, gap = n > 6 ? 50 : 66;
-      const maxW = 980, items = [], order = [];
+      const dark = UZ.titleTone(f, S.theme) === "dark" ? S.chapter : null;
+      const ink = dark ? dark.ink : S.ink, sub = dark ? (dark.sub || dark.ink) : S.muted;
+      const off = dark ? (dark.muted || sub) : S.muted;   // current があるときの、ほかの章
+      const n = f.items.length, size = n > 8 ? 26 : n > 6 ? 30 : 34, gap = Math.round(size * (n > 8 ? 1.5 : 1.7));
+      const numW = Math.round(size * 1.9), maxW = 1000 - numW, items = [], order = [];
+      const head = f.heading == null ? "目次" : String(f.heading);
       let y = 0, w = 0;
+      if (head) {
+        const T = UZ.mkText([head], 0, 26, 46, { anchor: "start", weight: S.bold, color: ink });
+        items.push({ id: "heading", kind: "text", texts: [T], bbox: { ...T.bbox } });
+        order.push("heading");
+        items.push({ id: "rule", kind: "text", texts: [], panel: { x: 0, y: 70, w: 64, h: 4, r: 0, fill: sub, stroke: "none" }, bbox: { x: 0, y: 70, w: 64, h: 4 } });
+        order.push("rule");
+        y = 108; w = T.bbox.w;
+      }
+      const hasCur = f.current != null;
       f.items.forEach((it, i) => {
-        const lines = UZ.wrap(it.text, size, maxW, 500, 2);
-        const t = UZ.mkText(lines, 64, 0, size, { anchor: "start", weight: 500, color: S.ink });
-        const subT = it.sub ? UZ.mkText(UZ.wrap(it.sub, 18, maxW), 64, 0, 18, { anchor: "start", color: S.muted }) : null;
-        const blockH = t.bbox.h + (subT ? subT.bbox.h + 4 : 0);
-        const cy = y + blockH / 2;
-        // 文字の位置を確定し直す
-        const tt = UZ.mkText(lines, 64, y + t.bbox.h / 2, size, { anchor: "start", weight: 500, color: S.ink });
-        const texts = [tt];
-        if (subT) texts.push(UZ.mkText(subT.lines, 64, y + t.bbox.h + 4 + subT.bbox.h / 2, 18, { anchor: "start", color: S.muted }));
-        const bullet = f.numbered ? { kind: "num", n: i + 1, x: 22, y: y + tt.lineH / 2, r: 18 } : { kind: "dot", x: 22, y: y + tt.lineH / 2, r: 6 };
-        const bw = Math.max(...texts.map(x => x.bbox.x + x.bbox.w));
-        const bbox = { x: 0, y, w: bw, h: blockH };
-        items.push({ id: it.id, kind: "text", texts, bullet, bbox, rowBox: { x: -12, y: y - 8, w: bw + 24, h: blockH + 16 } });
+        const cur = hasCur && it.id === f.current;
+        const lines = UZ.wrap(String(it.text), size, maxW, cur ? S.bold : 400, 2);
+        const lineH = Math.round(size * 1.4), h = lines.length * lineH;
+        const num = UZ.mkText([String(i + 1)], 0, y + lineH / 2, size, { anchor: "start", weight: S.bold, color: cur ? (dark ? ink : S.accent) : hasCur ? off : sub });
+        const T = UZ.mkText(lines, numW, y + h / 2, size, { anchor: "start", weight: cur ? S.bold : 400, color: hasCur && !cur ? off : ink, lineH });
+        const bw = numW + T.bbox.w;
+        items.push({ id: it.id, kind: "text", texts: [num, T], bbox: { x: 0, y, w: bw, h } });
         order.push(it.id);
         w = Math.max(w, bw);
-        y += blockH + (gap - size);
-        void cy;
+        y += h + (gap - lineH);
       });
-      return { w: Math.max(w, 600), h: y - (gap - size), items, order };
+      return { w: Math.max(w, 1), h: Math.max(y - (gap - Math.round(size * 1.4)), 1), items, order, autoShow: true, autoStagger: 0.08, maxScale: 1 };
+    },
+  };
+
+  // ======== 箇条（list）========
+  FIG.list = {
+    fill: true,   // ctx.fill: 区画の幅いっぱいに折り返し、余った高さを項目の間に配る（table と同じ約束）
+    async layout(f, S, ctx) {
+      const F = ctx && ctx.fill, k = F ? F.k : 1;
+      const n = f.items.length, size = Math.round((n > 6 ? 22 : 26) * k), subSize = Math.round(18 * k);
+      const ind = Math.round(64 * k), bx = Math.round(22 * k);
+      let gap = Math.round((n > 6 ? 50 : 66) * k);
+      const maxW = F ? F.w - ind : 980, items = [], order = [];
+      const blocks = f.items.map(it => {
+        const lines = UZ.wrap(it.text, size, maxW, 500, 2);
+        const subLines = it.sub ? UZ.wrap(it.sub, subSize, maxW) : null;
+        const tH = lines.length * Math.round(size * 1.38), sH = subLines ? subLines.length * Math.round(subSize * 1.38) : 0;
+        return { it, lines, subLines, tH, sH, h: tH + (subLines ? sH + 4 : 0) };
+      });
+      if (F) {   // 項目の間は文字の 0.6 つ分から始め、余った高さを配る（1 か所あたり、さらに文字 1.2 つ分まで）
+        gap = size + Math.round(size * 0.6);
+        const h0 = blocks.reduce((a, x) => a + x.h, 0) + (n - 1) * (gap - size);
+        if (n > 1) gap += Math.max(0, Math.min((F.h - h0) / (n - 1), size * 1.2));
+      }
+      let y = 0, w = 0, over = false;
+      blocks.forEach((B, i) => {
+        const tt = UZ.mkText(B.lines, ind, y + B.tH / 2, size, { anchor: "start", weight: 500, color: S.ink });
+        const texts = [tt];
+        if (B.subLines) texts.push(UZ.mkText(B.subLines, ind, y + B.tH + 4 + B.sH / 2, subSize, { anchor: "start", color: S.muted }));
+        const bullet = f.numbered ? { kind: "num", n: i + 1, x: bx, y: y + tt.lineH / 2, r: Math.round(18 * k) } : { kind: "dot", x: bx, y: y + tt.lineH / 2, r: Math.round(6 * k) };
+        const bw = Math.max(...texts.map(x => x.bbox.x + x.bbox.w));
+        if (F && bw > F.w + 1) over = true;
+        items.push({ id: B.it.id, kind: "text", texts, bullet, bbox: { x: 0, y, w: bw, h: B.h }, rowBox: { x: -12, y: y - 8, w: bw + 24, h: B.h + 16 } });
+        order.push(B.it.id);
+        w = Math.max(w, bw);
+        y += B.h + (gap - size);
+      });
+      const h = y - (gap - size);
+      // 区画に合わせて組んだときは、幅は区画いっぱい（左に揃う）
+      const lineCount = blocks.reduce((a, B) => a + B.lines.length + (B.subLines ? B.subLines.length : 0), 0);
+      return { w: F ? F.w : Math.max(w, 600), h: over ? Infinity : h, items, order, lineCount };
     },
   };
 
@@ -108,7 +176,7 @@
       for (const { it, x, placed } of cards) {
         const color = S.role(it.role || "process");
         const label = UZ.mkText(UZ.wrap(it.label, 26, cw - 40, S.bold, 1), x + cw / 2, headH / 2, 26, { weight: S.bold, color: S.ink });
-        items.push({ id: it.id, kind: "box", x, y: 0, w: cw, h: maxH, r: S.radius, stroke: color, fill: S.fill(it.role || "process"),
+        items.push({ id: it.id, kind: "box", x, y: 0, w: cw, h: maxH, r: S.radius, stroke: S.border(it.role || "process"), fill: S.fill(it.role || "process"),
           header: { h: headH, fill: C.rgba(color, 0.22) }, texts: [label], bbox: { x, y: 0, w: cw, h: maxH }, members: placed.map(p => p.id) });
         order.push(it.id);
         for (const p of placed) {
@@ -123,10 +191,16 @@
   };
 
   // ======== 表（table）========
+  // ctx.fill（スライドの部品を区画に合わせて組むとき）: { w, h, k }。k は文字の倍率。
+  // 区画の幅いっぱいに列を広げ、余った高さを行に配る。収まらなければ、区画より大きい w・h を返す（エンジンが k を下げて組み直す）
   FIG.table = {
-    async layout(f, S) {
+    fill: true,
+    async layout(f, S, ctx) {
+      const F = ctx && ctx.fill, k = F ? F.k : 1;
       const cols = f.columns.map(c => (typeof c === "string" ? { id: c, label: c } : c));
-      const size = 20, hsize = 19, padX = 18, markW = 30, rowMarkW = 48;
+      const size = Math.round(20 * k), hsize = Math.round(19 * k), padX = Math.round(18 * k), markW = Math.round(30 * k), rowMarkW = 48;
+      // 区画に合わせて組むときは、行の上下の余白を小さめから始め、余った高さを配る
+      const lineStep = Math.round(28 * k), padY = Math.round((F ? 16 : 26) * k), maxLines = F ? 3 : 2;
       const cellText = (row, ci) => {
         const v = Array.isArray(row.cells) ? row.cells[ci] : row.cells[cols[ci].id];
         return v == null ? { text: "" } : typeof v === "object" ? v : { text: String(v) };
@@ -134,30 +208,82 @@
       const colW = cols.map((c, ci) => {
         let w = UZ.textW(c.label, hsize, S.bold);
         for (const r of f.rows) w = Math.max(w, UZ.textW(cellText(r, ci).text, size));
-        return Math.min(380, Math.max(90, w)) + padX * 2 + markW;
+        return Math.min(380 * k, Math.max(90 * k, w)) + padX * 2 + markW;
       });
+      if (F) {   // 区画の幅に合わせる
+        const room = F.w - rowMarkW;
+        // 折り返さないときの幅（見出しと各セルの最長 + 余白）
+        const nat = cols.map((c, ci) => Math.max(UZ.textW(c.label, hsize, S.bold), ...f.rows.map(r => UZ.textW(cellText(r, ci).text, size, ci === 0 ? 500 : 400))) + padX * 2 + markW + 2);
+        const sum = nat.reduce((a, b) => a + b, 0);
+        if (sum <= room) {   // 全部 1 行で入る: 余りを均等に配る
+          nat.forEach((w, i) => { colW[i] = w + (room - sum) / nat.length; });
+        } else {   // 入らない: 狭い幅から始め、表が一番低くなる列に少しずつ幅を足す
+          const pad = padX * 2 + markW, minW = Math.round(110 * k);
+          // 点数: 表の高さ（行ごとの最大の行数の合計）に、折り返しの総数を少し足す（高さが同じなら、折り返しの少ない配り方。行の見出しの折り返しは避ける）
+          const height = ws => {
+            let h = Math.max(...cols.map((c, ci) => UZ.wrap(c.label, hsize, ws[ci] - padX * 2, S.bold, 9).length)) * 0.8, all = 0;
+            for (const r of f.rows) {
+              const ls = cols.map((_, ci) => UZ.wrap(cellText(r, ci).text, size, ws[ci] - pad, ci === 0 ? 500 : 400, 9).length);
+              h += Math.max(...ls); all += ls.reduce((a, b) => a + b, 0) + (ls[0] - 1) * 2;   // 行の見出し（1 列目）の折り返しは重く数える
+            }
+            return h + all * 0.15;
+          };
+          const ws = nat.map(w => Math.min(w, minW));
+          const step = Math.max(8, Math.round(room / 120));
+          let left = room - ws.reduce((a, b) => a + b, 0);
+          // 各列について、足す幅を 1 歩から自然な幅まで先まで試し、幅あたり一番低くなる足し方を採る
+          // （短い見出しの列は、一度に大きく広げないと 1 行にならないため）
+          while (left >= 1) {
+            const h0 = height(ws);
+            let best = -1, bestAdd = 0, bestGain = 0;
+            for (let i = 0; i < ws.length; i++) {
+              for (let add = step; add <= Math.min(left, nat[i] - ws[i] + step - 1); add += step) {
+                const t = ws.slice(); t[i] += Math.min(add, left);
+                const gain = (h0 - height(t)) / add;
+                if (gain > bestGain + 1e-9) { bestGain = gain; best = i; bestAdd = Math.min(add, left); }
+              }
+            }
+            // 低くならないときは、自然な幅との差が一番大きい列に足す（全部の列が自然な幅なら、残りを均等に配って終える）
+            if (best < 0) {
+              let gap = 0;
+              ws.forEach((w, i) => { if (nat[i] - w > gap) { gap = nat[i] - w; best = i; } });
+              if (best < 0) { ws.forEach((_, i) => { ws[i] += left / ws.length; }); break; }
+              bestAdd = Math.min(step, left);
+            }
+            ws[best] += bestAdd; left -= bestAdd;
+          }
+          ws.forEach((w, i) => { colW[i] = w; });
+        }
+      }
       const total = colW.reduce((a, b) => a + b, 0);
       const xs = [0]; colW.forEach(w => xs.push(xs[xs.length - 1] + w));
+      const headLines = cols.map((c, ci) => UZ.wrap(c.label, hsize, colW[ci] - padX * 2, S.bold, 2));
+      const headH = Math.max(Math.round(50 * k), padY + Math.max(...headLines.map(l => l.length)) * Math.round(hsize * 1.38));
+      const rowsL = f.rows.map(r => {
+        const cells = cols.map((c, ci) => {
+          const v = cellText(r, ci);
+          return { ...v, col: c.id, lines: UZ.wrap(v.text, size, colW[ci] - padX * 2 - markW, ci === 0 ? 500 : 400, maxLines) };
+        });
+        return { r, cells, rh: padY + Math.max(1, ...cells.map(c => c.lines.length)) * lineStep };
+      });
+      // 余った高さを行に配る（1 行あたり文字 1 つ分まで。残りは区画の中の揃えで空きになる）
+      if (F) {
+        const h0 = headH + rowsL.reduce((a, x) => a + x.rh, 0);
+        const add = Math.max(0, Math.min((F.h - h0) / Math.max(1, rowsL.length), size * 1.2));
+        for (const x of rowsL) x.rh += add;
+      }
       const items = [], order = [];
-      const headH = 50;
-      // 見出し
-      const headTexts = cols.map((c, ci) => UZ.mkText(UZ.wrap(c.label, hsize, colW[ci] - padX * 2, S.bold, 2), xs[ci] + padX, headH / 2, hsize, { anchor: "start", weight: S.bold, color: S.ink }));
+      const headTexts = cols.map((c, ci) => UZ.mkText(headLines[ci], xs[ci] + padX, headH / 2, hsize, { anchor: "start", weight: S.bold, color: S.ink }));
       items.push({ id: "header", kind: "rect", x: 0, y: 0, w: total, h: headH, r: 6, fill: S.surface, texts: headTexts, bbox: { x: 0, y: 0, w: total, h: headH } });
       order.push("header");
       let y = headH;
-      for (const r of f.rows) {
-        const cells = cols.map((c, ci) => {
-          const v = cellText(r, ci);
-          return { ...v, col: c.id, lines: UZ.wrap(v.text, size, colW[ci] - padX * 2 - markW, ci === 0 ? 500 : 400, 2) };
-        });
-        const nl = Math.max(1, ...cells.map(c => c.lines.length));
-        const rh = 26 + nl * 28;
+      for (const { r, cells, rh } of rowsL) {
         const rowItem = { id: r.id, kind: "rect", x: 0, y, w: total, h: rh, r: 4, fill: "none", rule: true, bbox: { x: 0, y, w: total, h: rh }, members: [] };
         items.push(rowItem);
         order.push(r.id);
         cells.forEach((c, ci) => {
           const cid = `${r.id}.${c.col}`;
-          const t = UZ.mkText(c.lines, xs[ci] + padX, y + rh / 2, size, { anchor: "start", weight: ci === 0 ? 500 : 400, color: S.ink });
+          const t = UZ.mkText(c.lines, xs[ci] + padX, y + rh / 2, size, { anchor: "start", weight: ci === 0 ? 500 : 400, color: S.ink, lineH: lineStep });
           const it = { id: cid, kind: "text", texts: [t], bbox: { x: xs[ci], y, w: colW[ci], h: rh }, parent: r.id, col: c.col, textBox: t.bbox };
           if (c.mark) it.staticMark = { kind: c.mark, x: xs[ci] + colW[ci] - padX - 6, y: y + rh / 2 };
           items.push(it);
@@ -169,7 +295,10 @@
       cols.forEach((c, ci) => {
         items.push({ id: c.id, kind: "group", members: f.rows.map(r => `${r.id}.${c.id}`), bbox: { x: xs[ci], y: 0, w: colW[ci], h: y }, headerIndex: ci });
       });
-      return { w: total + rowMarkW, h: y, items, order, rowMarkX: total + 24 };
+      // 区画に合わせて組んだときは、列の幅をはみ出す行（折り返しきれなかった文）があれば、収まらないとして返す
+      const clipped = F && rowsL.some(x => x.cells.some((c, ci) => c.lines.some(l => UZ.textW(l, size, ci === 0 ? 500 : 400) > colW[ci] - padX * 2 - markW + 1)));
+      const lineCount = headLines.reduce((a, l) => a + l.length, 0) + rowsL.reduce((a, x) => a + x.cells.reduce((b, c) => b + c.lines.length, 0), 0);
+      return { w: total + rowMarkW, h: clipped ? Infinity : y, items, order, rowMarkX: total + 24, lineCount };
     },
   };
 
@@ -200,8 +329,8 @@
       const rows = msgs.map(m => { const r = row; row += m.from === m.to ? 1.6 : 1; return r; });
       const bottom = top + row * rowH + 10;
       P.forEach((p, i) => {
-        const color = S.role(p.role || "process");
-        const t = UZ.mkText(p.label, xs[i], boxH / 2, size, { weight: 500, color: S.ink });
+        const color = S.border(p.role || "process");
+        const t = UZ.mkText(p.label, xs[i], boxH / 2, size, { weight: 500, color: S.label(p.role || "process") });
         items.push({ id: p.id, kind: "box", x: xs[i] - boxW[i] / 2, y: 0, w: boxW[i], h: boxH, r: S.radius, stroke: color, fill: S.fill(p.role || "process"), texts: [t], bbox: { x: xs[i] - boxW[i] / 2, y: 0, w: boxW[i], h: boxH },
           life: { pts: [[xs[i], boxH], [xs[i], bottom]] } });
         order.push(p.id);
@@ -356,10 +485,10 @@
     }
     for (const n of f.nodes) {
       const a = abs[n.id], sp = nodeSpec[n.id];
-      const color = S.role(n.role || "process");
+      const color = S.border(n.role || "process");
       const cx = a.x + a.w / 2;
       const labelCy = a.y + 32 + (sp.lines.length - 1) * 16 - 2;
-      const texts = [UZ.mkText(sp.lines, cx, labelCy, nsize, { weight: 500, color: S.ink, lineH: 32 })];
+      const texts = [UZ.mkText(sp.lines, cx, labelCy, nsize, { weight: 500, color: S.label(n.role || "process"), lineH: 32 })];
       if (sp.subLines.length) texts.push(UZ.mkText(sp.subLines, cx, labelCy + sp.lines.length * 16 + 4 + sp.subLines.length * 11, 17, { color: S.muted, lineH: 22 }));
       const shape = n.shape || (n.role === "store" ? "store" : "box");
       items.push({ id: n.id, kind: "box", x: a.x, y: a.y, w: a.w, h: a.h, r: shape === "round" ? a.h / 2 : S.radius, shape,
@@ -403,9 +532,9 @@
     async layout(f, S) {
       const W = f.width || 1184, H = f.height || 470, items = [], order = [];
       for (const s of f.shapes) {
-        const color = s.color || S.role(s.role || "process");
+        const color = s.color || S.border(s.role || "process");
         if (s.shape === "rect" || s.shape === "ellipse") {
-          const texts = s.text ? [UZ.mkText(UZ.wrap(s.text, s.size || 22, s.w - 16, 500, 3), s.x + s.w / 2, s.y + s.h / 2, s.size || 22, { weight: 500, color: S.ink })] : [];
+          const texts = s.text ? [UZ.mkText(UZ.wrap(s.text, s.size || 22, s.w - 16, 500, 3), s.x + s.w / 2, s.y + s.h / 2, s.size || 22, { weight: 500, color: s.fill === "none" ? S.ink : S.label(s.role || "process") })] : [];
           items.push({ id: s.id, kind: "box", shape: s.shape === "ellipse" ? "ellipse" : "box", x: s.x, y: s.y, w: s.w, h: s.h, r: s.r ?? S.radius,
             stroke: color, fill: s.fill === "none" ? "none" : S.fill(s.role || "process"), texts, bbox: { x: s.x, y: s.y, w: s.w, h: s.h } });
         } else if (s.shape === "line" || s.shape === "arrow") {
@@ -415,7 +544,8 @@
             bbox: { x: Math.min(...xs), y: Math.min(...ys), w: Math.max(...xs) - Math.min(...xs) || 1, h: Math.max(...ys) - Math.min(...ys) || 1 } });
         } else if (s.shape === "text") {
           const t = UZ.mkText(UZ.wrap(s.text, s.size || 22, s.maxW || 600, s.bold ? S.bold : 400, 4), s.x, s.y, s.size || 22, { anchor: s.anchor || "middle", weight: s.bold ? S.bold : 400, color: s.color || S.ink });
-          items.push({ id: s.id, kind: "text", texts: [t], bbox: { ...t.bbox } });
+          // over = この文字を上に重ねてよい図形の id（円の中に置く名前など。配置の検査が「箱に重なる」と言わない）
+          items.push({ id: s.id, kind: "text", texts: [t], bbox: { ...t.bbox }, over: s.over ? [].concat(s.over) : undefined });
         }
         order.push(s.id);
       }

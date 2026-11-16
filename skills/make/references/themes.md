@@ -4,48 +4,81 @@
 
 | テーマ | ファイル | 向く場面 |
 |---|---|---|
-| 3b1b 調 | `player/themes/3b1b.json` | 暗い背景・光る線。概念や仕組みの説明 |
-| フラットな図解 | `player/themes/flat.json` | 明るい背景・塗りの箱。社内資料に馴染む |
+| 空 提案書デザイン（既定） | `player/themes/koo.json` | 何も指定がないとき。同梱の見本・見本帳もこのテーマで描く |
 | デザインから作る | `extract_design.py` で作る | 会社やプロダクトの色に合わせたいとき |
 
-## インタビューでの聞き方
+## 既定のテーマ（koo）
 
-画風を聞くときは「3b1b 調 / フラットな図解 / 手持ちのデザインに合わせる」を出す。合わせる場合は、手元にあるものを何でも渡してもらう。デザインシステムである必要はない。
+同梱のテーマは `koo` の 1 つで、「空 提案書デザインシステム」（`derived_from` の Artifact）のトークンから作ってある。色はトークンにあるものだけを使う。例外は 1 つで、Blue（`#5090d9`）は Base の地の上で線と文字に使うと読みにくいので、線と文字には同じ色相の暗い色（`#286cb9`）を使う。箱の枠と面には Blue と Blue-soft をそのまま使う。どの色がどのトークンかは、テーマの `tokens` に書いてある。
+
+| 使いどころ | 色（トークン） |
+|---|---|
+| 地・面・本文・補足 | Base・White・Ink・Gray-600 |
+| 何も書かない箱（`process`） | Navy の枠、White の面 |
+| `actor`・`store`・`external` | Blue の枠と Blue-soft の面、Gold-deep の枠と Gold-soft の面、Gray-600 の枠と Gray-soft の面 |
+| 良い・足した・✓（`good`・`added`） | Gold の枠、Gold-soft の面、文字と印は Gold-deep |
+| 悪い・消した・✗、論点の外（`bad`・`removed`・`muted`） | グレーアウト。Gray-300 の面、文字と印は Gray-600 |
+| 注意（`warn`） | 強調（`accent`）と同じ Blue（文字と印は暗い Blue `#286cb9`） |
+| 字幕の帯、章扉（`title` 図の場面）と目次（`toc` 図の場面）の地 | Navy。文字は白 |
+
+デザインシステムに緑と赤はないので、良い・悪いは「色の付いた側（Gold）」と「グレーアウトした側」で言い分ける。そのため、koo では `warn` は `accent` と、`bad` は `muted` と同じ色で、色だけでは見分けられない（意図してそろえてある）。注意を強調と分けて見せたいときは、色でなく、言葉（見出し・ラベル）や置き場所で言い分ける。**このテーマを使う動画では、ここにない色を足さない。** `canvas` の図形や `custom` で色を直接書くときも、テーマの `tokens` にある色から選ぶ。
+
+## 見た目の聞き方
+
+見た目を決めるときは「既定（空 提案書デザイン）/ 手持ちのデザインに合わせる」を候補に出す（利用者が別の希望を言える余地を残す）。合わせる場合は、手元にあるものを何でも渡してもらう。デザインシステムである必要はない。
 
 - トークンの JSON、CSS 変数、Tailwind の設定、claude.ai の Design System
 - ブランドガイドの PDF、Web ページの URL、PowerPoint・Word のテンプレート
 - スクリーンショットやスライドの画像、ロゴ
 - 題材のリポジトリの CSS や UI 部品
 
+## 決めたテーマに従う
+
+見た目が決まったら、構成メモの `basics.look.theme` にテーマの名前（`koo`）か、作業フォルダの中のファイル名（`theme.json`）を書く。ここに書いたテーマが、その動画のテーマである。
+
+- 検査（`check_storyboard.cjs`）・コマ（`frames.cjs`）・組み立て（`build_player.py`）は、台本と同じフォルダの構成メモを読み、`--theme` を省くとそのテーマを使う。**違うテーマを `--theme` で渡すと、何も書かずに止まる**（文書の例にある `--theme koo` を写しても、決めたテーマから外れない）
+- 見た目を変えるときは、利用者と決めてから、構成メモを先に直す
+- 利用者がデザインを渡したら、そのデザインがテーマの正である。同梱のテーマ（`koo`）や見本のテーマの値で置き換えない
+
 ## デザインからテーマを作る手順
 
-1. 拾う: `python3 scripts/extract_design.py 入力… --report report.json --theme theme.json --name ブランド名`
+1. 拾う: `python3 scripts/extract_design.py 入力… --report <workdir>/design-report.json --theme <workdir>/theme.json --name ブランド名`
    - claude.ai のサンドボックスでは URL を直接読めないことがある。そのときは web_fetch などで HTML を取り、ファイルに保存してから渡す
    - claude.ai の Design System は、その Artifact の tokens.json を保存して渡す
-2. 確かめる: `report.json` の色の一覧（回数・名前・出どころ）と入力そのものを見比べ、下書きの役割が合っているか確かめる。とくに、名前の付いていない色だけの入力（画像・PDF・ブランドガイド）は推測なので、次を Claude が決め直す
-   - `bg`（背景）・`ink`（本文）・`accent`（強調。ブランドの主色）
-   - `roles` の 4 色（actor / process / store / external）。主色と、ブランドの補助色から選ぶ。足りなければ主色の色相を回した色でよい
-   - `good` / `bad` / `warn` は意味の色。ブランドに赤や緑がなくても、見分けやすさを優先する
-3. 検査する: `python3 scripts/check_theme.py theme.json`。不合格なら色の明るさを動かして直す（色相は保つ）
-4. 見本で確かめる: 台本の検査（`check_storyboard.cjs --theme theme.json`）と下見で、箱の文字が読めるかを見る
-5. 使ったテーマのファイルは成果物と一緒に残し、`derived_from` に入力を書く
+2. **下書きから始める。** `theme.json` は `extract_design.py` が書いた下書きを直して作る。新しく書き起こさない。同梱のテーマや、この文書の「テーマの項目」の例から値を写さない（写すと、渡されたデザインから外れる）。直してよいのは次のときだけで、直したら理由を報告に書く
+   - 役割の読み違い: `design-report.json` の色の一覧（回数・名前・出どころ）と入力そのものを見比べ、背景・本文・強調が違っていたら、**デザインにある色の中から**選び直す。名前の付いていない色だけの入力（画像・PDF・ブランドガイド）は推測なので、必ず見比べる
+   - `roles` の 4 色（process / actor / store / external）は図の箱の色で、画面の印象をいちばん左右する。**デザインにある色だけで作る。** 何も書かない箱は `process` になるので、`process` にデザインの主色を当てる。残りは、デザインの補助色、次にデザインの無彩色（灰色や紺）から選ぶ。明るすぎる色は、デザインに同じ色相の暗い色があればそれを使う。色相を回して新しい色を作るのは、デザインの色が 4 つに足りないときだけで、作ったら利用者に伝える
+   - `good` / `bad` / `warn` は意味の色。これも**デザインにある色だけで作る。** デザインに成功・失敗の色（緑・赤など）があればそれを使う。なければ緑や赤を足さず、良い側をデザインの強調の色、悪い側をグレーアウト（補足の色）にして言い分ける（下書きはこの形で出る）
+   - **字幕の帯と章扉の色も、デザインから決める。** デザインに反転面の色（表紙・章扉・見出しの帯に使う暗い色）があれば、字幕の帯（`subtitle.bg`）と章扉の地（`chapter.bg`）にその色を当て、文字はその上で読める色（多くは白）にする。下書きは、名前から反転面と分かる色があるときだけ `subtitle` と `chapter` を書くので、入力（表紙や章扉の見本、色の使い方の説明）を見て、足す・外す・別の色にするを決める。反転面の色がないデザインなら、`chapter` は書かず（章扉は通常の地になる）、字幕の帯は地と見分けられるデザインの色にする。決めた色と理由は、5 の見本と一緒に利用者に伝える
+   - **箱の面・枠・文字に当てる色がデザインにあれば、`colors.boxes` に書く。** 何も書かないと、箱の面は役割の色を地に混ぜた色（デザインにない中間の色）になる。デザインに面の色（カードの面、淡い色、グレーアウトの面）があれば、役割ごとに `fill`（面）・`border`（枠）・`label`（中の文字）を当てる
+   - コントラストの不合格: 色の明るさだけを動かす（色相は保つ）
+3. 検査する: `python3 scripts/check_theme.py <workdir>/theme.json --design <workdir>/design-report.json`。読みやすさ（コントラスト）に加えて、テーマがデザインから外れていないかを見る。背景・本文はデザインの色そのまま、強調はデザインの色相、字体の先頭はデザインの字体、デザインが影を使わないなら影なし、が合格の条件。出力の「デザイン: bg … ← デザインの …」の行が、どの色がデザインのどの色から来たかの記録になる
+4. 構成メモに書く: `basics.look.theme` に `theme.json` と書く。以後の道具は、このテーマを使う
+5. **図の色の見本を、台本を書く前に利用者に見せる。** 見本の台本をそのテーマでスライドコンテにして見せ（下のコマンド。4 つの役割の箱と印、章扉、字幕の帯が出る）、3 の「デザイン:」の行を添える（どの色をどこに使ったか。デザインにない色を足したなら、その理由）。図の色が渡したデザインと違って見えたら、ここで直す
+
+   ```sh
+   node scripts/frames.cjs examples/graph-flow.json --theme <workdir>/theme.json -o <workdir>/frames-theme
+   python3 scripts/build_sheet.py examples/graph-flow.json --frames <workdir>/frames-theme -o <workdir>/theme-sample.html --artifact
+   ```
+6. 台本ができたら、台本の検査（`check_storyboard.cjs`）と下見で、箱の文字が読めるかを見る
+7. 使ったテーマのファイルは成果物と一緒に残す（`derived_from` に入力が入っている）
 
 ## テーマの項目
 
-```json
-{
-  "name": "kumo", "label": "くも運輸の Web ページから作る", "mode": "light",
-  "colors": {
-    "bg": "#fbf7f0", "surface": "#ece8e1", "ink": "#1f2a37", "muted": "#5b6573", "line": "#cfcac2",
-    "accent": "#0e7c86", "good": "#2d9656", "bad": "#d64541", "warn": "#b26a00",
-    "roles": { "actor": "…", "process": "…", "store": "…", "external": "…", "muted": "…", "added": "…", "removed": "…" }
-  },
-  "font": { "family": "\"Zen Kaku Gothic New\", \"Noto Sans JP\", sans-serif", "weight": 400, "bold": 700,
-            "css": "https://fonts.googleapis.com/css2?family=…" },
-  "shape": { "radius": 12, "stroke": 2.2, "fill": "solid", "fillMix": 0.12, "fillAlpha": 0.14, "edgeWidth": 2.1, "glow": false, "shadow": true },
-  "subtitle": { "bg": "#fdfbf8f0", "ink": "#1f2a37" }
-}
-```
+項目の形だけを示す。値は、同梱のテーマを選んだならそのファイル、デザインから作るなら `extract_design.py` の下書きにある。
+
+| 項目 | 中身 |
+|---|---|
+| `name`・`label`・`mode` | テーマの名前、説明、`light` か `dark` |
+| `colors.bg`・`surface`・`ink`・`muted`・`line`・`accent` | 背景、面、本文、補足、線、強調 |
+| `colors.good`・`bad`・`warn` | 意味の色（印と、意味を表す文字） |
+| `colors.roles` | 役割の色: `actor`・`process`・`store`・`external`・`muted`・`added`・`removed`。線と文字に使うので、地の上で読める色にする |
+| `colors.boxes`（任意） | 役割ごとの箱の色: `{ "<役割>": { "fill": 面, "border": 枠, "label": 中の文字 } }`。書いた項目だけが効き、書かない項目は、面 = 役割の色を地に混ぜた色、枠 = 役割の色、文字 = 本文の色 |
+| `font.family`・`weight`・`bold`・`css` | 字体の並び、太さ、Google Fonts の URL |
+| `shape.radius`・`stroke`・`fill`・`fillMix`・`fillAlpha`・`edgeWidth`・`glow`・`shadow` | 角丸、線の太さ、塗り方、光らせるか、影 |
+| `subtitle.bg`・`ink` | 字幕の帯と文字 |
+| `chapter.bg`・`ink`・`sub`・`muted`・`line`・`accent`（任意） | 章扉の色。あれば、`title` 図か `toc` 図だけの場面の地が `bg` になり、題が `ink`、`sub` の文字と目次の番号が `sub`（目次に `current` があるときは、今の章以外が `muted`）、クレジットが `muted`、字幕の帯の枠が `line` になる。`tone: "dark"` のスライドでも同じ地と文字の色を使い、強調の語・見出しの棒・言いたいことの印は `accent`（なければ `colors.accent`。章扉の地の上で 4.5:1 以上。`check_theme.py` が見る）、図の線は `line`、補足の文字は `sub` になる。なければ章扉も通常の地 |
+| `tokens`（任意） | 色の値とデザインのトークン名の対応。人と Claude が読むための記録で、プレーヤーは使わない |
 
 - `shape.fill`: `solid`（背景と役割の色を `fillMix` で混ぜた塗り）・`tint`（役割の色を `fillAlpha` で透かす。暗い背景向き）・`none`
 - `glow`: 線と点を光らせる（暗い背景向き）。`shadow`: 箱に薄い影（明るい背景向き）
@@ -53,6 +86,18 @@
 
 ## 検査の基準（check_theme.py）
 
-- 本文・補足・強調と背景、箱の塗りの上の本文、字幕: コントラスト 4.5 以上
+- 本文・補足・強調と背景、箱の塗りの上の本文（`colors.boxes` に面と文字を書いた役割は、その面とその文字）、字幕、章扉の文字と章扉の地: コントラスト 4.5 以上
 - 役割の色・good / bad / warn と背景: 3 以上（図形の線）
 - 役割の 4 色どうし・good と bad: 色差 ΔE 20 以上
+- `--design` を付けたとき: 背景・本文がデザインの色（色差 ΔE 2 以内）、強調がデザインの有彩色と同じ色相、字体の先頭がデザインの字体、デザインが影を使わないなら `shadow` が false。役割の色・意味の色・箱の面と枠・字幕の帯・章扉の地がデザインにないときは注意
+
+## スライドの文字
+
+スライドの見出し・言いたいこと・テキストの部品・フレームは、新しいテーマのキーを足さずに、今ある色から決まる。
+
+| 部分 | 色 |
+|---|---|
+| 見出し、言いたいこと、小見出し、段落、箇条 | `colors.ink` |
+| 言いたいことの頭の印（▶）、箇条の点、強調の語 | `colors.accent` |
+| 囲み（`quote`）とフレームの面・枠 | `colors.surface`・`colors.line` |
+| 囲みの出どころ、フレームの題 | `colors.muted` |

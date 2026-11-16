@@ -1,0 +1,388 @@
+#!/usr/bin/env python3
+"""構成メモ outline.json の形を機械で点検する（仕様は references/outline.md）。
+
+  python3 check_outline.py <outline.json か作業フォルダ> [--ready] [--json]
+  python3 check_outline.py <outline.json か作業フォルダ> --agree-all
+
+  --ready  台本に進める状態かも見る（basics に audience・knows・takeaway がある、章が 1 つ以上ある、章の順番の意図とどの章にも意図がある。/1 では、どの章にも says がある）
+  --json   結果を JSON で出す: {"file", "errors", "warnings", "proposed", "open"}（proposed = Claude が決めて利用者がまだ見ていない項目、open = まだ決めていないこと）
+
+  --agree-all  state が proposed の項目を、まとめて agreed に書き換える（by は変えない）。利用者が「Claude が決めたこと」を
+               全部見て通したときにだけ使う。一部だけ通したときは、その項目を手で書き換える。誤りのある構成メモは書き換えない
+
+終了コード: 0 = 誤りなし（警告は出る）、1 = 誤りあり、2 = 使い方の誤りかファイルがない。
+結果は標準出力に 1 件 1 行で書く（「誤り: …」「警告: …」。誤りがなければ最後に「OK」）。
+
+構成メモの形（ugoku-zukai-outline/2。3 段の意図で書く）:
+{
+  "format": "ugoku-zukai-outline/2",
+  "title": "動画の題",
+  "basics": { … 下の /1 と同じ … },
+  "flow": 項目,                     章の順番の意図（なぜこの順か）。章が 2 つ以上なら、台本に進む前に要る
+  "chapters": [
+    {"id": "c2", "title": "章の題",
+     "intent": 項目,                この章で聴衆が何を分かるか。台本に進む前に要る
+     "link": 項目,                  前の章からのつながり（任意。最初の章には書かない）
+     "seconds": 80,
+     "slides": [{"id": "ux-def", "intent": 項目, "link": 項目}, …]}   id は台本の slides のキー。intent は必須、link は任意。
+  ],                                スライドは、最初に出る章にだけ書く。says・shows は使わない
+  "open": […]
+}
+--ready が /2 で見るのは、basics の 3 つ・章が 1 つ以上・flow（章が 2 つ以上のとき）・どの章にも intent。スライドの意図は proposed のままでよい。
+
+前の形（ugoku-zukai-outline/1。過去の作業フォルダを直すために読める）:
+{
+  "format": "ugoku-zukai-outline/1",
+  "title": "動画の題",
+  "basics": {                       キーは自由。値は「項目」。台本に進む前に要るのは audience・knows・takeaway
+    "audience": 項目, "knows": 項目, "takeaway": 項目,
+    "length": 項目 + {"seconds": 300},          正の数（任意）
+    "look":   項目 + {"theme": "koo"},         テーマの名前かパス（任意）
+    "voice":  項目 + {"speaker": 8, "speed": 1.1}   整数・正の数（任意）
+  },
+  "chapters": [                     空でもよい
+    {"id": "c3",                    台本の id と同じ規則。振り直さない
+     "title": "章の題",
+     "says":  [項目 + {"id": "c3.1"}, …],       id は構成メモの中で重複しない
+     "shows": 項目 + {"figure": "venn"},        任意。figure は player/src/validate.js の TYPES のキー
+     "seconds": 50}                 正の数（任意）
+  ],
+  "open": ["まだ決めていないこと", …]           任意
+}
+項目: {"text": "…", "by": "user" | "claude" | "source", "state": "proposed" | "agreed", "source": ["場所か引用", …]}
+  by: source なら source が 1 つ以上要る。by: user で state: proposed は誤り（利用者が言ったことは合意済み）。
+
+警告: 章の seconds の合計が basics.length.seconds から 15% を超えてずれている / 項目の text に禁止語がある（by: user の項目は見ない）。
+"""
+import json
+import os
+import re
+import sys
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, HERE)
+from check_text import banned, find_banned  # noqa: E402  禁止語は字幕の検査と同じ辞書・同じ探し方で見る
+
+FORMATS = ("ugoku-zukai-outline/1", "ugoku-zukai-outline/2")   # /1 = 章ごとの「言うこと・見せるもの」、/2 = 3 段の意図
+FORMAT = FORMATS[1]   # 新しく書く形式
+BY = ("user", "claude", "source")
+STATE = ("proposed", "agreed")
+READY_BASICS = ("audience", "knows", "takeaway")
+ID_RE = re.compile(r"^[A-Za-z0-9_\-ぁ-んァ-ヶ一-龠ー.]+$")  # player/src/validate.js の ID_RE と同じ
+LENGTH_TOLERANCE = 0.15
+BASICS_LABEL = {
+    "audience": "視聴者", "knows": "視聴者が知っている前提", "takeaway": "持ち帰ってほしいこと",
+    "can_do": "見終わったらできること", "length": "長さ", "look": "見た目", "voice": "声", "tone": "口調",
+}
+
+
+def version(outline):
+    """構成メモの形式の版（1 か 2）。どちらでもなければ None"""
+    fmt = outline.get("format") if isinstance(outline, dict) else None
+    return FORMATS.index(fmt) + 1 if fmt in FORMATS else None
+
+
+def figure_types():
+    """図の種類。player/src/validate.js の TYPES のキーから読む（一覧を二重に持たない。canvas も含む）"""
+    with open(os.path.join(HERE, "..", "player", "src", "validate.js"), encoding="utf-8") as f:
+        m = re.search(r"const TYPES = \{(.*?)\n\s*\};", f.read(), re.S)
+    if not m:
+        sys.exit("validate.js から TYPES を読めない")
+    return set(re.findall(r"(\w+)\s*:\s*\[", m.group(1)))
+
+
+def _text(v):
+    return isinstance(v, str) and v.strip() != ""
+
+
+def _positive(v):
+    return isinstance(v, (int, float)) and not isinstance(v, bool) and v > 0
+
+
+def _check_item(item, where, errors):
+    """項目の形を見る。項目として読めるときだけ True"""
+    if not isinstance(item, dict):
+        errors.append(f"{where}: 項目は text・by・state を持つオブジェクトで書く")
+        return False
+    if not _text(item.get("text")):
+        errors.append(f"{where}: text がない")
+    by, state = item.get("by"), item.get("state")
+    if by not in BY:
+        errors.append(f"{where}: by は {' / '.join(BY)} のどれか（今は {json.dumps(by, ensure_ascii=False)}）")
+    if state not in STATE:
+        errors.append(f"{where}: state は {' / '.join(STATE)} のどれか（今は {json.dumps(state, ensure_ascii=False)}）")
+    src = item.get("source")
+    if src is not None and not (isinstance(src, list) and all(_text(s) for s in src)):
+        errors.append(f"{where}: source は文字列の配列で書く")
+    elif by == "source" and not src:
+        errors.append(f"{where}: by が source なのに source（場所か引用）がない")
+    if by == "user" and state == "proposed":
+        errors.append(f"{where}: by が user の項目は state を agreed にする（利用者が言ったことは合意済み）")
+    return True
+
+
+def _items(outline):
+    """(場所, 人が読む名前, 項目) を、構成メモに書いてある順に返す。形が違うところは飛ばす"""
+    out = []
+    if not isinstance(outline, dict):
+        return out
+    basics = outline.get("basics")
+    if isinstance(basics, dict):
+        for k, v in basics.items():
+            if isinstance(v, dict):
+                out.append((f"basics.{k}", BASICS_LABEL.get(k, k), v))
+    if version(outline) == 2 and isinstance(outline.get("flow"), dict):
+        out.append(("flow", "章の順番の意図", outline["flow"]))
+    chapters = outline.get("chapters")
+    for ch in chapters if isinstance(chapters, list) else []:
+        if not isinstance(ch, dict):
+            continue
+        cid = ch.get("id")
+        name = f"{cid} {ch.get('title')}" if _text(ch.get("title")) else str(cid)
+        if version(outline) == 2:
+            if isinstance(ch.get("intent"), dict):
+                out.append((f"章「{cid}」の intent", f"章 {cid} の意図", ch["intent"]))
+            if isinstance(ch.get("link"), dict):
+                out.append((f"章「{cid}」の link", f"章 {cid} のつながり", ch["link"]))
+            for sl in ch.get("slides") if isinstance(ch.get("slides"), list) else []:
+                if not isinstance(sl, dict):
+                    continue
+                if isinstance(sl.get("intent"), dict):
+                    out.append((f"スライド「{sl.get('id')}」の intent", f"スライド {sl.get('id')} の意図", sl["intent"]))
+                if isinstance(sl.get("link"), dict):
+                    out.append((f"スライド「{sl.get('id')}」の link", f"スライド {sl.get('id')} のつながり", sl["link"]))
+            continue
+        says = ch.get("says")
+        for i, s in enumerate(says if isinstance(says, list) else []):
+            if isinstance(s, dict):
+                where = s["id"] if _text(s.get("id")) else f"{cid}.says[{i}]"
+                out.append((where, f"{name} / 言うこと {where}", s))
+        if isinstance(ch.get("shows"), dict):
+            out.append((f"{cid}.shows", f"{name} / 見せるもの", ch["shows"]))
+    return out
+
+
+def proposed_items(outline):
+    """Claude が決めて、利用者がまだ見ていないか答えていない項目（state: proposed）の一覧"""
+    return [{"where": where, "label": label, "text": item.get("text") if isinstance(item.get("text"), str) else ""}
+            for where, label, item in _items(outline) if item.get("state") == "proposed"]
+
+
+def slide_intents(outline):
+    """スライドの id → {"chapter": 章の id, "intent": 意図の文, "link": つながりの文か None}（/2 だけ。構成メモに書いた順）"""
+    out = {}
+    if version(outline) != 2:
+        return out
+    for ch in outline.get("chapters") if isinstance(outline.get("chapters"), list) else []:
+        for sl in ch.get("slides") if isinstance(ch, dict) and isinstance(ch.get("slides"), list) else []:
+            if isinstance(sl, dict) and _text(sl.get("id")) and sl["id"] not in out:
+                text = lambda v: v["text"] if isinstance(v, dict) and _text(v.get("text")) else None
+                out[sl["id"]] = {"chapter": ch.get("id"), "intent": text(sl.get("intent")), "link": text(sl.get("link"))}
+    return out
+
+
+def _open(outline):
+    """まだ決めていないこと（open）。形が違えば空"""
+    op = outline.get("open") if isinstance(outline, dict) else None
+    return [x for x in op if isinstance(x, str)] if isinstance(op, list) else []
+
+
+def check(outline, ready=False):
+    """構成メモを点検して (誤り, 警告) を返す"""
+    errors, warnings = [], []
+    if not isinstance(outline, dict):
+        return ["構成メモが JSON のオブジェクトでない"], warnings
+    v2 = version(outline) == 2
+    if version(outline) is None:
+        errors.append(f'format は "{FORMAT}" と書く（今は {json.dumps(outline.get("format"), ensure_ascii=False)}）')
+    if not _text(outline.get("title")):
+        errors.append("title（動画の題）がない")
+
+    basics = outline.get("basics")
+    if not isinstance(basics, dict):
+        errors.append("basics はオブジェクトで書く（キーは audience・knows・takeaway など）")
+        basics = {}
+    for k, v in basics.items():
+        _check_item(v, f"basics.{k}", errors)
+
+    def extra(key, field, ok, shape):
+        v = basics.get(key)
+        if isinstance(v, dict) and field in v and not ok(v[field]):
+            errors.append(f"basics.{key}.{field} は{shape}で書く")
+    extra("length", "seconds", _positive, "正の数")
+    extra("look", "theme", _text, "文字列（テーマの名前かパス）")
+    extra("voice", "speaker", lambda x: isinstance(x, int) and not isinstance(x, bool), "整数")
+    extra("voice", "speed", _positive, "正の数")
+
+    chapters = outline.get("chapters")
+    if not isinstance(chapters, list):
+        errors.append("chapters は配列で書く（まだ章がなければ空の配列）")
+        chapters = []
+    types = figure_types()
+    chapter_ids, say_ids, no_says = set(), set(), []
+    slide_ids, no_intent = set(), []
+    if v2 and "flow" in outline:
+        _check_item(outline["flow"], "flow（章の順番の意図）", errors)
+    for i, ch in enumerate(chapters):
+        if not isinstance(ch, dict):
+            errors.append(f"chapters[{i}]: 章はオブジェクトで書く")
+            continue
+        cid = ch.get("id")
+        where = f"章「{cid}」" if _text(cid) else f"chapters[{i}]"
+        if not _text(cid):
+            errors.append(f"{where}: id がない")
+        elif not ID_RE.match(cid):
+            errors.append(f"{where}: id に使えない文字がある（/ : 空白は不可）")
+        elif cid in chapter_ids:
+            errors.append(f"{where}: id が重複している")
+        else:
+            chapter_ids.add(cid)
+        if not _text(ch.get("title")):
+            errors.append(f"{where}: title がない")
+        if v2:   # 3 段の意図: 章の意図・前の章からのつながり・スライドごとの意図
+            for k in ("says", "shows"):
+                if k in ch:
+                    errors.append(f"{where}: {k} は ugoku-zukai-outline/2 では使わない（章の intent とスライドの intent に書く）")
+            if "intent" in ch:
+                _check_item(ch["intent"], f"{where}の intent", errors)
+            else:
+                no_intent.append(where)
+            if "link" in ch:
+                _check_item(ch["link"], f"{where}の link", errors)
+                if i == 0:
+                    warnings.append(f"{where}: 最初の章につながり（link）は要らない")
+            slides = ch.get("slides", [])
+            if not isinstance(slides, list):
+                errors.append(f"{where}: slides はスライドの配列で書く")
+                slides = []
+            for j, sl in enumerate(slides):
+                if not isinstance(sl, dict):
+                    errors.append(f"{where}の slides[{j}]: スライドは id と intent を持つオブジェクトで書く")
+                    continue
+                sid = sl.get("id")
+                sw = f"スライド「{sid}」" if _text(sid) else f"{where}の slides[{j}]"
+                if not _text(sid):
+                    errors.append(f"{sw}: id がない")
+                elif not ID_RE.match(sid):
+                    errors.append(f"{sw}: id に使えない文字がある（/ : 空白は不可）")
+                elif sid in slide_ids:
+                    errors.append(f"{sw}: id が重複している（スライドは、最初に出る章にだけ書く）")
+                else:
+                    slide_ids.add(sid)
+                if "intent" in sl:
+                    _check_item(sl["intent"], f"{sw}の intent", errors)
+                else:
+                    errors.append(f"{sw}: intent がない（このスライドで聴衆が何を分かるか）")
+                if "link" in sl:
+                    _check_item(sl["link"], f"{sw}の link", errors)
+            if "seconds" in ch and not _positive(ch["seconds"]):
+                errors.append(f"{where}: seconds は正の数で書く")
+            continue
+        says = ch.get("says", [])
+        if not isinstance(says, list):
+            errors.append(f"{where}: says は項目の配列で書く")
+            says = []
+        if not says:
+            no_says.append(where)
+        for j, s in enumerate(says):
+            w = f"{where}の says[{j}]"
+            if not _check_item(s, w, errors):
+                continue
+            sid = s.get("id")
+            if not _text(sid):
+                errors.append(f"{w}: id がない")
+            elif sid in say_ids:
+                errors.append(f"{w}: id「{sid}」が重複している")
+            else:
+                say_ids.add(sid)
+        shows = ch.get("shows")
+        if shows is not None and _check_item(shows, f"{where}の shows", errors):
+            fig = shows.get("figure")
+            if fig is not None and (not isinstance(fig, str) or fig not in types):
+                errors.append(f"{where}の shows: figure は {' / '.join(sorted(types))} のどれか（今は {json.dumps(fig, ensure_ascii=False)}）")
+        if "seconds" in ch and not _positive(ch["seconds"]):
+            errors.append(f"{where}: seconds は正の数で書く")
+
+    op = outline.get("open")
+    if op is not None and not (isinstance(op, list) and all(isinstance(x, str) for x in op)):
+        errors.append("open は文字列の配列で書く")
+
+    if ready:
+        for k in READY_BASICS:
+            if k not in basics:
+                errors.append(f"台本に進む前に basics.{k}（{BASICS_LABEL[k]}）が要る")
+        if not chapters:
+            errors.append("台本に進む前に、章（chapters）が 1 つ以上要る")
+        for where in no_says:
+            errors.append(f"台本に進む前に、{where}の says（言うこと）が要る")
+        if v2 and len(chapters) >= 2 and "flow" not in outline:
+            errors.append("台本に進む前に、章の順番の意図（flow）が要る")
+        for where in no_intent:
+            errors.append(f"台本に進む前に、{where}に意図（intent）が要る")
+
+    length = basics.get("length")
+    total = length.get("seconds") if isinstance(length, dict) else None
+    secs = [ch.get("seconds") for ch in chapters if isinstance(ch, dict)]
+    if _positive(total) and secs and all(_positive(s) for s in secs):
+        if abs(sum(secs) - total) > total * LENGTH_TOLERANCE:
+            warnings.append(f"章の seconds の合計 {sum(secs):g} 秒が、長さ（basics.length.seconds）{total:g} 秒から 15% を超えてずれている")
+
+    terms = banned()
+    for where, _label, item in _items(outline):
+        if item.get("by") == "user":   # 利用者の言葉はそのまま書く約束。字幕に出たら check_text.py が誤りにする
+            continue
+        if isinstance(item.get("text"), str):
+            for w in find_banned(item["text"], terms):
+                warnings.append(f"{where}: text に禁止語「{w}」")
+    return errors, warnings
+
+
+def main(argv):
+    args = [a for a in argv if not a.startswith("--")]
+    flags = {a for a in argv if a.startswith("--")}
+    if len(args) != 1 or flags - {"--ready", "--json", "--agree-all"} or ("--agree-all" in flags and len(flags) > 1):
+        print(__doc__, file=sys.stderr)
+        return 2
+    path = os.path.join(args[0], "outline.json") if os.path.isdir(args[0]) else args[0]
+    if not os.path.isfile(path):
+        print(f"構成メモがない: {path}", file=sys.stderr)
+        return 2
+    try:
+        with open(path, encoding="utf-8") as f:
+            outline = json.load(f)
+    except ValueError as e:
+        outline, errors, warnings = None, [f"JSON として読めない: {e}"], []
+    else:
+        errors, warnings = check(outline, ready="--ready" in flags)
+    if "--agree-all" in flags:
+        for e in errors:
+            print("誤り:", e)
+        if errors:
+            print("誤りがあるので書き換えなかった")
+            return 1
+        n = 0
+        for _where, _label, item in _items(outline):
+            if item.get("state") == "proposed":
+                item["state"] = "agreed"
+                n += 1
+        if n:
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(outline, f, ensure_ascii=False, indent=2)
+                f.write("\n")
+        print(f"{n} 項目を agreed にした: {path}")
+        return 0
+    if "--json" in flags:
+        print(json.dumps({"file": path, "errors": errors, "warnings": warnings,
+                          "proposed": proposed_items(outline), "open": _open(outline)}, ensure_ascii=False, indent=2))
+    else:
+        for e in errors:
+            print("誤り:", e)
+        for w in warnings:
+            print("警告:", w)
+        if not errors:
+            print("OK")
+    return 1 if errors else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

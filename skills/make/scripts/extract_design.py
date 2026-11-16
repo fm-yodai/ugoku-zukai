@@ -45,12 +45,13 @@ JP_GOOGLE_FONTS = {
 GENERIC = {"sans-serif", "serif", "monospace", "system-ui", "cursive", "inherit", "initial", "ui-sans-serif", "-apple-system", "blinkmacsystemfont"}
 ROLE_HINTS = {
     "bg": ["page-background", "background", "bg", "surface-0", "canvas", "page", "base", "lt1", "paper"],
-    "ink": ["page-text", "foreground", "fg", "text", "ink", "on-background", "on-surface", "dk1", "body", "content"],
+    "ink": ["body", "page-text", "foreground", "fg", "text", "ink", "on-background", "on-surface", "dk1", "content"],   # 本文（text-body）を見出し（text-heading）より先に採る
     "accent": ["primary", "brand", "accent", "main", "key", "accent1", "theme"],
     "muted": ["muted", "secondary-text", "subtle", "gray", "grey", "neutral", "dk2", "caption"],
     "good": ["success", "positive", "green", "ok"],
     "bad": ["danger", "error", "negative", "red", "critical", "destructive", "ng", "stop"],
     "warn": ["warning", "caution", "orange", "amber", "yellow"],
+    "surface": ["surface-card", "card", "panel", "surface-1", "surface"],
 }
 
 
@@ -60,6 +61,7 @@ class Bag:
         self.fonts = defaultdict(lambda: {"count": 0, "sources": set(), "role": set()})
         self.radii = []
         self.notes = []
+        self.shadows = {"none": 0, "some": 0}   # 影のトークンの数（値が none か、それ以外か）
 
     def color(self, rgb, src, name=None, weight=1):
         c = self.colors[UC.hexs(rgb)]
@@ -88,14 +90,39 @@ def split_families(s):
 
 # ---------------- 入力ごとの読み取り ----------------
 def read_json(data, src, bag):
+    # 名前付きのトークン（{"name": "c-base", "value": "#edf0f5"}。claude.ai の Design System の tokens.json の形）は、
+    # 配列の番号ではなく name で呼ぶ。別名（"{c-base}"）は、指している先の値に解く
+    named = {}
+
+    def collect(o):
+        if isinstance(o, dict):
+            if isinstance(o.get("name"), str) and ("value" in o or "$value" in o):
+                named.setdefault(o["name"], o.get("$value", o.get("value")))
+            for v in o.values():
+                collect(v)
+        elif isinstance(o, list):
+            for v in o:
+                collect(v)
+    collect(data)
+
+    def deref(v):
+        for _ in range(8):
+            m = re.fullmatch(r"\{([^{}]+)\}", v.strip()) if isinstance(v, str) else None
+            if not m or m.group(1) not in named:
+                break
+            v = named[m.group(1)]
+        return v
+
     def walk(o, path):
         if isinstance(o, dict):
-            if "$value" in o or "value" in o:
-                v = o.get("$value", o.get("value"))
+            token = "$value" in o or "value" in o
+            if token:
+                v = deref(o.get("$value", o.get("value")))
                 typ = o.get("$type", o.get("type", ""))
-                handle(v, path, typ)
+                own = isinstance(o.get("name"), str)
+                handle(v, [o["name"]] if own else path, typ, path)
             for k, v in o.items():
-                if k not in ("$value", "value"):
+                if k not in ("$value", "value") and not (token and k in ("name", "usage", "description", "$description")):
                     walk(v, path + [str(k)])
         elif isinstance(o, list):
             for i, v in enumerate(o):
@@ -103,13 +130,16 @@ def read_json(data, src, bag):
         else:
             handle(o, path, "")
 
-    def handle(v, path, typ):
+    def handle(v, path, typ, where=None):
         name = ".".join(path)
+        full = ".".join(where or path).lower()   # 置かれている場所（type.families.jp、shadow.tokens.0 など）
         if isinstance(v, str):
             rgb = UC.parse(v)
-            if rgb:
+            if "shadow" in full or "shadow" in name.lower():
+                bag.shadows["none" if v.strip().lower() in ("none", "0", "") else "some"] += 1
+            elif rgb:
                 bag.color(rgb, src, name)
-            elif "font" in name.lower() and ("famil" in name.lower() or typ == "fontFamily"):
+            elif typ == "fontFamily" or ("famil" in full and ("font" in full or full.startswith("type") or ".type" in full)):
                 bag.font(v, src)
             elif "radius" in name.lower() or "rounded" in name.lower():
                 m = re.match(r"([\d.]+)px", v)
@@ -291,7 +321,9 @@ def hint_score(names, role):
     for n in names:
         ln = n.lower()
         for i, h in enumerate(ROLE_HINTS[role]):
-            if re.search(rf"(^|[.\-_ /]){re.escape(h)}($|[.\-_ /\d])", ln):
+            if ln == h:   # 名前そのものが手がかりの語（accent、background）。accent-warm のような派生より強い
+                s = max(s, 20 - i * 0.5)
+            elif re.search(rf"(^|[.\-_ /]){re.escape(h)}($|[.\-_ /\d])", ln):
                 s = max(s, 10 - i * 0.5)
     return s
 
@@ -319,31 +351,54 @@ def draft_theme(bag, name):
     muted = pick(muted_pool, "muted") if muted_pool else UC.ensure_contrast(UC.mix(ink, bg, 0.4), bg, 4.6)
     acc_pool = [cv for cv in chroma if hint_score(cv[1]["names"], "accent") > 0] or chroma
     accent = pick(acc_pool, "accent") if acc_pool else ((88, 196, 221) if dark else (26, 95, 208))
-    accent = UC.ensure_contrast(accent, bg, 3.2)
+    def fit(c, target=3.2):
+        """背景とのコントラストが足りない色は、デザインにある同じ色相の色を先に探し、なければ色相を保って明るさを動かす"""
+        if UC.contrast(c, bg) >= target:
+            return c
+        h = UC.hls(c)[0]
+        made = UC.ensure_contrast(c, bg, target)
+        # デザインの色を採るのは、計算で動かした色に近いときだけ（青の代わりに紺を採るような、別の色への置き換えはしない）
+        alts = [d for d, _ in chroma if abs(((UC.hls(d)[0] - h + 0.5) % 1) - 0.5) <= 0.04 and UC.contrast(d, bg) >= target and UC.delta_e(d, made) <= 22]
+        return min(alts, key=lambda d: UC.delta_e(d, made)) if alts else made
+    accent = fit(accent, 4.6)   # 注記やラベルの文字に使うので、check_theme.py の 4.5 を満たすところまで寄せる
 
-    def semantic(role, hue, default):
+    # 意味の色（good / bad / warn）も、デザインにある色だけで作る。名前（success・error など）か、近い色相（緑・赤・橙）の色がデザインにあればそれ。
+    # なければ緑や赤を足さず、good = 強調色と別の有彩色（なければ強調色）、bad = 補足の色（グレーアウト）、warn = 強調色、で言い分ける
+    own_semantic = set()   # デザインが意味の色として持っていたもの（役割の色には回さない）
+
+    def semantic(role, hue, fallback):
         named = [cv for cv in chroma if hint_score(cv[1]["names"], role) > 0]
-        if named:
-            return UC.ensure_contrast(pick(named, role), bg, 3.2)
         near = [cv for cv in chroma if abs(((UC.hls(cv[0])[0] - hue + 0.5) % 1) - 0.5) < 0.05]
-        if near:
-            return UC.ensure_contrast(max(near, key=lambda cv: cv[1]["count"])[0], bg, 3.2)
-        return UC.ensure_contrast(default, bg, 3.2)
-    good = semantic("good", 0.36, (30, 138, 76))
-    bad = semantic("bad", 0.01, (201, 54, 43))
-    warn = semantic("warn", 0.1, (230, 160, 0))
-    # 役割の色: 強調色から始め、拾えた有彩色を色差の大きい順に足す。足りなければ色相を回して作る
-    roles_order = ["actor", "process", "store", "external"]
+        if named or (near and role != "warn"):
+            c = fit(pick(named, role) if named else max(near, key=lambda cv: cv[1]["count"])[0])
+            own_semantic.add(c)
+            return c
+        return fallback()
+    second = sorted((cv for cv in chroma if UC.delta_e(fit(cv[0]), accent) > 28), key=lambda cv: -cv[1]["count"])
+    good = semantic("good", 0.36, lambda: fit(second[0][0]) if second else accent)
+    bad = semantic("bad", 0.01, lambda: muted)
+    if UC.delta_e(good, bad) < 20:   # 見分けられないときは、bad を本文寄りの灰色にする
+        bad = UC.ensure_contrast(UC.mix(muted, ink, 0.5), bg, 4.5)
+    warn = semantic("warn", 0.1, lambda: accent)
+    # 役割の色（図の箱の色）は、デザインにある色だけで作る。強調色から始め、デザインの有彩色、次に無彩色を、色差の大きい順に足す。
+    # それでも 4 色に足りないときだけ、色相を回して作る（check_theme.py --design が「デザインにない色」と知らせる）。
+    # 何も書かない箱は process になるので、process にデザインの主色（強調色）を当てる
+    roles_order = ["process", "actor", "store", "external"]
     chosen = [accent]
-    semantic_names = lambda names: any(hint_score(names, r) > 0 for r in ("good", "bad", "warn", "ink", "bg"))  # noqa: E731
-    role_pool = [(c, v) for c, v in chroma if 0.2 < UC.hls(c)[1] < 0.85 and not semantic_names(v["names"])
-                 and UC.delta_e(c, ink) > 18 and UC.delta_e(c, bg) > 18 and min(UC.delta_e(c, x) for x in (good, bad)) > 20]
-    for c, _ in sorted(role_pool, key=lambda cv: -cv[1]["count"]):
-        c2 = UC.ensure_contrast(c, bg, 3.2)
-        if all(UC.delta_e(c2, x) > 28 for x in chosen):
-            chosen.append(c2)
-        if len(chosen) >= 4:
-            break
+    semantic_names = lambda names: any(hint_score(names, r) > 0 for r in ("good", "bad", "warn"))  # noqa: E731
+
+    def usable(c, v):
+        return (not semantic_names(v["names"]) and UC.delta_e(c, bg) > 18 and UC.delta_e(fit(c), ink) > 8
+                and all(UC.delta_e(c, x) > 20 for x in own_semantic))
+    for pool, gap in ((chroma, 28), (neutral, 20)):
+        for c, v in sorted(pool, key=lambda cv: -cv[1]["count"]):
+            if len(chosen) >= 4:
+                break
+            if not usable(c, v):
+                continue
+            c2 = fit(c)
+            if UC.contrast(c2, bg) >= 3 and all(UC.delta_e(c2, x) > gap for x in chosen):
+                chosen.append(c2)
     h, l, s = UC.hls(accent)
     for rot in (0.42, 0.11, 0.75, 0.25, 0.58):
         if len(chosen) >= 4:
@@ -363,11 +418,16 @@ def draft_theme(bag, name):
         stack.append(f'"{fam}"')
     if jp and jp != fam:
         stack.append(f'"{jp}"')
-    stack += ['"Noto Sans JP"', '"Hiragino Sans"', '"Yu Gothic"', "sans-serif"]
+    stack += [f for f in ('"Noto Sans JP"', '"Hiragino Sans"', '"Yu Gothic"', "sans-serif") if f not in stack]
     css_fams = [jp or "Noto Sans JP"] + (["Noto Sans JP"] if jp and jp != "Noto Sans JP" else [])
     css = "https://fonts.googleapis.com/css2?" + "&".join("family=" + f.replace(" ", "+") + ":wght@400;500;700" for f in dict.fromkeys(css_fams)) + "&display=swap"
     radius = sorted(bag.radii)[len(bag.radii) // 2] if bag.radii else 8
     surface = UC.mix(bg, ink, 0.07)
+    # 面の色（カードやパネル）が名前で分かれば、それを使う（背景と同じ色・背景から離れすぎた色は面にしない）
+    surf_named = [cv for cv in cols if hint_score(cv[1]["names"], "surface") > 0 and cv[0] != bg and UC.contrast(cv[0], bg) < 1.6]
+    if surf_named:
+        surface = pick(surf_named, "surface")
+    no_shadow = bag.shadows["none"] > 0 and bag.shadows["some"] == 0   # 影のトークンがどれも none
     theme = {
         "name": name, "label": f"{name} に合わせる", "mode": "dark" if dark else "light",
         "colors": {
@@ -377,11 +437,33 @@ def draft_theme(bag, name):
         },
         "font": {"family": ", ".join(stack), "weight": 400, "bold": 700, "css": css},
         "shape": {"radius": max(0, min(18, radius)), "stroke": 2.2 if not dark else 2.6, "fill": "tint" if dark else "solid",
-                  "fillAlpha": 0.14, "fillMix": 0.12, "edgeWidth": 2.1, "glow": False, "shadow": not dark},
+                  "fillAlpha": 0.14, "fillMix": 0.12, "edgeWidth": 2.1, "glow": False, "shadow": not dark and not no_shadow},
         "subtitle": {"bg": "rgba(0,0,0,0.62)" if dark else UC.hexs(UC.mix(bg, (255, 255, 255), 0.6)) + "f0", "ink": UC.hexs(ink)},
+        **inverse_parts(cols, bg, dark),
         "derived_from": sorted({s for v in bag.colors.values() for s in v["sources"]}),
     }
     return theme
+
+
+INVERSE_HINTS = ["inverse", "inverted", "navy", "dark", "cover", "chapter", "primary-dark", "footer", "header"]
+
+
+def inverse_parts(cols, bg, dark):
+    """字幕の帯と章扉（題の札の場面の地）の下書き。明るいデザインに、反転面に使う暗い色（紺や黒に近い色）があれば、その色を当てる。
+    なければ何も足さない（字幕は薄い帯のまま、章扉は通常の地）。決めるのは Claude（references/themes.md）"""
+    if dark:
+        return {}
+    pool = [(c, v) for c, v in cols if UC.contrast(c, (255, 255, 255)) >= 10 and UC.contrast(c, bg) >= 7]
+
+    def score(cv):
+        names = [n.lower() for n in cv[1]["names"]]
+        hint = max((len(INVERSE_HINTS) - i for i, h in enumerate(INVERSE_HINTS) if any(h in n for n in names)), default=0)
+        return (hint, UC.saturation(cv[0]) >= 0.18, cv[1]["count"])
+    named = [cv for cv in pool if score(cv)[0] > 0]
+    if not named:
+        return {}
+    inv = UC.hexs(max(named, key=score)[0])
+    return {"subtitle": {"bg": inv, "ink": "#ffffff"}, "chapter": {"bg": inv, "ink": "#ffffff"}}
 
 
 def main():
@@ -404,6 +486,8 @@ def main():
                           for h, v in bag.colors.items()), key=lambda x: -x["count"])[:40],
         "fonts": [{"family": f, "count": v["count"], "role": sorted(v["role"]), "sources": sorted(v["sources"])} for f, v in sorted(bag.fonts.items(), key=lambda kv: -kv[1]["count"])],
         "radius": sorted(bag.radii)[len(bag.radii) // 2] if bag.radii else None,
+        # 影のトークン: none = どれも「影なし」、some = 影がある、None = 影のトークンがない（check_theme.py --design が見る）
+        "shadow": "none" if bag.shadows["none"] and not bag.shadows["some"] else "some" if bag.shadows["some"] else None,
         "notes": bag.notes,
     }
     json.dump(report, open(a.report, "w", encoding="utf-8"), ensure_ascii=False, indent=2)

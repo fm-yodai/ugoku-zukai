@@ -3,8 +3,9 @@
   "use strict";
   const { clamp, mix, smooth, ease } = UZ;
 
-  UZ.FORMAT = "ugoku-zukai/2";
-  UZ.VERBS = ["show", "hide", "focus", "unfocus", "pulse", "mark", "unmark", "trace", "reply", "note", "badge", "relabel", "tint", "move", "custom"];
+  UZ.FORMATS = ["ugoku-zukai/2", "ugoku-zukai/3"];   // /2 = 場面が図を指す形だけ。/3 = スライドも使える
+  UZ.FORMAT = "ugoku-zukai/3";
+  UZ.VERBS = ["show", "hide", "focus", "unfocus", "blur", "unblur", "pulse", "mark", "unmark", "trace", "reply", "note", "badge", "relabel", "tint", "move", "resize", "custom"];
   const MARK_RE = /\{([A-Za-z0-9_]+)\}/g;
 
   // ---- 字幕の文と印 ----
@@ -60,7 +61,8 @@
   };
 
   // ---- 動作の既定の長さ ----
-  const DUR = { show: 0.7, hide: 0.5, focus: 0.6, unfocus: 0.6, pulse: 0.8, mark: 0.5, unmark: 0.4, trace: 1.0, reply: 0.8, note: 0.6, badge: 0.5, relabel: 0.6, tint: 0.6, move: 1.0, custom: 2.0 };
+  const LABEL_HOLD = 1.0;   // 点の札を見せておく秒数（この間、点は動かない）
+  const DUR = { show: 0.7, hide: 0.5, focus: 0.6, unfocus: 0.6, blur: 0.6, unblur: 0.6, pulse: 0.8, mark: 0.5, unmark: 0.4, trace: 2.0, reply: 0.8, note: 0.6, badge: 0.5, relabel: 0.6, tint: 0.6, move: 1.0, resize: 0.9, custom: 2.0 };
   const STAGGER = 0.22;
 
   const verbOf = a => UZ.VERBS.find(v => Object.prototype.hasOwnProperty.call(a, v));
@@ -68,7 +70,7 @@
 
   // ================= 組み立て =================
   UZ.build = async function (sb, theme, timeline, opts = {}) {
-    const S = UZ.styleOf(theme);
+    const S = UZ.styleOf(theme), S0 = S;
     const errors = [], warnings = [];
     const err = (m) => errors.push(m), warn = (m) => warnings.push(m);
     const v = UZ.validate(sb);
@@ -76,37 +78,77 @@
     if (errors.length) return { errors, warnings };
     timeline = timeline || UZ.estimateTimeline(sb);
     const TL = Object.fromEntries(timeline.lines.map(l => [l.id, l]));
+    // 時刻表と台本の行が食い違っていたら、先へ進まない（合成した後に行を足した・消した。そのまま描くと、ない行を引いて止まる）
+    const lineIds = new Set();
+    for (const sc of sb.scenes) for (const ln of sc.lines) lineIds.add(ln.id);
+    for (const id of lineIds) if (!TL[id]) err(`行 ${id}: 時刻表にない（台本を直したら tts.py をもう一度実行する）`);
+    for (const l of timeline.lines) if (!lineIds.has(l.id)) err(`行 ${l.id}: 時刻表にあるが台本にない（合成した後に行を消した）。tts.py をもう一度実行する`);
+    if (errors.length) return { errors, warnings };
 
     // ---- 場面ごとの配置区画 ----
+    const FIGS = UZ.figuresOf(sb);   // figures と、スライドの中で宣言した部品
+    const slides = {};
     const scenes = sb.scenes.map(sc => {
-      const figs = asList(sc.figure);
-      const header = sc.title || (figs.length === 1 && sb.figures[figs[0]].type !== "title" ? sb.figures[figs[0]].title : "") || "";
-      const B = UZ.AREA.body;
-      const ratio = sc.split || 0.56, gap = 40;
-      const areas = figs.length === 1 ? [{ ...B }]
-        : [{ x: B.x, y: B.y, w: (B.w - gap) * ratio, h: B.h }, { x: B.x + (B.w - gap) * ratio + gap, y: B.y, w: (B.w - gap) * (1 - ratio), h: B.h }];
+      const P = UZ.sceneParts(sb, sc);   // スライドを指す場面は、部品 = 図、区画 = 区画の矩形
+      const figs = P.figs, header = P.header, areas = P.areas;
+      if (P.slide) {
+        areas.forEach((r, i) => { if (r.w < 40 || r.h < 40) err(`スライド「${P.slide}」: 部品「${figs[i]}」の区画が小さすぎる（フレームの中に置くなら、フレームの行か列を増やす）`); });
+        const sl = slides[P.slide] || (slides[P.slide] = { id: P.slide, figs, transient: P.parts.filter(p => p.transient).map(p => p.id), complete: sb.slides[P.slide].start === "complete", scenes: [] });
+        sl.scenes.push(sc.id);
+      }
       const captions = [];
       figs.forEach((fid, i) => {
-        const f = sb.figures[fid];
-        if (f.title && f.title !== header && f.type !== "title") {
+        const f = FIGS[fid];
+        // スライドでは、図の題を図の上に出さない（見出しとテキストの部品がその役をする）
+        if (!P.slide && f.title && f.title !== header && f.type !== "title") {
           captions.push({ fig: fid, text: f.title, x: areas[i].x + areas[i].w / 2, y: areas[i].y + 12 });
           areas[i] = { ...areas[i], y: areas[i].y + 36, h: areas[i].h - 36 };
         }
       });
-      return { id: sc.id, figs, header, areas, captions, lines: sc.lines };
+      // 場面の地: 題の札か目次だけの場面は、テーマに chapter があれば暗い地（章扉）。それ以外は通常の地
+      const tones = figs.map(fid => UZ.titleTone(FIGS[fid], theme));
+      if (figs.length > 1 && tones.includes("dark") && !(P.slide && sb.slides[P.slide].tone === "dark")) err(`場面 ${sc.id}: 題の札や目次を他の図と並べるときは、その図に tone: "light" と書く（暗い地は題の札か目次だけの場面で使う）`);
+      // スライドの地: tone: "dark" なら、テーマに chapter があれば暗い地（部品も暗い地の色で組む）
+      const slideDark = P.slide && sb.slides[P.slide].tone === "dark" && theme.chapter;
+      return { id: sc.id, chapter: sc.chapter, figs, header, areas, captions, lines: sc.lines, tone: slideDark ? "dark" : figs.length === 1 ? tones[0] : "light", slideDark: !!slideDark, slide: P.slide, statement: P.statement };
     });
 
-    // ---- 図の配置（最初に出る場面の区画で 1 回だけ）----
+    if (errors.length) return { errors, warnings };
+    // 画像は、道具が先に読み込んで渡す（opts.assets。node は assets.cjs、組み立ては uz_assets.py）
+    const assets = opts.assets || {};
+    for (const [fid, f] of Object.entries(FIGS)) if (f.type === "image" && !assets[f.src]) err(`図「${fid}」: 画像「${f.src}」が読み込まれていない`);
+    if (errors.length) return { errors, warnings };
+    const credits = [];
+    for (const f of Object.values(FIGS)) if (f.type === "image" && typeof f.credit === "string" && f.credit && !credits.includes(f.credit)) credits.push(f.credit);
+
+    // ---- 図の配置（最初に出る場面の区画で 1 回だけ。色も、その場面の地で決まる）----
     const figs = {};
+    const SD = UZ.darkStyleOf(S);
     for (const sc of scenes) {
       for (let i = 0; i < sc.figs.length; i++) {
         const fid = sc.figs[i];
         if (figs[fid]) continue;
-        const f = sb.figures[fid];
-        const L = await UZ.FIG[f.type].layout(f, S, { area: sc.areas[i], tryBoth: !f.direction });
+        const f = FIGS[fid];
+        const S = sc.slideDark ? SD : S0;
+        const A = sc.areas[i];
+        let L = null;
+        // スライドの部品は、区画に合わせて組む（図が fill に対応していれば。fit: "content" で止める）。
+        // 文字の倍率 k の候補（FILL_K）のうち、区画に収まり、折り返しの総数（図が返す lineCount）が k = 1 のときより増えない、一番大きい k を採る。
+        // k = 1 でも収まらなければ、今までどおり組んで縮める
+        if (sc.slide && UZ.FIG[f.type].fill && f.fit !== "content") {
+          const fits = [];
+          for (const k of UZ.FILL_K) {
+            const T = await UZ.FIG[f.type].layout(f, S, { area: A, fill: { w: A.w, h: A.h, k }, assets });
+            if (T.w <= A.w + 0.5 && T.h <= A.h + 0.5) fits.push({ k, T });
+          }
+          const base = fits.find(x => x.k === 1);
+          const pick = fits.find(x => !base || x.T.lineCount == null || x.T.lineCount <= base.T.lineCount);
+          if (pick) L = { ...pick.T, maxScale: 1, fillK: pick.k };
+        }
+        if (!L) L = await UZ.FIG[f.type].layout(f, S, { area: A, tryBoth: !f.direction, assets });
         const items = {};
         for (const it of L.items) { it.fig = fid; it.key = `${fid}/${it.id}`; items[it.id] = it; }
-        figs[fid] = { id: fid, type: f.type, spec: f, w: L.w, h: L.h, items, order: L.order, autoShow: !!L.autoShow, fixed: !!L.fixed, extra: L };
+        figs[fid] = { id: fid, type: f.type, spec: f, w: L.w, h: L.h, items, order: L.order, autoShow: !!L.autoShow, fixed: !!L.fixed, extra: L, dark: !!sc.slideDark };
       }
     }
     // ---- id の解決 ----
@@ -114,7 +156,7 @@
       let fid = null, id = ref;
       if (typeof ref !== "string") { err(`${ctxv}: 対象は文字列で書く（${JSON.stringify(ref)}）`); return null; }
       if (ref.includes("/")) [fid, id] = ref.split("/");
-      if (figs[id] && !fid) return { fig: id, whole: true };
+      if (!fid && sc.figs.includes(id) && figs[id]) return { fig: id, whole: true };   // 図（部品）の全体。この場面にある図だけ
       const cands = (fid ? [fid] : sc.figs).filter(f => figs[f] && figs[f].items[id]);
       if (!cands.length) {
         if (fid && figs[fid] && id === "dot") return { fig: fid, id };
@@ -122,6 +164,19 @@
       }
       if (cands.length > 1) { err(`${ctxv}: 「${ref}」が複数の図にある。「図/id」で書く（${cands.join(", ")}）`); return null; }
       return { fig: cands[0], id };
+    }
+    // 点（dot:<名前>）と注記（note:<id>）は、trace と note が出した後でだけ指せる。
+    // 返すもの: 部品のキー / null = 誤り（知らせた）/ undefined = 点でも注記でもない
+    function extraKey(sc, ref, ctxv) {
+      if (typeof ref !== "string") return undefined;
+      const [fid, id] = ref.includes("/") ? ref.split("/") : [null, ref];
+      if (!/^(dot|note):/.test(id)) return undefined;
+      const pool = id.startsWith("dot:") ? extras.dots : extras.notes;
+      const hit = (fid ? [fid] : sc.figs).map(f => `${f}/${id}`).filter(k => pool[k]);
+      if (hit.length === 1) return hit[0];
+      if (hit.length > 1) err(`${ctxv}: 「${ref}」が複数の図にある。「図/${id}」で書く`);
+      else err(`${ctxv}: 「${ref}」はまだ出ていない（${id.startsWith("dot:") ? "trace" : "note"} で出した後に消す）`);
+      return null;
     }
     // 表示・強調の対象を部品の列に広げる（図ごと・行・カード・枠 → 中身も）
     function expand(r) {
@@ -143,14 +198,24 @@
     const itemByKey = {};
     for (const F of Object.values(figs)) for (const it of Object.values(F.items)) itemByKey[it.key] = it;
     const dotState = {};   // 点の今の位置（台本を読みながら追う）
+    const sizeState = {};  // 大きさを変えた箱の今の形（resize を重ねたとき、前の形から続ける）
 
     for (const sc of scenes) {
       const first = TL[sc.lines[0].id];
       sc.start = Math.max(0, first.start - 0.35);
-      for (const fid of sc.figs) if (figs[fid].autoShow) acts.push({ verb: "show", keys: figs[fid].order.map(id => figs[fid].items[id].key), start: sc.start + 0.25, dur: 0.8, each: 0.8, stagger: 0.35, end: sc.start + 1.2 + 0.35 * figs[fid].order.length });
+      // 最初から完成形で出すスライド（start: "complete"）: 最初に使う場面の頭で、完成形に含める部品をすべて出す
+      const sl = sc.slide && slides[sc.slide];
+      if (sl && sl.complete && sl.scenes[0] === sc.id) {
+        const keys = sl.figs.filter(fid => !sl.transient.includes(fid) && !figs[fid].autoShow).flatMap(fid => expand({ fig: fid, whole: true }));
+        if (keys.length) acts.push({ verb: "show", keys, start: sc.start + 0.25, dur: 0.5, each: 0.5, stagger: 0.04, end: sc.start + 0.75 + 0.04 * keys.length });
+      }
+      // 場面の頭で自動で出す図（題の札・目次）。項目の多い図は間隔を詰める（図が autoStagger で決める）
+      for (const fid of sc.figs) if (figs[fid].autoShow) {
+        const st = figs[fid].extra.autoStagger ?? 0.35;
+        acts.push({ verb: "show", keys: figs[fid].order.map(id => figs[fid].items[id].key), start: sc.start + 0.25, dur: 0.8, each: 0.8, stagger: st, end: sc.start + 1.2 + st * figs[fid].order.length });
+      }
       for (const ln of sc.lines) {
         const tl = TL[ln.id];
-        if (!tl) { err(`行 ${ln.id}: 時刻表にない（台本を直したら tts.py をもう一度実行する）`); continue; }
         if (tl.text != null && tl.text !== UZ.parseText(ln.read || ln.text).text) { err(`行 ${ln.id}: 音声が古い（合成した後に文が変わった）。tts.py をもう一度実行する`); continue; }
         let cursor = tl.start + 0.05;
         (ln.do || []).forEach((a, ai) => {
@@ -164,9 +229,17 @@
           const act = { verb, start, line: ln.id, scene: sc.id, a };
           let dur = a.dur ?? DUR[verb];
           const val = a[verb];
-          if (verb === "show" || verb === "hide" || verb === "pulse" || verb === "focus") {
+          if (verb === "show" || verb === "hide" || verb === "pulse" || verb === "focus" || verb === "blur") {
             const keys = [];
-            for (const ref of asList(val)) { const r = resolve(sc, ref, where); if (r) keys.push(...expand(r)); }
+            for (const ref of asList(val)) {
+              const x = extraKey(sc, ref, where);   // 点（dot:<名前>）と注記（note:<id>）
+              if (x !== undefined) {
+                if (x && verb !== "hide") err(`${where}: 点と注記（${ref}）に使えるのは hide だけ`);
+                else if (x) { keys.push(x); delete dotState[x]; }   // 消した点は、次の trace で 1 つ目のノードにもう一度現れる
+                continue;
+              }
+              const r = resolve(sc, ref, where); if (r) keys.push(...expand(r));
+            }
             act.keys = keys;
             if (verb === "show" || verb === "hide") {
               act.stagger = a.stagger ?? (keys.length > 1 ? STAGGER : 0);
@@ -174,6 +247,9 @@
               dur = act.each + act.stagger * Math.max(0, keys.length - 1);
             }
             if (verb === "focus") act.figsOf = [...new Set(keys.map(k => k.split("/")[0]))];
+            if (verb === "blur") act.figsOf = sc.figs;   // ぼかしは、対象のない図も含めて場面の全部の図に及ぶ
+          } else if (verb === "unblur") {
+            act.figsOf = val === true || val == null ? sc.figs : asList(val);
           } else if (verb === "unfocus") {
             act.figsOf = val === true || val == null ? sc.figs : asList(val);
           } else if (verb === "mark" || verb === "unmark") {
@@ -197,25 +273,28 @@
             const F = figs[fid], did = a.dot || "dot", key = `${fid}/dot:${did}`;
             if (!extras.dots[key]) extras.dots[key] = { key, fig: fid, id: did };
             let cur = dotState[key];
-            const pts = [];
-            let startNode = path[0];
             if (cur && cur.node !== path[0]) {
               err(`${where}: 点「${did}」はいま ${cur.node} にいる。経路は ${cur.node} から書く`); return;
             }
-            pts.push(F.items[startNode].dotAt);
-            let ok = true, segs = 0;
+            // 点は辺の上だけに出る（辺の始まりから終わりまで。角は丸める）。箱にいる間は、点の代わりに箱を強調する
+            const legs = [];
+            let ok = true;
             for (let i = 1; i < path.length; i++) {
               const e = F.items[`${path[i - 1]}>${path[i]}`];
               if (!e) { err(`${where}: 辺 ${path[i - 1]}>${path[i]} が宣言されていない（点は宣言した辺の上だけを通る）`); ok = false; break; }
-              pts.push(...(F.extra.direct ? e.pts : enterExit(F.items[path[i - 1]], e.pts, F.items[path[i]])));
-              pts.push(F.items[path[i]].dotAt);
-              segs++;
+              const lp = roundCorners(dedupe(e.pts), 30);
+              legs.push({ poly: UZ.withLengths(lp), from: F.items[path[i - 1]].key, to: F.items[path[i]].key });
             }
             if (!ok) return;
-            act.key = key; act.poly = UZ.withLengths(dedupe(pts)); act.appear = !cur;
+            act.key = key; act.legs = legs; act.appear = !cur;
+            act.node = F.items[path[0]].key; act.at = F.items[path[0]].dotAt; act.endAt = F.items[path[path.length - 1]].dotAt; act.color = S.warn;
             act.label = a.label; act.fig = fid;
-            dur = a.dur ?? Math.max(0.6, DUR.trace * segs);
-            dotState[key] = { node: path[path.length - 1], last: path };
+            // 札は、点が何を表すかを最初に 1 回だけ見せる（同じ言葉の札は、その後の trace では出さない）。
+            // 札を見せる間（LABEL_HOLD 秒）は、点は動かずに箱を強調し、札が消えてから動き出す
+            act.labelNew = a.label != null && a.label !== (cur ? cur.label : undefined);
+            act.hold = act.labelNew ? LABEL_HOLD : act.appear ? 0.35 : 0;
+            dur = a.dur ?? Math.max(0.6, DUR.trace * legs.length + (act.labelNew ? LABEL_HOLD : 0));
+            dotState[key] = { node: path[path.length - 1], last: path, label: a.label != null ? a.label : (cur ? cur.label : undefined) };
           } else if (verb === "reply") {
             const path = asList(val);
             const fid = a.fig || sc.figs.find(f => path.every(p => figs[f].items[p] && figs[f].items[p].dotAt));
@@ -243,7 +322,11 @@
           } else if (verb === "relabel" || verb === "tint") {
             act.keys = [];
             for (const ref of asList(val)) { const r = resolve(sc, ref, where); if (r && !r.whole) act.keys.push(`${r.fig}/${r.id}`); }
-            act.text = a.text; act.color = a.as ? S.role(a.as) : S.accent;
+            act.text = a.text;
+            // as: "off" は、2×2 の象限を「該当しない」のグレーにする
+            act.off = verb === "tint" && a.as === "off";
+            if (act.off && act.keys.some(k => !itemByKey[k] || !itemByKey[k].quad)) { err(`${where}: as: "off" は 2×2（matrix）の象限だけに使える`); return; }
+            act.color = act.off ? S.muted : a.as ? S.role(a.as) : S.accent;
             if (verb === "relabel" && a.text == null) err(`${where}: text が要る`);
           } else if (verb === "move") {
             const r = resolve(sc, val, where);
@@ -259,6 +342,28 @@
             if (a.by) to = [c0[0] + a.by[0], c0[1] + a.by[1]];
             if (!to) { err(`${where}: to（座標か id）か by が要る`); return; }
             act.key = it.key; act.delta = [to[0] - c0[0], to[1] - c0[1]];
+          } else if (verb === "resize") {
+            const r = resolve(sc, val, where);
+            if (!r) return;
+            const it = r.whole ? null : figs[r.fig].items[r.id];
+            if (!it || it.kind !== "box" || ["diamond", "poly", "store"].includes(it.shape) || it.header || it.life) { err(`${where}: 大きさを変えられるのは、四角と楕円の箱だけ（「${val}」は違う）`); return; }
+            const to = a.to && typeof a.to === "object" && !Array.isArray(a.to) ? a.to : null;
+            const sc2 = a.scale == null ? null : Array.isArray(a.scale) ? a.scale : [a.scale, a.scale];
+            if ((!to || (to.w == null && to.h == null)) && !sc2) { err(`${where}: to（{ w, h } のどちらかか両方）か scale（倍率）が要る`); return; }
+            const nums = [...(to ? [to.w, to.h].filter(v => v != null) : []), ...(sc2 || [])];
+            if (nums.some(v => typeof v !== "number" || !(v > 0)) || (sc2 && sc2.length !== 2)) { err(`${where}: 大きさと倍率は正の数で書く`); return; }
+            const AN = { center: [0.5, 0.5], left: [0, 0.5], right: [1, 0.5], top: [0.5, 0], bottom: [0.5, 1], "top-left": [0, 0], "top-right": [1, 0], "bottom-left": [0, 1], "bottom-right": [1, 1] };
+            const an = AN[a.anchor || "center"];
+            if (!an) { err(`${where}: anchor は ${Object.keys(AN).join(" / ")} のどれか`); return; }
+            if (a.text != null && !["center", "top"].includes(a.text)) { err(`${where}: text は center（箱の中心に付いていく）か top（箱の上に寄せる）`); return; }
+            const cur = sizeState[it.key] || { rect: { x: it.x, y: it.y, w: it.w, h: it.h }, textOff: [0, 0] };
+            const w = to && to.w != null ? to.w : cur.rect.w * (sc2 ? sc2[0] : 1), h = to && to.h != null ? to.h : cur.rect.h * (sc2 ? sc2[1] : 1);
+            const rect = { x: cur.rect.x + (cur.rect.w - w) * an[0], y: cur.rect.y + (cur.rect.h - h) * an[1], w, h };
+            // 文字は箱の中心に付いていく。text: "top" なら、新しい箱の上に寄せる（中に別の箱を入れるとき）
+            const textOff = [rect.x + rect.w / 2 - (it.x + it.w / 2), rect.y + rect.h / 2 - (it.y + it.h / 2)];
+            if (a.text === "top" && it.texts && it.texts.length) textOff[1] = rect.y + 14 - Math.min(...it.texts.map(t => t.bbox.y));
+            act.key = it.key; act.from = cur.rect; act.to = rect; act.textFrom = cur.textOff; act.textTo = textOff;
+            sizeState[it.key] = { rect, textOff };
           } else if (verb === "custom") {
             const src = sb.custom && sb.custom[val];
             if (!src) { err(`${where}: custom「${val}」が台本の custom にない`); return; }
@@ -266,7 +371,7 @@
             extras.customs.push({ key, name: val, src, fig: a.fig || sc.figs[0] });
             act.key = key;
           }
-          act.dur = dur; act.end = start + dur;
+          act.dur = dur; act.end = start + dur; act.line = ln.id;
           acts.push(act);
           cursor = act.end;
           if (act.end > tl.start + tl.dur + 1.2) warn(`${where}: 動きが行の終わりより ${(act.end - tl.start - tl.dur).toFixed(1)} 秒はみ出す（次の行の声に重なる）`);
@@ -311,8 +416,14 @@
     }
     const place = (fid, area) => {
       const F = figs[fid], w = F.x1 - F.x0, h = F.y1 - F.y0;
-      const s = Math.min(area.w / w, area.h / h, F.fixed ? 10 : (F.type === "title" ? 1 : 1.3));
-      return { s, ox: area.x + (area.w - w * s) / 2 - F.x0 * s, oy: area.y + (area.h - h * s) / 2 - F.y0 * s };
+      // 拡大の上限: 図が決めていればそれ（テキストは 1 = 文字の大きさを保つ）
+      const s = Math.min(area.w / w, area.h / h, F.extra.maxScale ?? (F.fixed ? 10 : (F.type === "title" ? 1 : 1.3)));
+      // 区画の中の揃え: 部品の valign・halign。なければ図の既定（テキストは上）、それもなければ中央
+      const va = F.spec.valign || F.extra.valign || "middle", ha = F.spec.halign || "center";
+      const dx = area.w - w * s, dy = area.h - h * s;
+      const ox = area.x + (ha === "start" ? 0 : ha === "end" ? dx : dx / 2) - F.x0 * s;
+      const oy = area.y + (va === "top" ? 0 : va === "bottom" ? dy : dy / 2) - F.y0 * s;
+      return { s, ox, oy };
     };
     for (const sc of scenes) sc.place = Object.fromEntries(sc.figs.map((fid, i) => [fid, place(fid, sc.areas[i])]));
     acts.sort((a, b) => a.start - b.start);
@@ -324,23 +435,32 @@
     for (let i = 0; i < scenes.length; i++) scenes[i].end = i + 1 < scenes.length ? scenes[i + 1].start : endCard;
 
     // 一度も出ない図への警告
+    // スライドの部品は、そのスライドを使うどの場面でも出ないときだけ知らせる（場面をまたいで少しずつ出すのは普通の使い方）
+    const shown = fid => acts.some(a => a.verb === "show" && a.keys.some(k => k.startsWith(fid + "/")));
     for (const sc of scenes) for (const fid of sc.figs) {
-      if (figs[fid].autoShow) continue;
+      if (figs[fid].autoShow || sc.slide) continue;
       const any = acts.some(a => a.verb === "show" && a.keys.some(k => k.startsWith(fid + "/")) && a.start < sc.end);
       if (!any) warn(`場面 ${sc.id}: 図「${fid}」を show していない（何も出ない）`);
     }
+    for (const sl of Object.values(slides)) for (const fid of sl.figs) {
+      if (!figs[fid].autoShow && !shown(fid)) warn(`スライド「${sl.id}」: 部品「${fid}」を、どの場面でも show していない（何も出ない）`);
+    }
     const sp = (sb.voice && sb.voice.speaker) ?? UZ.DEFAULT_SPEAKER;
     const credit = sb.credit || (sb.voice && sb.voice.credit) || timeline.credit || `VOICEVOX:${UZ.SPEAKER_NAMES[sp] || "話者 " + sp}`;
-    return { errors, warnings, sb, theme, S, timeline, TL, scenes, figs, acts, itemByKey, duration, endCard, credit, title: sb.title || "" };
+    return { errors, warnings, sb, theme, S, timeline, TL, scenes, figs, slides, assets, credits, acts, itemByKey, duration, endCard, credit, title: sb.title || "" };
   };
 
-  // 箱の中の点の位置 → 辺の始まり … 辺の終わり → 次の箱の中、の折れ線（箱の中は縦・横だけで動く）
-  function enterExit(a, pts, b) {
-    const out = [];
-    const s = pts[0], e = pts[pts.length - 1];
-    out.push([s[0], a.dotAt[1]]);
-    out.push(...pts);
-    out.push([e[0], b.dotAt[1]]);
+  // 折れ線の角を、半径 r ぶん手前から曲線でつなぐ
+  function roundCorners(pts, r) {
+    const out = [pts[0]];
+    for (let i = 1; i < pts.length - 1; i++) {
+      const a = pts[i - 1], p = pts[i], b = pts[i + 1];
+      const la = Math.hypot(a[0] - p[0], a[1] - p[1]), lb = Math.hypot(b[0] - p[0], b[1] - p[1]), d = Math.min(r, la / 2, lb / 2);
+      if (d < 1) { out.push(p); continue; }
+      const p1 = [p[0] + (a[0] - p[0]) / la * d, p[1] + (a[1] - p[1]) / la * d], p2 = [p[0] + (b[0] - p[0]) / lb * d, p[1] + (b[1] - p[1]) / lb * d];
+      for (let k = 0; k <= 6; k++) { const u = k / 6, v = 1 - u; out.push([v * v * p1[0] + 2 * v * u * p[0] + u * u * p2[0], v * v * p1[1] + 2 * v * u * p[1] + u * u * p2[1]]); }
+    }
+    out.push(pts[pts.length - 1]);
     return out;
   }
   function dedupe(pts) {
@@ -419,7 +539,7 @@
   // ================= 時刻 t のコマ =================
   UZ.frame = function (M, t) {
     const st = {};
-    const get = k => st[k] || (st[k] = { show: 0, dim: 1, pulse: 0, tint: null, tintP: 0, text: null, textFrom: null, textP: 1, mark: null, pos: null, off: [0, 0], labelText: null });
+    const get = k => st[k] || (st[k] = { show: 0, dim: 1, blur: 0, pulse: 0, tint: null, tintP: 0, text: null, textFrom: null, textP: 1, mark: null, pos: null, off: [0, 0], labelText: null });
     let badge = { text: "", show: 0, from: "" };
     const customs = {};
     for (const a of M.acts) {
@@ -437,27 +557,61 @@
           }
           break;
         }
+        case "blur": {
+          const set = new Set(a.keys);
+          for (const fid of a.figsOf) for (const it of Object.values(M.figs[fid].items)) {
+            const s = get(it.key); const target = set.has(it.key) || set.has(`${fid}/${it.target}`) || it.kind === "dot" || it.kind === "note" || it.isReply ? 0 : 1;
+            s.blur = mix(s.blur, target, smooth(p));
+          }
+          break;
+        }
+        case "unblur": for (const fid of a.figsOf) for (const it of Object.values(M.figs[fid] ? M.figs[fid].items : {})) { const s = get(it.key); s.blur = mix(s.blur, 0, smooth(p)); } break;
         case "unfocus": for (const fid of a.figsOf) for (const it of Object.values(M.figs[fid] ? M.figs[fid].items : {})) { const s = get(it.key); s.dim = mix(s.dim, 1, smooth(p)); } break;
         case "mark": { const s = get(a.key); if (s.mark && s.mark !== a.kind && s.show > 0) { s.mark = a.kind; s.show = Math.max(0.6, ease(p)); } else { s.mark = a.kind; s.show = Math.max(s.show, ease(p)); } s.markPop = p < 1 ? Math.sin(Math.PI * p) : 0; break; }
         case "unmark": { const s = get(a.key); s.show = Math.min(s.show, 1 - p); break; }
         case "note": get(a.key).show = Math.max(get(a.key).show, smooth(p)); break;
         case "trace": {
-          const s = get(a.key);
-          if (a.appear) s.show = smooth(clamp(p * a.dur / 0.3));
-          else s.show = 1;
-          const q = a.appear ? clamp((t - a.start - 0.25) / Math.max(0.1, a.dur - 0.25)) : p;
-          s.pos = UZ.along(a.poly, ease(q));
+          // 点は辺の上を動く間だけ見える（dotVis）。箱にいる間は、その箱を強調する（heres = 箱ごとの強さ）
+          const s = get(a.key), u0 = t - a.start, n = a.legs.length;
+          s.show = 1; s.heres = {}; s.hereColor = a.color; s.herePop = null;
+          const slice = n ? Math.max(0.1, a.dur - a.hold) / n : 1;
+          const x = n ? clamp((u0 - a.hold) / slice / n) * n : 0;
+          if (!n || x <= 0) {
+            s.pos = a.at.slice(); s.dotVis = 0; s.heres[a.node] = a.appear ? smooth(clamp(u0 / 0.3)) : 1;
+            if (a.labelNew) s.herePop = [a.node, Math.sin(Math.PI * clamp(u0 / 0.8))];   // 札を見せる間に、箱を一度強く見せる
+          } else if (x >= n) { s.pos = a.endAt.slice(); s.dotVis = 0; s.heres[a.legs[n - 1].to] = 1; }
+          else {
+            const i = Math.min(n - 1, Math.floor(x)), lg = a.legs[i], m = clamp((x - i) / 0.9);
+            s.pos = UZ.along(lg.poly, ease(m));
+            s.dotVis = smooth(clamp(m / 0.1)) * (1 - smooth(clamp((m - 0.9) / 0.1)));
+            s.heres[lg.from] = 1 - smooth(clamp(m / 0.3));
+            s.heres[lg.to] = Math.max(s.heres[lg.to] || 0, smooth(clamp((m - 0.75) / 0.25)));
+          }
           if (a.label != null) s.labelText = a.label;
-          s.moving = q > 0 && q < 1;
+          // 札は、止まっている間だけ出る（動き出す前に消える）
+          s.labelShow = a.labelNew ? smooth(clamp(u0 / 0.2)) * (1 - smooth(clamp((u0 - (a.hold - 0.25)) / 0.2))) : 0;
+          s.labelPop = 0;
+          s.moving = s.dotVis > 0;
           break;
         }
         case "reply": get(a.key).show = clamp(p / 0.85); break;
         case "badge": if (a.text) { const was = badge.text; badge = { text: a.text, show: was ? 1 : ease(p), from: was && was !== a.text ? was : "", p: smooth(p) }; } else badge = { text: badge.text, show: Math.min(badge.show, 1 - p), from: "", p: 1 }; break;
         case "relabel": for (const k of a.keys) { const s = get(k); s.textFrom = s.text; s.text = a.text; s.textP = smooth(p); } break;
-        case "tint": for (const k of a.keys) { const s = get(k); s.tintFrom = s.tint; s.tint = a.color; s.tintP = smooth(p); } break;
+        case "tint": for (const k of a.keys) { const s = get(k); s.tintFrom = s.tint; s.tint = a.color; s.tintP = smooth(p); s.tintOff = !!a.off; } break;
         case "move": { const s = get(a.key); const q = ease(p); s.off = [s.off[0] + a.delta[0] * q, s.off[1] + a.delta[1] * q]; break; }
+        case "resize": {
+          const s = get(a.key), q = ease(p);
+          s.rect = p >= 1 ? { ...a.to } : { x: mix(a.from.x, a.to.x, q), y: mix(a.from.y, a.to.y, q), w: mix(a.from.w, a.to.w, q), h: mix(a.from.h, a.to.h, q) };
+          s.textOff = p >= 1 ? a.textTo.slice() : [mix(a.textFrom[0], a.textTo[0], q), mix(a.textFrom[1], a.textTo[1], q)];
+          break;
+        }
         case "custom": customs[a.key] = p; break;
       }
+    }
+    // 点のいる箱の強調（点を消すと、強調も消える）
+    for (const s of Object.values(st)) if (s.heres) {
+      for (const [k, v] of Object.entries(s.heres)) { const ns = get(k); ns.here = Math.max(ns.here || 0, v * s.show); ns.hereColor = s.hereColor; }
+      if (s.herePop) { const ns = get(s.herePop[0]); ns.pulse = Math.max(ns.pulse || 0, s.herePop[1] * s.show); }
     }
     // 場面: 図の出入りと置き場所
     let si = M.scenes.findIndex((sc, i) => t < sc.end || i === M.scenes.length - 1);
@@ -485,8 +639,35 @@
         sub = { id: ln.id, text: UZ.parseText(line.text).text, opacity: o };
       }
     }
+    // 地の暗さ（0 = 通常の地、1 = 章扉の地）。場面の変わり目でなめらかに切り替え、終わりの札では通常の地に戻す
+    const toneOf = s => (s && s.tone === "dark" ? 1 : 0);
+    const dark = mix(prev ? toneOf(prev) : toneOf(sc), toneOf(sc), k) * (1 - endP);
     const header = { text: sc.header, opacity: (prev && prev.header !== sc.header ? k : 1) * (1 - endP), prev: prev && prev.header !== sc.header ? { text: prev.header, opacity: 1 - k } : null };
-    return { t, st, figs: figsF, scene: sc, captions: sc.captions.map(c => ({ ...c, opacity: (prev && prev.figs.includes(c.fig) && prev.captions.some(x => x.text === c.text) ? 1 : k) * (1 - endP) })), header, sub, badge, customs, end: endP };
+    const stSame = prev && prev.statement.join("\n") === sc.statement.join("\n");
+    const statement = { lines: sc.statement, opacity: (prev && !stSame ? k : 1) * (1 - endP), prev: prev && !stSame && prev.statement.length ? { lines: prev.statement, opacity: 1 - k } : null };
+    return { t, st, figs: figsF, scene: sc, statement, captions: sc.captions.map(c => ({ ...c, opacity: (prev && prev.figs.includes(c.fig) && prev.captions.some(x => x.text === c.text) ? 1 : k) * (1 - endP) })), header, sub, badge, customs, end: endP, dark };
+  };
+  // ================= スライドの完成形のコマ =================
+  // 完成形 = 宣言した部品がすべて出た状態。完成形に含めない部品（transient）と、動作で足したもの（印・注記・点・戻りの矢印）は出さない。
+  // 字幕・札はなし。frame() と同じ形で返す（そのスライドを最初に使う場面の区画）。スライドがなければ null
+  UZ.finalFrame = function (M, slideId) {
+    const sl = M.slides && M.slides[slideId];
+    if (!sl) return null;
+    const sc = M.scenes.find(s => s.id === sl.scenes[0]);
+    const st = {}, figsF = {};
+    for (const fid of Object.keys(M.figs)) figsF[fid] = { opacity: 0, place: null };
+    for (const fid of sl.figs) {
+      if (sl.transient.includes(fid)) continue;
+      figsF[fid] = { opacity: 1, place: sc.place[fid] };
+      for (const it of Object.values(M.figs[fid].items)) {
+        if (it.kind === "mark" || it.kind === "note" || it.kind === "dot" || it.isReply) continue;
+        st[it.key] = { show: 1, dim: 1, blur: 0, pulse: 0, tint: null, tintP: 0, text: null, textFrom: null, textP: 1, mark: null, pos: null, off: [0, 0], labelText: null };
+      }
+    }
+    // 大きさを変えた箱（resize）は、変えた後の形で出す（中に入れた部品と重ならないように）
+    for (const a of M.acts) if (a.verb === "resize" && sl.scenes.includes(a.scene) && st[a.key]) { st[a.key].rect = { ...a.to }; st[a.key].textOff = a.textTo.slice(); }
+    return { t: sc.start, st, figs: figsF, scene: sc, statement: { lines: sc.statement, opacity: 1, prev: null }, captions: [],
+      header: { text: sc.header, opacity: 1, prev: null }, sub: null, badge: { text: "", show: 0, from: "" }, customs: {}, end: 0, dark: sc.tone === "dark" ? 1 : 0 };
   };
   const lineCache = new WeakMap();
   function findLine(sb, id) {

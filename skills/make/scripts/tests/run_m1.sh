@@ -3,7 +3,7 @@
 set -u
 cd "$(dirname "$0")/../.."
 fail=0
-for th in player/themes/3b1b.json player/themes/flat.json examples/themes/kumo.json; do
+for th in player/themes/koo.json examples/themes/kumo.json; do
   python3 scripts/check_theme.py "$th" || fail=1
   for sb in examples/*.json; do node scripts/check_storyboard.cjs "$sb" --theme "$th" >/dev/null || { echo "NG: $sb ($th)"; node scripts/check_storyboard.cjs "$sb" --theme "$th"; fail=1; }; done
 done

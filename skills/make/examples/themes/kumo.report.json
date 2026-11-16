@@ -118,5 +118,6 @@
     }
   ],
   "radius": 12.0,
+  "shadow": null,
   "notes": []
 }

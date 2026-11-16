@@ -12,12 +12,14 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 MAKE = os.path.join(ROOT, "skills", "make")
 sys.path.insert(0, os.path.join(MAKE, "scripts"))
 import build_player as BP  # noqa: E402
+import uz_assets  # noqa: E402
 
 SAMPLES = [
+    ("slide-forms", "スライド（言いたいこと・図と文章・定義の囲み・画像）"),
     ("graph-flow", "箱と矢印（業務の流れ）"),
     ("graph-state", "箱と矢印（状態遷移）"),
     ("sequence", "シーケンス図"),
-    ("table-compare", "箇条・比較・表"),
+    ("table-compare", "目次・箇条・比較・表"),
     ("mixed", "2 つの図・下の層"),
     ("proposal-process", "スイムレーン・As-Is/To-Be・ロードマップ"),
     ("proposal-analysis", "ツリー・2×2"),
@@ -25,8 +27,7 @@ SAMPLES = [
     ("proposal-concept", "サイクル・ベン図・ピラミッド"),
 ]
 THEMES = [
-    ("3b1b", os.path.join(MAKE, "player", "themes", "3b1b.json")),
-    ("flat", os.path.join(MAKE, "player", "themes", "flat.json")),
+    ("koo", os.path.join(MAKE, "player", "themes", "koo.json")),
     ("kumo", os.path.join(MAKE, "examples", "themes", "kumo.json")),
 ]
 
@@ -72,8 +73,8 @@ PAGE = r"""<title>ugoku-zukai 見本帳</title>
 </style>
 <div class="wrap">
   <header>
-    <h1>ugoku-zukai 見本帳（M2）</h1>
-    <p>新しい台本の形式で書いた見本を、テーマを切り替えて再生できます。ナレーションは VOICEVOX（春日部つむぎ）で合成し、文中の印 <code>{a}</code> の語を話し始める瞬間に動きが始まります。音が出るのは再生ボタンを押してからです。</p>
+    <h1>ugoku-zukai 見本帳</h1>
+    <p>台本の見本を、テーマを切り替えて再生できます。最初の見本は、スライド（見出し・言いたいこと・区画に並べた図とテキストと画像）の形です。ほかは、スライドに置く図の見本です。ナレーションは VOICEVOX（春日部つむぎ）で合成し、文中の印 <code>{a}</code> の語を話し始める瞬間に動きが始まります。音が出るのは再生ボタンを押してからです。</p>
   </header>
   <div class="pick">
     <div class="row" id="samples"><span>見本</span></div>
@@ -87,12 +88,13 @@ PAGE = r"""<title>ugoku-zukai 見本帳</title>
       <output id="clock">0:00 / 0:00</output>
       <label><input id="subs" type="checkbox" checked> 字幕</label>
     </div>
+    <div class="row" id="finals" hidden><span>完成形</span></div>
     <div class="err" id="err" hidden></div>
   </div>
+  <section class="panel"><h2>行（押すとその行へ）</h2><ul class="lines" id="lines"></ul></section>
   <div class="cols">
     <section class="panel"><h2>台本（storyboard.json）</h2><pre id="json"></pre></section>
     <div style="display:grid;gap:18px;align-content:start;min-width:0">
-      <section class="panel"><h2>行（押すとその行へ）</h2><ul class="lines" id="lines"></ul></section>
       <section class="panel"><h2>検査（プレーヤーと同じ JS で計算）</h2><div id="check"></div></section>
       <section class="panel"><h2>テーマ</h2><div id="theme"></div></section>
     </div>
@@ -166,10 +168,25 @@ const G = /*UZ:DATA*/null;
     const S = G.samples.find(s => s.id === cur.sample), T = G.themes.find(t => t.id === cur.theme);
     $("json").textContent = JSON.stringify(S.storyboard, null, 2);
     try { if (document.fonts) await Promise.race([document.fonts.load(`500 24px ${T.theme.font.family}`), new Promise(r => setTimeout(r, 2000))]); } catch (e) {}
-    const m = await UZ.build(S.storyboard, T.theme, S.timeline || null);
+    const m = await UZ.build(S.storyboard, T.theme, S.timeline || null, { assets: S.assets || {} });
     if (my !== token) return;
     if (m.errors.length) { $("err").textContent = m.errors.join("\n"); $("err").hidden = false; return; }
     M = m; view = new UZ.View($("uz-stage"), M); view.subtitles = $("subs").checked;
+    // スライドの完成形（部品がすべて出た状態）を見るボタン。スライドのない見本では出さない
+    const fin = $("finals");
+    for (const b of fin.querySelectorAll("button")) b.remove();
+    fin.hidden = !Object.keys(M.slides || {}).length;
+    for (const sl of Object.values(M.slides || {})) {
+      const b = document.createElement("button");
+      b.className = "chip"; b.type = "button"; b.textContent = S.storyboard.slides[sl.id].title;
+      b.onclick = () => {
+        if (playing) $("play").click();
+        const orig = UZ.frame, fr = UZ.finalFrame(M, sl.id);
+        UZ.frame = () => fr;   // この 1 回だけ、完成形のコマを描く
+        try { view.render(fr.t); } finally { UZ.frame = orig; }
+      };
+      fin.appendChild(b);
+    }
     // 行の一覧
     const ul = $("lines"); ul.innerHTML = "";
     for (const sc of S.storyboard.scenes) for (const l of sc.lines) {
@@ -204,7 +221,11 @@ def main():
     ap.add_argument("-o", "--out", default=os.path.join(ROOT, "dist", "gallery.html"))
     ap.add_argument("--voice", help="見本ごとの tts.py の出力（DIR/<見本の id>/timeline.json と narration.mp3）。あれば音声つきにする")
     a = ap.parse_args()
-    samples = [{"id": sid, "label": label, "storyboard": json.load(open(os.path.join(MAKE, "examples", f"{sid}.json"), encoding="utf-8"))} for sid, label in SAMPLES]
+    samples = []
+    for sid, label in SAMPLES:
+        path = os.path.join(MAKE, "examples", f"{sid}.json")
+        sb = json.load(open(path, encoding="utf-8"))
+        samples.append({"id": sid, "label": label, "storyboard": sb, "assets": uz_assets.load_assets(path, sb)})   # 画像の部品は埋め込む
     if a.voice:
         import base64
         for smp in samples:

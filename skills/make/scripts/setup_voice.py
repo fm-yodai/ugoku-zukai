@@ -2,8 +2,13 @@
 """VOICEVOX（voicevox_core）を入れる。1 回入れれば、同じ置き場を使い回す（何度実行してもよい）。
 
 使い方: python3 setup_voice.py --agree [--home DIR] [--models 0,1] [--json]
+        python3 setup_voice.py --status [--home DIR] [--json]
   --agree は、ユーザーが VOICEVOX 音声モデルと VOICEVOX ONNX Runtime の利用規約に同意したときだけ付ける。
     規約: https://github.com/VOICEVOX/voicevox_vvm/blob/main/TERMS.txt
+    同意した日時と規約の場所を、置き場の consent.json に記録する（置き場が残る環境では、次から聞かずに済む）。
+  --status は、入っているかと、同意の記録があるかを調べるだけ（何も取らず、何も書かない）。
+    終了コード 0 = 入っていて、今の規約への同意の記録がある（聞かずに使える）。3 = 利用者に聞く必要がある
+    （入っていない・記録がない・記録した後で規約の場所か音声モデルの版が変わった）
   --home   置き場。省くと UZ_VOICE_HOME → ${CLAUDE_PLUGIN_DATA}/voicevox → ~/.cache/ugoku-zukai/voicevox の順
   --models 入れる音声モデル（vvm の番号）。省くと 0（四国めたん・ずんだもん・春日部つむぎ など）
 
@@ -32,6 +37,46 @@ URLS = {
 }
 VVM_URL = "https://github.com/VOICEVOX/voicevox_vvm/releases/download/{ver}/{n}.vvm"
 DICT_DIR = "open_jtalk_dic_utf_8-1.11"
+TERMS_URL = "https://github.com/VOICEVOX/voicevox_vvm/blob/main/TERMS.txt"
+
+
+def record_consent(home, now=None):
+    """同意を置き場に記録する。同じ規約・同じ音声モデルの版の記録がもうあれば、最初の日時を残す"""
+    p = os.path.join(home, "consent.json")
+    if consent_state(home)[0] == "recorded":
+        return
+    with open(p, "w", encoding="utf-8") as f:
+        json.dump({"terms": TERMS_URL, "vvm": VVM_VER, "agreed_at": now or time.strftime("%Y-%m-%dT%H:%M:%S")}, f, ensure_ascii=False, indent=1)
+
+
+def consent_state(home):
+    """(状態, 記録)。状態は recorded = 今の規約への同意の記録がある / changed = 記録の後で規約か版が変わった / none = 記録がない"""
+    try:
+        with open(os.path.join(home, "consent.json"), encoding="utf-8") as f:
+            rec = json.load(f)
+    except (OSError, ValueError):
+        return "none", None
+    if not isinstance(rec, dict) or not rec.get("agreed_at"):
+        return "none", None
+    return ("recorded" if rec.get("terms") == TERMS_URL and rec.get("vvm") == VVM_VER else "changed"), rec
+
+
+def status(home, as_json):
+    installed = os.path.exists(os.path.join(home, "installed.json"))
+    state, rec = consent_state(home)
+    ask = not installed or state != "recorded"
+    if as_json:
+        print(json.dumps({"home": home, "installed": installed, "consent": state, "ask": ask, "terms": TERMS_URL,
+                          "agreed_at": rec.get("agreed_at") if rec else None}, ensure_ascii=False))
+    elif not installed:
+        print(f"VOICEVOX は入っていない（{home}）。利用者に規約（{TERMS_URL}）を示し、同意を得てから --agree を付けて実行する")
+    elif state == "none":
+        print(f"VOICEVOX は入っているが、同意の記録がない（{home}）。利用者に規約（{TERMS_URL}）を示して同意を得てから、--agree を付けて実行する（記録するだけで、取り直さない）")
+    elif state == "changed":
+        print(f"同意の記録（{rec['agreed_at'][:10]}）の後で、規約の場所か音声モデルの版が変わった。利用者に規約（{TERMS_URL}）を示して聞き直す")
+    else:
+        print(f"VOICEVOX は入っていて、利用規約への同意の記録がある（{rec['agreed_at'][:10]} に同意。{TERMS_URL}）。聞かずに使える。報告に、前に同意した規約のもとで作ったと書く")
+    return 3 if ask else 0
 
 
 def default_home():
@@ -92,10 +137,13 @@ def list_voices(home):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--agree", action="store_true")
+    ap.add_argument("--status", action="store_true")
     ap.add_argument("--home", default=default_home())
     ap.add_argument("--models", default="0")
     ap.add_argument("--json", action="store_true")
     a = ap.parse_args()
+    if a.status:
+        sys.exit(status(a.home, a.json))
     if not a.agree:
         print("利用規約への同意（--agree）がないので入れない。ユーザーに規約（https://github.com/VOICEVOX/voicevox_vvm/blob/main/TERMS.txt）を示し、同意を得てから --agree を付けて実行する。")
         sys.exit(2)
@@ -133,6 +181,7 @@ def main():
     info = {"home": home, "core": CORE_VER, "sec": round(time.time() - t0, 1), "steps": steps, "voices": voices}
     with open(os.path.join(home, "installed.json"), "w", encoding="utf-8") as f:
         json.dump(info, f, ensure_ascii=False, indent=2)
+    record_consent(home)
     if a.json:
         print(json.dumps(info, ensure_ascii=False))
         return

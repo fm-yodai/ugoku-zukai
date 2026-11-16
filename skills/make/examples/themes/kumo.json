@@ -11,12 +11,12 @@
     "accent": "#0e7c86",
     "good": "#2d9656",
     "bad": "#d64541",
-    "warn": "#d06d0d",
+    "warn": "#0e7c86",
     "roles": {
-      "actor": "#0e7c86",
-      "process": "#d06d0d",
+      "process": "#0e7c86",
+      "actor": "#d06d0d",
       "store": "#7a5cc2",
-      "external": "#860e3e",
+      "external": "#5b6573",
       "muted": "#737b86",
       "added": "#2d9656",
       "removed": "#d64541"

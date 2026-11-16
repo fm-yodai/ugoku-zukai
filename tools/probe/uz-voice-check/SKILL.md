@@ -43,8 +43,8 @@ python3 $SKILL/voice_report.py $W/work --expected $SKILL/expected.json --out $OU
 ### 5. 配置の検査と、音声つきの再生ページ
 
 ```bash
-node $SKILL/make/scripts/check_storyboard.cjs $SKILL/make/examples/proposal-analysis.json --theme flat --timeline $W/work/timeline.json
-python3 $SKILL/make/scripts/build_player.py $SKILL/make/examples/proposal-analysis.json -o $OUT/uz-voice-player.html --theme flat --voice $W/work --artifact
+node $SKILL/make/scripts/check_storyboard.cjs $SKILL/make/examples/proposal-analysis.json --theme koo --timeline $W/work/timeline.json
+python3 $SKILL/make/scripts/build_player.py $SKILL/make/examples/proposal-analysis.json -o $OUT/uz-voice-player.html --theme koo --voice $W/work --artifact
 ```
 
 `$OUT/uz-voice-player.html` を Artifact として公開し（書き写さずにファイルのまま）、ユーザーに「再生ボタンを押して、声と図の動きがそろっているか」を見てもらいます。

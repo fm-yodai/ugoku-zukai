@@ -1,0 +1,89 @@
+{
+  "format": "ugoku-zukai-outline/2",
+  "title": "UX とは結局何か",
+  "basics": {
+    "audience": {
+      "text": "自社の開発部",
+      "by": "user",
+      "state": "agreed"
+    },
+    "knows": {
+      "text": "UI/UX という言葉は聞いたことがある",
+      "by": "claude",
+      "state": "agreed"
+    },
+    "takeaway": {
+      "text": "UX は画面の話に限らない",
+      "by": "user",
+      "state": "agreed"
+    },
+    "length": {
+      "text": "2 分くらい",
+      "by": "user",
+      "state": "agreed",
+      "seconds": 120
+    },
+    "look": {
+      "text": "空 提案書デザイン（既定）",
+      "by": "claude",
+      "state": "proposed",
+      "theme": "koo"
+    }
+  },
+  "chapters": [
+    {
+      "id": "c1",
+      "title": "二つの言葉の関係",
+      "intent": {
+        "text": "ここで聴衆は、UX がユーザビリティを含む広い語だと分かる",
+        "by": "user",
+        "state": "agreed"
+      },
+      "seconds": 40,
+      "slides": [
+        {
+          "id": "relation",
+          "intent": {
+            "text": "二つの語の包含関係が、図ひとつで分かる",
+            "by": "claude",
+            "state": "proposed"
+          }
+        }
+      ]
+    },
+    {
+      "id": "c2",
+      "title": "UX の定義",
+      "link": {
+        "text": "関係が分かったので、それぞれが何を指すかを規格の言葉で押さえる",
+        "by": "claude",
+        "state": "agreed"
+      },
+      "seconds": 80,
+      "slides": [
+        {
+          "id": "definitions",
+          "intent": {
+            "text": "二つの定義を並べて読み比べられる",
+            "by": "claude",
+            "state": "proposed"
+          }
+        },
+        {
+          "id": "ux-def",
+          "intent": {
+            "text": "UX の定義の文そのものを読める",
+            "by": "claude",
+            "state": "proposed"
+          },
+          "link": {
+            "text": "二つを比べた後で、UX のほうを詳しく見る",
+            "by": "claude",
+            "state": "proposed"
+          }
+        }
+      ]
+    }
+  ],
+  "open": []
+}

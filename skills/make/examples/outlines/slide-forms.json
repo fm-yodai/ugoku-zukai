@@ -1,0 +1,136 @@
+{
+  "format": "ugoku-zukai-outline/2",
+  "title": "ユーザビリティと UX の違い",
+  "basics": {
+    "audience": {
+      "text": "自社の開発部",
+      "by": "user",
+      "state": "agreed"
+    },
+    "knows": {
+      "text": "UI/UX という言葉は聞いたことがある。二つの違いは説明できない",
+      "by": "claude",
+      "state": "agreed"
+    },
+    "takeaway": {
+      "text": "ユーザビリティは UX の一部で、UX は使う前から使った後までの体験の全体を指す",
+      "by": "user",
+      "state": "agreed"
+    },
+    "length": {
+      "text": "1 分くらい",
+      "by": "user",
+      "state": "agreed",
+      "seconds": 60
+    },
+    "look": {
+      "text": "空 提案書デザイン（既定）",
+      "by": "claude",
+      "state": "agreed",
+      "theme": "koo"
+    },
+    "voice": {
+      "text": "落ち着いた声",
+      "by": "claude",
+      "state": "agreed",
+      "speaker": 8,
+      "speed": 1.1
+    },
+    "tone": {
+      "text": "です・ます。一般的なビジネスの語り口",
+      "by": "user",
+      "state": "agreed"
+    }
+  },
+  "flow": {
+    "text": "聞いたことのある二つの語の関係を先に見せ、次に定義で裏づけ、最後に誰の体験かに戻す。聴衆が、知っている語から順に整理できる",
+    "by": "claude",
+    "state": "agreed"
+  },
+  "chapters": [
+    {
+      "id": "c1",
+      "title": "二つの言葉の関係",
+      "seconds": 13,
+      "intent": {
+        "text": "ここで聴衆は、UX がユーザビリティを含む、より広い語だと分かる",
+        "by": "user",
+        "state": "agreed"
+      },
+      "slides": [
+        {
+          "id": "relation",
+          "intent": {
+            "text": "二つの語の包含関係が、図ひとつで分かる",
+            "by": "claude",
+            "state": "agreed"
+          }
+        }
+      ]
+    },
+    {
+      "id": "c2",
+      "title": "二つの言葉の定義",
+      "seconds": 28,
+      "intent": {
+        "text": "ここで聴衆は、二つの語が規格でどう定められているかを読み、UX の範囲が使う前から使った後までだと分かる",
+        "by": "claude",
+        "state": "agreed"
+      },
+      "link": {
+        "text": "関係が分かったので、それぞれが何を指すかを規格の言葉で押さえる",
+        "by": "claude",
+        "state": "agreed"
+      },
+      "slides": [
+        {
+          "id": "definitions",
+          "intent": {
+            "text": "二つの定義を並べて読み比べ、見ているものの違い（度合いと、知覚と反応）に気づく",
+            "by": "claude",
+            "state": "agreed"
+          }
+        },
+        {
+          "id": "ux-def",
+          "intent": {
+            "text": "UX の定義の文そのものを読み、範囲が使う前・使っている間・使った後に及ぶと分かる",
+            "by": "claude",
+            "state": "agreed"
+          },
+          "link": {
+            "text": "二つを比べた後で、広いほうの UX を詳しく見る",
+            "by": "claude",
+            "state": "agreed"
+          }
+        }
+      ]
+    },
+    {
+      "id": "c3",
+      "title": "誰の体験か",
+      "seconds": 16,
+      "intent": {
+        "text": "ここで聴衆は、UX の主語が利用者であり、使いやすさがその体験の一部だと分かる",
+        "by": "claude",
+        "state": "agreed"
+      },
+      "link": {
+        "text": "定義の「利用者の知覚と反応」を、利用者の側から言い直して締める",
+        "by": "claude",
+        "state": "agreed"
+      },
+      "slides": [
+        {
+          "id": "whose",
+          "intent": {
+            "text": "利用者が、使う前・使っている間・使った後に何を体験するかを、順に読める",
+            "by": "claude",
+            "state": "agreed"
+          }
+        }
+      ]
+    }
+  ],
+  "open": []
+}
