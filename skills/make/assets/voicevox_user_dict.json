@@ -154,6 +154,27 @@
    "accent_type": 0,
    "word_type": "COMMON_NOUN",
    "priority": 7
+  },
+  {
+   "surface": "AI",
+   "pronunciation": "エーアイ",
+   "accent_type": 3,
+   "word_type": "PROPER_NOUN",
+   "priority": 8
+  },
+  {
+   "surface": "右上",
+   "pronunciation": "ミギウエ",
+   "accent_type": 0,
+   "word_type": "COMMON_NOUN",
+   "priority": 7
+  },
+  {
+   "surface": "後",
+   "pronunciation": "アト",
+   "accent_type": 1,
+   "word_type": "COMMON_NOUN",
+   "priority": 3
   }
  ]
 }
