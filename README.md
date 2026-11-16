@@ -14,7 +14,7 @@
 - **見た目**: 既定は「空 提案書デザインシステム」に沿ったテーマです（Base の地、章扉と字幕の帯は Navy、強調は Gold）。手持ちのデザイン（トークン・CSS・Web ページ・PowerPoint・画像など。デザインシステムでなくてよい）を渡せば、色と文字を拾ってテーマにします
 - **描き方を選べる**: 標準は「決まった語彙の台本＋自動配置の SVG プレーヤー」です。数式の変形や 3D が主役の題材には、今は向きません（manim-web で描く層は予定で、まだありません）
 - **声**: VOICEVOX をその場で動かすので、ナレーションの文は外部の音声サービスに送りません
-- **出力**: HTML 1 枚の再生ページ（音声込み）を Artifact で公開します。mp4 はプレーヤーから書き出す予定です
+- **出力**: HTML 1 枚の再生ページ（音声込み）を Artifact で公開します。mp4 の書き出しは今はありません
 
 ## 構成
 
@@ -28,7 +28,9 @@
 | 検証用スキル | `tools/probe/` | claude.ai のサンドボックスで、VOICEVOX と再生方法が使えるか（evx-probe）、同じ音声が作れるか（uz-voice-check）を確かめる |
 | zip の作成 | `tools/build_claude_ai_zip.py` | claude.ai にアップロードするスキルの zip を作る |
 
-## 入れ方（予定）
+## 入れ方
+
+どの環境でも、このリポジトリをマーケットプレイスとして追加し、プラグイン `ugoku-zukai` を入れます。
 
 **Claude Code**
 
@@ -39,14 +41,23 @@ claude plugin install ugoku-zukai@ugoku-zukai
 
 **claude.ai / Claude Desktop のチャット**
 
+1. 「Customize > Plugins」を開き、「Add > Add marketplace」で `fm-yodai/ugoku-zukai` を入力します
+2. 一覧に出た `ugoku-zukai` を入れます
+3. 設定でコード実行を有効にし、ネットワークは少なくとも GitHub と PyPI と npm に届くようにしてください（VOICEVOX と、コマを描く道具を初回に入れるため）
+
+チャットでは、スキル `make` だけが使われます（`agents/` のサブエージェントは使われず、1 つの会話で役を順に演じます）。同じアカウントの Claude Code にも、入れたプラグインが同期されます。組織のプランでは、管理者が利用者によるプラグインの追加を止めていると入れられません。
+
+マーケットプレイスを追加できないときは、[Releases](https://github.com/fm-yodai/ugoku-zukai/releases) にある `ugoku-zukai-make.zip` を「Customize > Skills」からアップロードしても使えます。zip は次のコマンドでも作れます。
+
 ```bash
 python3 tools/build_claude_ai_zip.py   # dist/ugoku-zukai-make.zip ができる
 ```
 
-できた zip を「Customize > Skills」からアップロードします。コード実行を有効にし、ネットワークは少なくとも GitHub と PyPI に届く設定にしてください。
+**使い方**: 「〜を動く図解にして」「このリポジトリを動画で紹介して」のように頼むか、`/ugoku-zukai:make` で始めます。
 
 ## クレジットとライセンス
 
-- このリポジトリのライセンスは未定です（公開する前に決めます）
-- **VOICEVOX**: 音声モデルには利用規約があります（[VOICEVOX 音声モデル 利用規約](https://github.com/VOICEVOX/voicevox_vvm/blob/main/TERMS.txt)）。キャラクターごとの規約にも従ってください。例えば、既定の春日部つむぎの音声には「VOICEVOX:春日部つむぎ」のクレジットが必要です。作った動画と再生ページには、クレジットを自動で表示します
-- **使う予定のライブラリ**: elkjs（EPL-2.0）、rough.js（MIT）、manim-web（MIT）、voicevox_core（MIT）、Mediabunny（MPL-2.0、検討中）
+- このリポジトリは [MIT License](LICENSE) です
+- **VOICEVOX**: 音声モデルには利用規約があります（[VOICEVOX 音声モデル 利用規約](https://github.com/VOICEVOX/voicevox_vvm/blob/main/TERMS.txt)）。キャラクターごとの規約にも従ってください。例えば、既定の春日部つむぎの音声には「VOICEVOX:春日部つむぎ」のクレジットが必要です。作った動画と再生ページには、クレジットを自動で表示します。VOICEVOX はこのリポジトリに含めず、初めて声を作るときに、規約への同意を得てから入れます
+- **同梱しているライブラリ**: elkjs 0.9.3（EPL-2.0。`skills/make/player/vendor/` にライセンス文と一緒に置いています）
+- **使うときに入れるライブラリ**: voicevox_core（MIT）、@resvg/resvg-js（MPL-2.0）

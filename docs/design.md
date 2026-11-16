@@ -178,12 +178,12 @@ ugoku-zukai/
 決まったこと（2026-11-05）:
 
 - 名前は ugoku-zukai、スキル名は make
-- このプラグイン単体で、fm-yodai のアカウントから公開する（最初は非公開）
+- このプラグイン単体で、fm-yodai のアカウントから公開する（最初は非公開。M6 で public にする。§17）
 - v1 は手元に残したまま別のリポジトリで作る
 
 未決:
 
-1. **リポジトリのライセンス**: 公開する前に決める
+1. **リポジトリのライセンス**: MIT、著作権者は fm-yodai に決めた（2026-11-16。§17）
 2. **mp4 の書き出しに使うライブラリ**: Mediabunny が第一候補。ライセンスは MPL-2.0
 3. **既定の声**: 非開発者向けに、ずんだもん以外を既定にするか
 4. **ライブラリの読み込み**: claude.ai の Artifact で、jsDelivr から elkjs と manim-web を読めるかは未確認。読めなければ同梱する
@@ -634,3 +634,25 @@ claude.ai のチャットで「UXデザイン支援とは何か」（春日部�
 - **7 演出**: `visual-grammar.md` に VG-9（出す順は説明の順に合わせる。包含は内側から、循環図の中心は最後、象限には具体例を添えるとよい場合がある）を足し、S-D4 に含めた。`structures.md` の concept 型に、比較の後の具体例の 1 枚を確かめる項目を足した。どれも規則ではなく考え方として書いた
 - **8 規格の名前**: writer の「聴衆が関心を持つ言葉で話す」に規格の番号を加え、S-W5 の較正の例に、営業向けの動画で規格の番号を読み上げた例を足した
 - **10 A-2 の重さ**: A-2 を、主張を足して言いたいことが変わるものは must、1 語・1 句で範囲を少し広げるだけのものは should に分けた。must だけの基準でなくなるので、`ledger.py` は評価役が付けた should をそのまま残す
+
+## 17. 配布（M6。2026-11-16〜）
+
+### 利用者が決めたこと（2026-11-16）
+
+- **配る相手**: 社内のメンバー（非開発者と開発者）。Claude Code・claude.ai・Claude Desktop のどれでも使えるようにする
+- **配り方**: 社内マーケットプレイスには載せず、`fm-yodai/ugoku-zukai` を public にして、このリポジトリをマーケットプレイスとして追加してもらう。claude.ai / Desktop も「Customize > Plugins > Add > Add marketplace」で入れられる（チャットで効くのは skills だけで、agents と hooks は無視される。チャットでは 1 会話で役を演じる今の作りと合う）。追加できないときの控えに、スキルの zip（`tools/build_claude_ai_zip.py`）を Releases に置く
+- **ライセンス**: MIT。著作権者は fm-yodai。同梱の elkjs（EPL-2.0）はライセンス文を `player/vendor/` に置いたまま配る。VOICEVOX は同梱せず、使う人が規約に同意してから入れる（今の作りのまま）
+- **テーマ koo**: 社外に出してよい。デザインシステムの Artifact の URL は消し、名前だけを残す
+- **M4 は保留のまま**: mp4 が要るかは、メンバーに使ってもらってから見る
+
+### public にする前にしたこと（2026-11-16）
+
+- 履歴を書き換えた（git filter-repo）: コミットの作者とコミッターのメールアドレスを GitHub の noreply に、Artifact の URL を名前だけに、`/home/yodai` を `~` にした。試作の生成物（`prototypes/compare/manim/media/` と `render.log`）は履歴から消した
+- PR の ref（`refs/pull/1/head`）は force push では消えないので、GitHub のリポジトリを消して作り直し、private のまま push し直した。PR #1 のページはなくなった
+- `LICENSE` を置き、README の入れ方を 3 つの環境の手順に書き直した
+
+### 残り
+
+1. claude.ai か Desktop で、private のうちに一度プラグインとして入れ、`make` が動くか（スキルのフォルダが見つかるか、frontmatter で止まらないか）を確かめる
+2. public に切り替え、Releases にスキルの zip を置く
+3. メンバーに使ってもらい、skill-creator の evals と、学んだことを重ねて読む仕組み（§13 で M6 に回したもの）が要るかを決める

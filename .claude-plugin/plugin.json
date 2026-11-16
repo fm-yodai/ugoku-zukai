@@ -5,6 +5,7 @@
   "author": {
     "name": "fm-yodai"
   },
+  "license": "MIT",
   "repository": "https://github.com/fm-yodai/ugoku-zukai",
   "keywords": ["explainer", "video", "animation", "diagram", "voicevox", "japanese"]
 }
