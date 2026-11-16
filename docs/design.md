@@ -197,7 +197,7 @@ ugoku-zukai/
 | M1b 提案系の図 | スイムレーン・As-Is/To-Be・ロードマップ・ツリー・グラフ/KPI・2×2・ピラミッド/ファネル・サイクル/ベン図 | 同上（M1a の一覧ページに足す） |
 | M2 声 | setup_voice.py・tts.py（両環境） | claude.ai と Claude Code で同じ台本から同じ音声が作れる |
 | M3 進行役 | SKILL.md（チャット版の 1 会話で回す手順と、Claude Code 版のサブエージェント）、node での配置の検査 | claude.ai で 3 分の動画が最後まで作れる（済み。進め方の作り直し R1〜R4 を含め、2026-11-16 に締めた） |
-| M4 書き出し | mp4 ボタン、downloads capability | Artifact から mp4 を保存できる |
+| M4 書き出し | mp4 ボタン、downloads capability | Artifact から mp4 を保存できる（保留。2026-11-16、利用者とニーズが浮かぶまで後回しにした。§5.3 の設計は残す。M6 で使ってもらって要るかを見る） |
 | M5 manim-web モード | 補助の関数群、references/manim-web.md | 数式の題材で 1 本作れる |
 | M6 配布 | プラグイン化、claude.ai 用の zip、評価（skill-creator の evals） | 社内の 2〜3 人が自分の題材で作れる |
 
