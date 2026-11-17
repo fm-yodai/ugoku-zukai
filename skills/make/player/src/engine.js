@@ -145,11 +145,21 @@
           const pick = fits.find(x => !base || x.T.lineCount == null || x.T.lineCount <= base.T.lineCount);
           if (pick) L = { ...pick.T, maxScale: 1, fillK: pick.k };
         }
-        if (!L) L = await UZ.FIG[f.type].layout(f, S, { area: A, tryBoth: !f.direction, assets });
+        // Morph の graph は、前の図（v1）のレイアウトに寄せる。v1 がまだ配置されていなければ（場面の順の誤り）寄せずに組む
+        const mv = sc.slide != null ? (sb.slides[sc.slide].parts[i] || {}).morph : null;
+        const anchor = f.type === "graph" && mv && figs[mv] && figs[mv].type === "graph" ? graphAnchor(figs[mv]) : null;
+        if (!L) L = await UZ.FIG[f.type].layout(f, S, { area: A, tryBoth: !f.direction, assets, anchor });
+        if (L.morphBroken && L.morphBroken.length) warn(`スライド「${sc.slide}」: 部品「${fid}」の Morph の並びを保てない（${L.morphBroken.join("、")} の順が「${mv}」と入れ替わる）。edges の向きか direction を直す`);
         const items = {};
         for (const it of L.items) { it.fig = fid; it.key = `${fid}/${it.id}`; items[it.id] = it; }
         figs[fid] = { id: fid, type: f.type, spec: f, w: L.w, h: L.h, items, order: L.order, autoShow: !!L.autoShow, fixed: !!L.fixed, extra: L, dark: !!sc.slideDark };
       }
+    }
+    // Morph の anchor: v1 の向きと、ノードの矩形
+    function graphAnchor(F) {
+      const nodes = {};
+      for (const it of Object.values(F.items)) if (it.kind === "box") nodes[it.id] = { x: it.x, y: it.y, w: it.w, h: it.h };
+      return { dir: F.extra.dir, nodes };
     }
     // ---- id の解決 ----
     function resolve(sc, ref, ctxv) {

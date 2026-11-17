@@ -363,6 +363,12 @@
   // ======== 箱と矢印（graph）========
   FIG.graph = {
     async layout(f, S, ctx) {
+      // ctx.anchor = { dir, nodes: { id: {x, y, w, h} } }: Morph の前の図（v1）のレイアウト。向きを v1 にそろえ、共通ノードの並びを保つ
+      if (ctx.anchor) {
+        const r = await layoutGraph(f, S, ctx.anchor.dir, ctx);
+        r.score = Math.min(ctx.area.w / r.w, ctx.area.h / r.h, 1.3);
+        return r;
+      }
       const dir = (f.direction || "right").toLowerCase();
       const tries = [dir, dir === "right" ? "down" : "right"];
       let best = null;
@@ -393,6 +399,21 @@
       nodeSpec[n.id] = { w: Math.round(w2), h, lines, subLines };
     }
     const edges = f.edges.map(e => ({ ...e, id: e.id || `${e.from}>${e.to}` }));
+    // Morph の anchor があるときは、宣言の順のうち共通ノードの位置に、共通ノードを v1 での並び（直交する方向 → 流れの方向）で入れ直し、
+    // その順を ELK のモデルの順（considerModelOrder）として渡す。新しいノードは宣言の位置のまま
+    const anchor = ctx && ctx.anchor;
+    let rank = null;
+    if (anchor) {
+      const A = anchor.nodes, down = dir === "down";
+      const key = id => { const a = A[id]; return down ? [a.x + a.w / 2, a.y + a.h / 2] : [a.y + a.h / 2, a.x + a.w / 2]; };
+      const ids = f.nodes.map(n => n.id);
+      const shared = ids.filter(id => A[id]).sort((p, q) => { const a = key(p), b = key(q); return a[0] - b[0] || a[1] - b[1]; });
+      let k = 0;
+      const merged = ids.map(id => A[id] ? shared[k++] : id);
+      rank = Object.fromEntries(merged.map((id, i) => [id, i]));
+      edges.sort((a, b) => (rank[a.from] ?? 0) - (rank[b.from] ?? 0) || (rank[a.to] ?? 0) - (rank[b.to] ?? 0));
+    }
+    const byRank = list => rank ? list.slice().sort((a, b) => (rank[a] ?? 0) - (rank[b] ?? 0)) : list;
     const elkNode = id => {
       const s = nodeSpec[id];
       const o = { id, width: s.w, height: s.h };
@@ -414,15 +435,16 @@
         "elk.layered.edgeLabels.sideSelection": "ALWAYS_UP", "elk.hierarchyHandling": "INCLUDE_CHILDREN",
         "elk.layered.nodePlacement.strategy": "NETWORK_SIMPLEX",
         "elk.partitioning.activate": bands.length ? "true" : "false",
+        ...(anchor ? { "elk.layered.considerModelOrder.strategy": "NODES_AND_EDGES" } : {}),
       },
       children: [], edges: [],
     };
     for (const g of frames) {
       root.children.push({ id: g.id, layoutOptions: { "elk.padding": "[top=46,left=22,bottom=22,right=22]",
         ...(bands.length ? { "elk.partitioning.partition": String(Math.max(0, bands.findIndex(b => b.members.includes(g.id)))) } : {}) },
-        children: g.members.filter(m => nodeSpec[m]).map(elkNode) });
+        children: byRank(g.members.filter(m => nodeSpec[m])).map(elkNode) });
     }
-    for (const n of f.nodes) if (!inFrame[n.id]) root.children.push(elkNode(n.id));
+    for (const id of byRank(f.nodes.map(n => n.id))) if (!inFrame[id]) root.children.push(elkNode(id));
     for (const e of edges) {
       root.edges.push({ id: e.id, sources: [e.from], targets: [e.to],
         labels: e.label ? [{ text: e.label, width: UZ.textW(e.label, lsize) + 10, height: lsize + 8 }] : [] });
@@ -438,6 +460,7 @@
       }
     };
     walk(r, 0, 0);
+    const morphBroken = anchor ? brokenPairs(anchor.nodes, abs, dir) : undefined;
     // 辺: elkjs は INCLUDE_CHILDREN のとき、辺の座標を辺の container（共通の親）基準で返す
     const edgeGeom = {};
     const collectEdges = (node, ox, oy) => {
@@ -524,7 +547,22 @@
     const maxX = Math.max(...all.map(b => b.x + b.w)), maxY = Math.max(...all.map(b => b.y + b.h));
     const pad = 6;
     UZ.shiftItems(items, -minX + pad, -minY + pad);
-    return { w: maxX - minX + pad * 2, h: maxY - minY + pad * 2, items, order: finalOrder, dir };
+    return { w: maxX - minX + pad * 2, h: maxY - minY + pad * 2, items, order: finalOrder, dir, morphBroken };
+  }
+
+  // 共通ノードの組のうち、v1 と並びが入れ替わったもの（"a と b" の列）。
+  // v1 で流れの方向に重ならない（別の層の）組は流れの方向の順を、重なる（同じ層の）組は直交する方向の順を比べる
+  function brokenPairs(A, B, dir) {
+    const down = dir === "down";
+    const c = r => down ? { flow: r.y + r.h / 2, orth: r.x + r.w / 2, fw: r.h } : { flow: r.x + r.w / 2, orth: r.y + r.h / 2, fw: r.w };
+    const ids = Object.keys(B).filter(id => A[id]);
+    const out = [];
+    for (let i = 0; i < ids.length; i++) for (let j = i + 1; j < ids.length; j++) {
+      const a1 = c(A[ids[i]]), b1 = c(A[ids[j]]), a2 = c(B[ids[i]]), b2 = c(B[ids[j]]);
+      const k = Math.abs(a1.flow - b1.flow) < (a1.fw + b1.fw) / 2 ? "orth" : "flow";
+      if (Math.sign(a2[k] - b2[k]) !== Math.sign(a1[k] - b1[k])) out.push(`${ids[i]} と ${ids[j]}`);
+    }
+    return out;
   }
 
   // ======== 下の層: 図形を直接書く（canvas）========
