@@ -1,0 +1,117 @@
+{
+  "format": "ugoku-zukai/4",
+  "title": "小さな Web サービスの構成が育つまで",
+  "voice": { "speaker": 8, "speed": 1.1 },
+  "figures": {
+    "cover": { "type": "title", "text": "小さな Web サービスの構成は\nどう育つのか" },
+    "v1": { "type": "graph", "direction": "right",
+      "nodes": [
+        { "id": "user", "label": "利用者", "role": "actor" },
+        { "id": "app", "label": "アプリ", "sub": "Web サーバー", "role": "process" },
+        { "id": "db", "label": "DB", "role": "store" } ],
+      "edges": [
+        { "from": "user", "to": "app", "label": "ページを開く" },
+        { "from": "app", "to": "db", "label": "読む・書く" } ] },
+    "v2": { "type": "graph", "direction": "right",
+      "nodes": [
+        { "id": "user", "label": "利用者", "role": "actor" },
+        { "id": "app", "label": "アプリ", "sub": "Web サーバー", "role": "process" },
+        { "id": "cache", "label": "キャッシュ", "role": "added" },
+        { "id": "db", "label": "DB", "role": "store" } ],
+      "edges": [
+        { "from": "user", "to": "app", "label": "ページを開く" },
+        { "from": "app", "to": "cache", "label": "先に探す" },
+        { "from": "app", "to": "db", "label": "読む・書く" } ] },
+    "v3": { "type": "graph", "direction": "right",
+      "nodes": [
+        { "id": "user", "label": "利用者", "role": "actor" },
+        { "id": "app", "label": "アプリ", "sub": "Web サーバー", "role": "process" },
+        { "id": "cache", "label": "キャッシュ", "role": "process" },
+        { "id": "db", "label": "DB", "role": "store" },
+        { "id": "replica", "label": "読み取りレプリカ", "role": "added", "shape": "store" } ],
+      "groups": [ { "id": "dbs", "label": "データの保存先", "members": ["db", "replica"] } ],
+      "edges": [
+        { "from": "user", "to": "app", "label": "ページを開く" },
+        { "from": "app", "to": "cache", "label": "先に探す" },
+        { "from": "app", "to": "db", "label": "書く" },
+        { "from": "app", "to": "replica", "label": "読む" },
+        { "from": "db", "to": "replica", "label": "変更を複製" } ] },
+    "added-v2": { "type": "list", "numbered": true, "items": [
+      { "id": "i-cache", "text": "キャッシュ：よく読まれるページを覚えておき、DB を読まずに返す" } ] },
+    "added-v3": { "type": "list", "numbered": true, "items": [
+      { "id": "i-cache", "text": "キャッシュ：よく読まれるページを覚えておき、DB を読まずに返す" },
+      { "id": "i-replica", "text": "読み取りレプリカ：DB の複製。読み取りを受け持ち、DB を書き込みに専念させる" } ] },
+    "growth": { "type": "cycle", "center": "利用者が増えるたびに",
+      "steps": [
+        { "id": "watch", "label": "負荷を見る", "role": "actor" },
+        { "id": "find", "label": "詰まりを見つける", "role": "process" },
+        { "id": "add", "label": "そこに部品を足す", "role": "added" } ] }
+  },
+  "slides": {
+    "arch-v1": {
+      "title": "最初の構成",
+      "statement": "最初は、アプリと DB が 1 つずつの小さな構成で始めます。",
+      "parts": [ { "figure": "v1" } ]
+    },
+    "arch-v2": {
+      "title": "キャッシュを足した構成",
+      "statement": "よく読まれるページは、キャッシュが DB の手前で返します。",
+      "parts": [
+        { "figure": "v2", "morph": "v1", "area": { "col": [1, 12], "row": [1, 4] } },
+        { "figure": "added-v2", "fit": "content", "valign": "top", "halign": "start", "area": { "col": [1, 12], "row": [5, 6] } }
+      ]
+    },
+    "arch-v3": {
+      "title": "読み取りレプリカを足した構成",
+      "statement": "読み取りはレプリカに分け、DB は書き込みに専念させます。",
+      "parts": [
+        { "figure": "v3", "morph": "v2", "area": { "col": [1, 12], "row": [1, 4] } },
+        { "figure": "added-v3", "morph": "added-v2", "fit": "content", "valign": "top", "halign": "start", "area": { "col": [1, 12], "row": [5, 6] } }
+      ]
+    },
+    "how-to-grow": {
+      "title": "構成の育て方",
+      "statement": "部品は、詰まった所を見つけてから、そこに足します。",
+      "parts": [ { "figure": "growth" } ]
+    }
+  },
+  "scenes": [
+    { "id": "s1", "chapter": "c1", "figure": "cover", "lines": [
+      { "id": "l1", "text": "小さな Web サービスの構成が、利用者が増えるにつれてどう育つかを、例で見ていきます。", "read": "小さなウェブサービスの構成が、利用者が増えるにつれてどう育つかを、例で見ていきます。" } ] },
+    { "id": "s2", "chapter": "c1", "slide": "arch-v1", "lines": [
+      { "id": "l2", "text": "例にするのは、{a}利用者がレシピを投稿して読める、料理のサービスです。",
+        "do": [ { "at": "a", "show": ["user", "app", "user>app"] } ] },
+      { "id": "l3", "text": "{a}アプリは、投稿されたレシピを DB に書き、ページが開かれると DB から読んで返します。", "read": "{a}アプリは、投稿されたレシピをデービーに書き、ページが開かれるとデービーから読んで返します。",
+        "do": [ { "at": "a", "show": ["db", "app>db"] } ] },
+      { "id": "l4", "text": "利用者が増えると、{a}人気のレシピのページを、何度も DB から読むようになります。", "read": "利用者が増えると、{a}人気のレシピのページを、何度もデービーから読むようになります。",
+        "do": [ { "at": "a", "trace": ["user", "app", "db"], "label": "人気のレシピ" } ] },
+      { "id": "l5", "text": "{a}DB の負荷を見ると、その多くが、同じページの読み取りでした。", "read": "{a}デービーの負荷を見ると、その多くが、同じページの読み取りでした。",
+        "do": [ { "hide": "dot:dot" }, { "at": "a", "pulse": "db" } ] } ] },
+    { "id": "s3", "chapter": "c2", "slide": "arch-v2", "lines": [
+      { "id": "l6", "text": "そこで、{a}アプリの隣にキャッシュを置きます。",
+        "do": [ { "at": "a", "show": ["cache", "app>cache"] } ] },
+      { "id": "l7", "text": "{a}アプリは先にキャッシュを探し、見つかれば DB を読まずに返します。", "read": "{a}アプリは先にキャッシュを探し、見つかればデービーを読まずに返します。",
+        "do": [ { "at": "a", "trace": ["user", "app", "cache"], "label": "人気のレシピ" } ] },
+      { "id": "l8", "text": "{a}キャッシュは、よく読まれるページを覚えておき、DB を読む回数を減らす部品です。", "read": "{a}キャッシュは、よく読まれるページを覚えておき、デービーを読む回数を減らす部品です。",
+        "do": [ { "hide": "dot:dot" }, { "at": "a", "show": "i-cache" } ] },
+      { "id": "l9", "text": "ただ、{a}キャッシュに無いページや検索の読み取りは、今も DB に届きます。", "read": "ただ、{a}キャッシュに無いページや検索の読み取りは、今もデービーに届きます。",
+        "do": [ { "at": "a", "pulse": "app>db" } ] } ] },
+    { "id": "s4", "chapter": "c3", "slide": "arch-v3", "lines": [
+      { "id": "l10", "text": "そこで、{a}DB の複製を、もう一つ用意します。", "read": "そこで、{a}デービーの複製を、もう一つ用意します。",
+        "do": [ { "at": "a", "show": ["dbs", "replica"] } ] },
+      { "id": "l11", "text": "{a}読み取りだけを受け持つ複製なので、読み取りレプリカと呼びます。",
+        "do": [ { "at": "a", "show": "i-replica" } ] },
+      { "id": "l12", "text": "{a}アプリは、読み取りをレプリカへ送り、書き込みだけを DB へ送ります。", "read": "{a}アプリは、読み取りをレプリカへ送り、書き込みだけをデービーへ送ります。",
+        "do": [ { "at": "a", "show": "app>replica", "draw": true } ] },
+      { "id": "l13", "text": "{a}二つの DB のあいだも見てみます。{b}DB への変更は、レプリカに複製されます。", "read": "{a}二つのデービーのあいだも見てみます。{b}デービーへの変更は、レプリカに複製されます。",
+        "do": [ { "at": "a", "zoom": "dbs" }, { "at": "b", "show": "db>replica" } ] },
+      { "id": "l14", "text": "{a}全体に戻ると、読み取りはキャッシュとレプリカが受け持ち、DB は書き込みに専念できます。", "read": "{a}全体に戻ると、読み取りはキャッシュとレプリカが受け持ち、デービーは書き込みに専念できます。",
+        "do": [ { "at": "a", "zoom": "all" } ] } ] },
+    { "id": "s5", "chapter": "c4", "slide": "how-to-grow", "lines": [
+      { "id": "l15", "text": "この例では、{a}DB の負荷を見て、{b}読み取りの詰まりを見つけ、{c}部品を足しました。", "read": "この例では、{a}デービーの負荷を見て、{b}読み取りの詰まりを見つけ、{c}部品を足しました。",
+        "do": [ { "at": "a", "show": ["watch", "watch>find"] }, { "at": "b", "show": ["find", "find>add"] }, { "at": "c", "show": ["add", "add>watch"] } ] },
+      { "id": "l16", "text": "{a}利用者が増えるたびに、この順番を繰り返します。",
+        "do": [ { "at": "a", "show": "center" } ] },
+      { "id": "l17", "text": "最初から大きく作り込まずに、詰まった所へ、効く部品を足していきましょう。" } ] }
+  ]
+}

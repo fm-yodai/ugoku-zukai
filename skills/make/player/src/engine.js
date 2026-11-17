@@ -65,7 +65,8 @@
   const DUR = { show: 0.7, hide: 0.5, focus: 0.6, unfocus: 0.6, blur: 0.6, unblur: 0.6, pulse: 0.8, mark: 0.5, unmark: 0.4, trace: 2.0, reply: 0.8, note: 0.6, badge: 0.5, relabel: 0.6, tint: 0.6, move: 1.0, resize: 0.9, zoom: 1.0, pan: 0.9, custom: 2.0 };
   const STAGGER = 0.22;
   // カメラ（zoom・pan）: 倍率の上限と、寄せたときの既定の余白（画面の px）
-  UZ.CAMERA = { maxZoom: 2.5, pad: 40 };
+  // 上限は 2.0。箱 1 つに寄せたとき、2.5 では文字が 40px を超えて隣の箱が画面から外れ、どこを見ているかが分からなくなった（M7 の見本で確認）
+  UZ.CAMERA = { maxZoom: 2.0, pad: 40 };
   const CAM0 = { s: 1, tx: 0, ty: 0 };
   // カメラ cam（画面座標 p → p * s + t）を、図の写し方 pl に重ねる
   const camOn = (cam, pl) => ({ s: cam.s * pl.s, ox: cam.s * pl.ox + cam.tx, oy: cam.s * pl.oy + cam.ty });

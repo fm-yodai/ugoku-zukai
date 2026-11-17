@@ -25,6 +25,7 @@ SAMPLES = [
     ("proposal-analysis", "ツリー・2×2"),
     ("proposal-numbers", "KPI・棒グラフ・ファネル"),
     ("proposal-concept", "サイクル・ベン図・ピラミッド"),
+    ("camera-morph", "Morph・カメラ・線の描画"),
 ]
 THEMES = [
     ("koo", os.path.join(MAKE, "player", "themes", "koo.json")),
