@@ -113,6 +113,19 @@
       return { id: sc.id, chapter: sc.chapter, figs, header, areas, captions, lines: sc.lines, tone: slideDark ? "dark" : figs.length === 1 ? tones[0] : "light", slideDark: !!slideDark, slide: P.slide, statement: P.statement };
     });
 
+    // ---- Morph: morph を書いた部品を最初に使う場面の直前の場面が、v1 を置いたスライドでなければ誤り ----
+    // （morph が後のスライドを指す逆向きの鎖や、a ↔ b の輪も、ここで止まる）
+    const morphs = [];   // { si: 場面の添字, from: v1, to: v2 }
+    scenes.forEach((sc, si) => {
+      if (sc.slide == null || slides[sc.slide].scenes[0] !== sc.id) return;
+      sb.slides[sc.slide].parts.forEach((p, i) => {
+        if (!p || typeof p.morph !== "string") return;
+        const prev = scenes[si - 1];
+        if (!prev || prev.slide == null || !prev.figs.includes(p.morph)) { err(`スライド「${sc.slide}」: morph「${p.morph}」は直前のシーンのスライドにない（「${p.morph}」を置いたスライドの、すぐ次の場面で使う）`); return; }
+        morphs.push({ si, from: p.morph, to: sc.figs[i] });
+      });
+    });
+
     if (errors.length) return { errors, warnings };
     // 画像は、道具が先に読み込んで渡す（opts.assets。node は assets.cjs、組み立ては uz_assets.py）
     const assets = opts.assets || {};
@@ -458,6 +471,33 @@
       return { s, ox, oy };
     };
     for (const sc of scenes) sc.place = Object.fromEntries(sc.figs.map((fid, i) => [fid, place(fid, sc.areas[i])]));
+    // ---- Morph: v1 と v2 で同じ id の要素を対応づける（act は場面の頭から 0.8 秒）----
+    // graph の系列は、対応する要素がキャンバス上で同じ座標なので、写し方の補間（frame）だけで動く。
+    // list・compare・table は、v1 の要素の画面上の位置を v2 の写し方で逆変換した位置（fromBox・fromPts）から動かす
+    for (const mo of morphs) {
+      const sc = scenes[mo.si], prev = scenes[mo.si - 1], F1 = figs[mo.from], F2 = figs[mo.to];
+      const series = !!seriesOf[mo.to] && seriesOf[mo.to] === seriesOf[mo.from];
+      const pairs = [], auto = [];
+      if (!MORPH_TYPES.includes(F2.type)) warn(`スライド「${sc.slide}」: 部品「${mo.to}」: Morph で要素をつなげない type（${F2.type}）。「${mo.from}」を消しながら「${mo.to}」を出す`);
+      else {
+        const P1 = prev.place[mo.from], P2 = sc.place[mo.to], k = P1.s / P2.s;
+        const loc = ([x, y]) => [(P1.ox + x * P1.s - P2.ox) / P2.s, (P1.oy + y * P1.s - P2.oy) / P2.s];
+        for (const it2 of Object.values(F2.items)) {
+          const it1 = F1.items[it2.id];
+          if (!it1 || it1.kind !== it2.kind || !MORPH_KINDS.includes(it2.kind) || it1.isReply || it2.isReply) continue;
+          if (it1.autoId || it2.autoId) { auto.push(it2.id); continue; }
+          const pr = { from: it1.key, to: it2.key, kind: it2.kind, fromBox: null, fromPts: null, fromStroke: it1.stroke ?? null, fromFill: it1.fill ?? null, fromText: textOf(it1), toText: textOf(it2) };
+          if (!series) {
+            const b = boxOfItem(it1);
+            if (b) { const [x, y] = loc([b.x, b.y]); pr.fromBox = { x, y, w: b.w * k, h: b.h * k }; }
+            if (it1.pts) pr.fromPts = it1.pts.map(loc);
+          }
+          pairs.push(pr);
+        }
+        if (auto.length) warn(`スライド「${sc.slide}」: 部品「${mo.to}」: 自動で付いた id の要素（${auto.join("、")}）は Morph でつながない。Morph でつなぐなら id を書く`);
+      }
+      acts.push({ verb: "morph", scene: sc.id, line: sc.lines[0].id, start: sc.start, dur: 0.8, end: sc.start + 0.8, from: mo.from, to: mo.to, series, pairs });
+    }
     acts.sort((a, b) => a.start - b.start);
     const lastLine = timeline.lines[timeline.lines.length - 1];
     const speechEnd = lastLine.start + lastLine.dur;
@@ -468,7 +508,8 @@
 
     // 一度も出ない図への警告
     // スライドの部品は、そのスライドを使うどの場面でも出ないときだけ知らせる（場面をまたいで少しずつ出すのは普通の使い方）
-    const shown = fid => acts.some(a => a.verb === "show" && a.keys.some(k => k.startsWith(fid + "/")));
+    // Morph で v1 の表示を引き継ぐ図も、出たものとみなす
+    const shown = fid => acts.some(a => (a.verb === "show" && a.keys.some(k => k.startsWith(fid + "/"))) || (a.verb === "morph" && a.to === fid && a.pairs.length));
     for (const sc of scenes) for (const fid of sc.figs) {
       if (figs[fid].autoShow || sc.slide) continue;
       const any = acts.some(a => a.verb === "show" && a.keys.some(k => k.startsWith(fid + "/")) && a.start < sc.end);
@@ -481,6 +522,19 @@
     const credit = sb.credit || (sb.voice && sb.voice.credit) || timeline.credit || `VOICEVOX:${UZ.SPEAKER_NAMES[sp] || "話者 " + sp}`;
     return { errors, warnings, sb, theme, S, timeline, TL, scenes, figs, series, slides, assets, credits, acts, itemByKey, duration, endCard, credit, title: sb.title || "" };
   };
+
+  // Morph で要素をつなぐ type と、要素の kind（group は描かない。印・注記・点は動作で足したもので、引き継がない）
+  const MORPH_TYPES = ["graph", "list", "compare", "table"];
+  const MORPH_KINDS = ["box", "edge", "text", "rect", "band", "frame"];
+  const textOf = it => { const T = it.kind === "edge" ? it.label : it.texts && it.texts[0]; return T ? T.lines.join("\n") : null; };
+  const boxOfItem = it => (it.kind === "box" || it.kind === "rect" || it.kind === "frame" || it.kind === "band" ? { x: it.x, y: it.y, w: it.w, h: it.h } : it.bbox || null);
+  // 2 本の折れ線の補間。点の数が違うときは、両方の頂点の位置（長さの割合）で取り直す
+  function lerpPts(A, B, q) {
+    if (A.length === B.length) return A.map((p, i) => [mix(p[0], B[i][0], q), mix(p[1], B[i][1], q)]);
+    const pa = UZ.withLengths(A), pb = UZ.withLengths(B);
+    const us = [...new Set([...pa.L.map(l => l / (pa.total || 1)), ...pb.L.map(l => l / (pb.total || 1))])].sort((x, y) => x - y);
+    return us.map(u => { const a = UZ.along(pa, u), b = UZ.along(pb, u); return [mix(a[0], b[0], q), mix(a[1], b[1], q)]; });
+  }
 
   // 折れ線の角を、半径 r ぶん手前から曲線でつなぐ
   function roundCorners(pts, r) {
@@ -574,6 +628,10 @@
     const get = k => st[k] || (st[k] = { show: 0, dim: 1, blur: 0, pulse: 0, tint: null, tintP: 0, text: null, textFrom: null, textP: 1, mark: null, pos: null, off: [0, 0], labelText: null });
     let badge = { text: "", show: 0, from: "" };
     const customs = {};
+    // 今の場面（Morph の act が、自分の場面の間だけ v1 を隠すのに使う）
+    let si = M.scenes.findIndex((sc, i) => t < sc.end || i === M.scenes.length - 1);
+    if (t < M.scenes[0].start) si = 0;
+    const sc = M.scenes[si], prev = si > 0 ? M.scenes[si - 1] : null;
     for (const a of M.acts) {
       if (t < a.start) break;
       const p = clamp((t - a.start) / Math.max(0.001, a.dur));
@@ -638,6 +696,37 @@
           break;
         }
         case "custom": customs[a.key] = p; break;
+        case "morph": {
+          // 対応する要素: v2 は v1 の表示（出ているかどうか）だけを引き継ぐ。Morph の場面の間は v1 を隠す（重ねて描かない）
+          const here = sc.id === a.scene, q = ease(p);
+          for (const pr of a.pairs) {
+            const s1 = get(pr.from), s2 = get(pr.to);
+            s2.show = Math.max(s2.show, s1.show);
+            if (!here) continue;
+            s1.show = 0;
+            if (p >= 1) continue;
+            const it = M.itemByKey[pr.to];
+            s2.morph = true;
+            if (pr.fromBox) {
+              const B = pr.fromBox;
+              if (it.kind === "box") {
+                const R = { x: mix(B.x, it.x, q), y: mix(B.y, it.y, q), w: mix(B.w, it.w, q), h: mix(B.h, it.h, q) };
+                s2.rect = R; s2.textOff = [R.x + R.w / 2 - (it.x + it.w / 2), R.y + R.h / 2 - (it.y + it.h / 2)];
+              } else {
+                const b = it.kind === "text" ? it.bbox : it;
+                s2.off = [s2.off[0] + (B.x - b.x) * (1 - q), s2.off[1] + (B.y - b.y) * (1 - q)];
+              }
+            }
+            if (pr.fromPts && it.pts) s2.pts = lerpPts(pr.fromPts, it.pts, q);
+            const fillDiff = pr.fromFill != null && it.fill != null && pr.fromFill !== it.fill;
+            if ((pr.fromStroke != null && it.stroke != null && pr.fromStroke !== it.stroke) || fillDiff) {
+              s2.tintFrom = pr.fromStroke ?? it.stroke; s2.tint = it.stroke ?? null; s2.tintP = q;
+              if (fillDiff) s2.fillFrom = pr.fromFill;
+            }
+            if (pr.fromText != null && pr.toText != null && pr.fromText !== pr.toText) { s2.textFrom = pr.fromText; s2.text = pr.toText; s2.textP = q; }
+          }
+          break;
+        }
       }
     }
     // 点のいる箱の強調（点を消すと、強調も消える）
@@ -646,18 +735,23 @@
       if (s.herePop) { const ns = get(s.herePop[0]); ns.pulse = Math.max(ns.pulse || 0, s.herePop[1] * s.show); }
     }
     // 場面: 図の出入りと置き場所
-    let si = M.scenes.findIndex((sc, i) => t < sc.end || i === M.scenes.length - 1);
-    if (t < M.scenes[0].start) si = 0;
-    const sc = M.scenes[si], prev = si > 0 ? M.scenes[si - 1] : null;
     const k = smooth((t - sc.start) / 0.6);
     const figsF = {};
     for (const fid of Object.keys(M.figs)) figsF[fid] = { opacity: 0, place: null };
+    // この場面の Morph（v2 → act）。要素をつなぐ v2 は図ごとの fade in をしない（要素ごとに出る）。
+    // graph の系列は、v2 の写し方を v1 の写し方から補間し、fade out する v1 も同じ写し方で写す
+    const morphTo = {}, morphFrom = {};
+    if (prev) for (const a of M.acts) if (a.verb === "morph" && a.scene === sc.id) { morphTo[a.to] = a; morphFrom[a.from] = a; }
     for (const fid of sc.figs) {
       let pl = sc.place[fid];
-      if (prev && prev.place[fid]) { const a = prev.place[fid], b = pl, q = ease((t - sc.start) / 0.8); pl = { s: mix(a.s, b.s, q), ox: mix(a.ox, b.ox, q), oy: mix(a.oy, b.oy, q) }; }
-      figsF[fid] = { opacity: prev && prev.figs.includes(fid) ? 1 : k, place: pl };
+      const mo = morphTo[fid], from = prev && (prev.place[fid] || (mo && mo.series ? prev.place[mo.from] : null));
+      if (from) { const a = from, b = pl, q = ease((t - sc.start) / 0.8); pl = { s: mix(a.s, b.s, q), ox: mix(a.ox, b.ox, q), oy: mix(a.oy, b.oy, q) }; }
+      figsF[fid] = { opacity: prev && (prev.figs.includes(fid) || (mo && mo.pairs.length)) ? 1 : k, place: pl };
     }
-    if (prev) for (const fid of prev.figs) if (!sc.figs.includes(fid)) figsF[fid] = { opacity: 1 - k, place: prev.place[fid] };
+    if (prev) for (const fid of prev.figs) if (!sc.figs.includes(fid)) {
+      const mo = morphFrom[fid];
+      figsF[fid] = { opacity: 1 - k, place: mo && mo.series && figsF[mo.to] ? figsF[mo.to].place : prev.place[fid] };
+    }
     for (const a of M.acts) if (a.verb === "custom" && a.scene !== sc.id) delete customs[a.key];
     // 終わりの札
     const endP = smooth((t - M.endCard) / 0.6);

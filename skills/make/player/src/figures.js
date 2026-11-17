@@ -160,7 +160,7 @@
         const x = ci * (cw + gap);
         const pts = (it.points || []).map((p, pi) => {
           const o = typeof p === "string" ? { text: p } : p;
-          return { id: o.id || `${it.id}.${pi + 1}`, text: o.text, kind: o.kind || "plain", lines: UZ.wrap(o.text, ptSize, cw - pad * 2 - 34, 400, 3) };
+          return { id: o.id || `${it.id}.${pi + 1}`, autoId: !o.id, text: o.text, kind: o.kind || "plain", lines: UZ.wrap(o.text, ptSize, cw - pad * 2 - 34, 400, 3) };
         });
         let y = headH + 24;
         const placed = pts.map(p => {
@@ -182,7 +182,7 @@
         for (const p of placed) {
           const glyph = p.kind === "pro" ? "check" : p.kind === "con" ? "cross" : "dot";
           const gcol = p.kind === "pro" ? S.good : p.kind === "con" ? S.bad : S.muted;
-          items.push({ id: p.id, kind: "text", texts: [p.t], glyph: { kind: glyph, x: x + pad + 12, y: p.gy, size: 18, color: gcol }, bbox: { x: x + pad, y: p.t.bbox.y, w: p.t.bbox.x + p.t.bbox.w - x - pad, h: p.t.bbox.h }, parent: it.id });
+          items.push({ id: p.id, kind: "text", texts: [p.t], glyph: { kind: glyph, x: x + pad + 12, y: p.gy, size: 18, color: gcol }, bbox: { x: x + pad, y: p.t.bbox.y, w: p.t.bbox.x + p.t.bbox.w - x - pad, h: p.t.bbox.h }, parent: it.id, ...(p.autoId ? { autoId: true } : {}) });
           order.push(p.id);
         }
       }

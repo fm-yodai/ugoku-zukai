@@ -12,6 +12,21 @@
     return e;
   }
   const ptsD = pts => "M" + pts.map(p => `${p[0].toFixed(1)},${p[1].toFixed(1)}`).join("L");
+  // 矢じり（折れ線の最後の区間の向き）
+  function headD(pts, k) {
+    const n = pts.length, tip = pts[n - 1], from = pts[n - 2];
+    const ang = Math.atan2(tip[1] - from[1], tip[0] - from[0]), Lh = 12 * k, Wh = 6 * k;
+    const a = [tip[0] - Lh * Math.cos(ang) + Wh * Math.sin(ang), tip[1] - Lh * Math.sin(ang) - Wh * Math.cos(ang)];
+    const b = [tip[0] - Lh * Math.cos(ang) - Wh * Math.sin(ang), tip[1] - Lh * Math.sin(ang) + Wh * Math.cos(ang)];
+    return `M${a}L${tip}L${b}Z`;
+  }
+  // 面の色の補間（Morph で role が変わったとき）。透明度も補間する。"none" は透明として扱う
+  function mixFill(c1, c2, p) {
+    if (c1 === "none" && c2 === "none") return "none";
+    const a = C.parse(c1 === "none" ? c2 : c1), b = C.parse(c2 === "none" ? c1 : c2);
+    const aa = c1 === "none" ? 0 : a[3], ba = c2 === "none" ? 0 : b[3], m = (x, y) => x + (y - x) * p;
+    return `rgba(${[0, 1, 2].map(i => Math.round(m(a[i], b[i]))).join(",")},${+m(aa, ba).toFixed(3)})`;
+  }
   const GLYPH = {
     check: "M-7,0 L-2,5 L8,-6",
     cross: "M-6,-6 L6,6 M6,-6 L-6,6",
@@ -153,13 +168,7 @@
           E.g = el("g", null, it.isReply ? L.fx : L.edge);
           E.line = el("path", { d: ptsD(it.pts), fill: "none", stroke: it.stroke, "stroke-width": it.width, "stroke-linejoin": "round", "stroke-linecap": "round",
             ...(it.dashed ? { "stroke-dasharray": "7 6" } : { pathLength: 1, "stroke-dasharray": "1 1" }) }, E.g);
-          if (it.head) {
-            const n = it.pts.length, tip = it.pts[n - 1], from = it.pts[n - 2];
-            const k = it.headScale || 1, ang = Math.atan2(tip[1] - from[1], tip[0] - from[0]), Lh = 12 * k, Wh = 6 * k;
-            const a = [tip[0] - Lh * Math.cos(ang) + Wh * Math.sin(ang), tip[1] - Lh * Math.sin(ang) - Wh * Math.cos(ang)];
-            const b = [tip[0] - Lh * Math.cos(ang) - Wh * Math.sin(ang), tip[1] - Lh * Math.sin(ang) + Wh * Math.cos(ang)];
-            E.head = el("path", { d: `M${a}L${tip}L${b}Z`, fill: it.stroke, stroke: it.stroke, "stroke-width": 1, "stroke-linejoin": "round" }, E.g);
-          }
+          if (it.head) E.head = el("path", { d: headD(it.pts, it.headScale || 1), fill: it.stroke, stroke: it.stroke, "stroke-width": 1, "stroke-linejoin": "round" }, E.g);
           if (it.label) E.label = this.textSpec(it.isReply ? E.g : L.fx, it.label, { halo: true });
         } else if (it.kind === "text") {
           E.g = el("g", null, L.box);
@@ -282,7 +291,12 @@
             }
             const to = s.rect && s.textOff ? `translate(${s.textOff[0].toFixed(2)},${s.textOff[1].toFixed(2)})` : null;
             for (const tx of [...E.texts, E.smark].filter(Boolean)) { if (to) tx.setAttribute("transform", to); else tx.removeAttribute("transform"); }
+            // 見出しの帯（compare のカード）は、箱の形に合わせて伸び縮みする
+            if (E.head) { if (s.rect) E.head.setAttribute("transform", `translate(${R.x},${R.y}) scale(${R.w / it.w},${R.h / it.h}) translate(${-it.x},${-it.y})`); else E.head.removeAttribute("transform"); }
           }
+          // 面の色（Morph で role が変わったとき）
+          const fillC = s.fillFrom != null ? mixFill(s.fillFrom, it.fill, s.tintP) : it.fill;
+          if (E._fillC !== fillC && (E._fillC != null || fillC !== it.fill)) { E._fillC = fillC; E.fill.setAttribute("fill", fillC); }
           const cx = R.x + R.w / 2, cy = R.y + R.h / 2;
           E.g.setAttribute("transform", `translate(${off[0]},${off[1]}) translate(${cx},${cy}) scale(${sc}) translate(${-cx},${-cy})`);
           const col = s.tint ? C.mix(s.tintFrom || it.stroke, s.tint, s.tintP) : (s.pulse > 0.01 ? C.mix(it.stroke, S.accent, s.pulse) : it.stroke);
@@ -291,8 +305,16 @@
           E.stroke.setAttribute("stroke", here > 0.01 ? C.mix(col, s.hereColor || S.warn, here) : col);
           E.stroke.setAttribute("stroke-width", S.stroke + 1.6 * (s.pulse || 0) + 2.4 * here);
           if (E.hereR) { E.hereR.setAttribute("stroke", s.hereColor || S.warn); E.hereR.setAttribute("opacity", (0.3 * here).toFixed(3)); }
-          if (s.text != null && E.texts[0]) this.relabel(E.texts[0], it.texts[0], s);
+          if (s.text != null && E.texts[0]) this.relabel(E.texts[0], it.texts[0], s); else if (E.texts[0]) this.unlabel(E.texts[0], it.texts[0]);
         } else if (it.kind === "edge") {
+          // 経路の書き換え（Morph で両端が動くとき）。矢じりも描き直す
+          const pk = s.pts ? s.pts.map(p => `${p[0].toFixed(1)},${p[1].toFixed(1)}`).join(" ") : "";
+          if ((E._pts || "") !== pk) {
+            E._pts = pk;
+            const P = s.pts || it.pts;
+            E.line.setAttribute("d", ptsD(P));
+            if (E.head) E.head.setAttribute("d", headD(P, it.headScale || 1));
+          }
           if (it.dashed) E.line.style.opacity = op(smooth(show));
           else { E.line.setAttribute("stroke-dashoffset", (1 - smooth(clamp(show / 0.9))).toFixed(4)); E.line.style.opacity = op(show > 0 ? 1 : 0); }
           if (E.head) E.head.style.opacity = op(smooth((show - 0.85) / 0.15));
@@ -300,8 +322,8 @@
           let col = s.tint ? C.mix(s.tintFrom || it.stroke, s.tint, s.tintP) : it.stroke;
           if (s.pulse > 0.01) col = C.mix(col, S.accent, s.pulse);
           E.line.setAttribute("stroke", col); if (E.head) { E.head.setAttribute("fill", col); E.head.setAttribute("stroke", col); }
-          E.line.setAttribute("stroke-width", it.width + (s.tint ? 1 * s.tintP : 0) + 1.5 * (s.pulse || 0));
-          if (s.text != null && E.label) this.relabel(E.label, it.label, s);
+          E.line.setAttribute("stroke-width", it.width + (s.tint && !s.morph ? 1 * s.tintP : 0) + 1.5 * (s.pulse || 0));   // Morph の色の補間では太くしない
+          if (s.text != null && E.label) this.relabel(E.label, it.label, s); else if (E.label) this.unlabel(E.label, it.label);
         } else if (it.kind === "text") {
           E.g.style.opacity = op(smooth(show));
           const dy = (1 - ease(show)) * 10;
@@ -309,7 +331,7 @@
           const b = it.bbox, cx = b.x + b.w / 2, cy = b.y + b.h / 2;
           E.g.setAttribute("transform", `translate(${off[0]},${off[1] + dy}) translate(${cx},${cy}) scale(${sc}) translate(${-cx},${-cy})`);
           if (E.hl) E.hl.setAttribute("opacity", (s.pulse || 0).toFixed(3));
-          if (s.text != null && E.texts[0]) this.relabel(E.texts[0], it.texts[0], s);
+          if (s.text != null && E.texts[0]) this.relabel(E.texts[0], it.texts[0], s); else if (E.texts[0] && this.unlabel(E.texts[0], it.texts[0])) E.texts[0].style.opacity = "";
           if (s.tint && E.texts[0]) E.texts[0].setAttribute("fill", C.mix(it.texts[0].color || S.ink, s.tint, s.tintP));
         } else if (it.kind === "bar") {
           const g = ease(clamp(show / 0.85));
@@ -326,6 +348,7 @@
           if (s.text != null && E.texts[0]) this.relabel(E.texts[0], it.texts[0], s);
         } else if (it.kind === "rect") {
           E.g.style.opacity = op(smooth(show));
+          this.offset(E.g, off);
           if (it.fill === "none") E.bg.setAttribute("fill", C.rgba(s.tint || S.accent, 0.16 * Math.max(s.pulse || 0, s.tint ? s.tintP : 0)));
           if (E.tintR) {
             // 塗り替えは、元の面を消しながら新しい面を重ねる。題の色も、塗りに合わせる
@@ -337,6 +360,7 @@
           }
         } else if (it.kind === "band" || it.kind === "frame" || it.kind === "image") {
           E.g.style.opacity = op(smooth(show));
+          this.offset(E.g, off);
         } else if (it.kind === "mark") {
           const kind = s.mark || "check", col = kind === "cross" ? S.bad : kind === "question" ? S.warn : S.good;
           E.path.setAttribute("d", GLYPH[kind]); E.path.setAttribute("stroke", col); E.bgc.setAttribute("stroke", col);
@@ -411,10 +435,23 @@
       this.renderCustoms(fr);
       return fr;
     }
+    // 文の入れ替え（relabel と、Morph で文が違うとき）。改行（\n）で行を分ける
     relabel(tEl, spec, s) {
-      const want = s.textP < 0.5 ? (s.textFrom != null ? s.textFrom : spec.lines.join("")) : s.text;
-      if (tEl._cur !== want) { tEl._cur = want; this.setLines(tEl, [want]); }
+      const want = s.textP < 0.5 ? (s.textFrom != null ? s.textFrom : spec.lines.join("\n")) : s.text;
+      if (tEl._cur !== want) { tEl._cur = want; this.setLines(tEl, String(want).split("\n")); }
       tEl.style.opacity = (Math.abs(s.textP - 0.5) * 2).toFixed(3);
+    }
+    // 入れ替えた文を元に戻す（入れ替えより前へ戻ったときと、Morph が終わったとき）。戻したら true
+    unlabel(tEl, spec) {
+      if (tEl._cur == null) return false;
+      tEl._cur = null;
+      if (spec.spans) this.setSpans(tEl, spec.spans, spec.emColor); else this.setLines(tEl, spec.lines);
+      return true;
+    }
+    // 部品の位置のずれ（Morph の要素ごとの補間）
+    offset(g, off) {
+      const tr = off[0] || off[1] ? `translate(${off[0].toFixed(2)},${off[1].toFixed(2)})` : "";
+      if ((g._off || "") !== tr) { g._off = tr; if (tr) g.setAttribute("transform", tr); else g.removeAttribute("transform"); }
     }
     renderCustoms(fr) {
       const M = this.M;

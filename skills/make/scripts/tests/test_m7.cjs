@@ -21,7 +21,18 @@ const M7 = format => deck4({ a: { title: "A", parts: [{ figure: "g1" }] }, b: { 
 const seriesDeck = (figures, links) => deck4(
   Object.fromEntries(links.map(([fid, mv], i) => [`s${i + 1}`, { title: fid, parts: [mv ? { figure: fid, morph: mv } : { figure: fid }] }])),
   links.map(([fid], i) => SC(`c${i + 1}`, `s${i + 1}`, [{ id: `l${i + 1}`, text: "{a}出します。", do: [{ show: fid, at: "a" }] }])), figures);
-const boxOf = (F, id) => { const it = F.items[id]; return it && [it.x, it.y, it.w, it.h]; };
+// Morph の検査用: スライド a（v1）→ b（v2、morph: v1）。o.v1・o.v2 = 図（既定は G1・G2 を g1・g2 で）、
+// o.show1 = a で出すもの（既定は図ごと）、o.show2 = b で後から出すもの（既定は cache）、o.complete = b を完成形で始める、o.back = 最後に a へ戻る
+const morphDeck = (o = {}) => {
+  const f1 = o.v1 ? "v1" : "g1", f2 = o.v2 ? "v2" : "g2";
+  const b = { title: "B", parts: [{ figure: f2, morph: f1 }] };
+  if (o.complete) b.start = "complete";
+  const scenes = [SC("s1", "a", [{ id: "l1", text: "{a}出します。", do: [{ show: o.show1 ? `${f1}/${o.show1}` : f1, at: "a" }] }]),
+    SC("s2", "b", [{ id: "l2", text: "ここで、新しい部分を{a}足します。", do: [{ show: o.show2 || "cache", at: "a" }] }])];
+  if (o.back) scenes.push(SC("s3", "a", [{ id: "l3", text: "元の形に戻ります。" }]));
+  return deck4({ a: { title: "A", parts: [{ figure: f1 }] }, b }, scenes, { [f1]: o.v1 || G1, [f2]: o.v2 || G2 });
+};
+const boxOf =(F, id) => { const it = F.items[id]; return it && [it.x, it.y, it.w, it.h]; };
 // 系列でない graph の座標の指紋（この変更の前の値をテストに埋める）
 const crypto = require("crypto");
 const graphPrint = M => {
@@ -132,8 +143,122 @@ const tests = {
   },
   async series_branch_is_error() {
     const G3 = { type: "graph", nodes: [...G1.nodes, { id: "log", label: "ログ" }], edges: G1.edges };
-    const M = await build(seriesDeck({ g1: G1, g2: G2, g3: G3 }, [["g1"], ["g2", "g1"], ["g3", "g1"]]));
+    // g1 のスライドに戻ってから g3 へ進む（どちらの morph も直前の場面に g1 がある）
+    const sb = seriesDeck({ g1: G1, g2: G2, g3: G3 }, [["g1"], ["g2", "g1"], ["g3", "g1"]]);
+    sb.scenes.splice(2, 0, SC("c1b", "s1", [{ id: "l1b", text: "戻ります。" }]));
+    const M = await build(sb);
     hasErr(M, /morph の系列が分かれている/);
+  },
+  async morph_requires_previous_scene() {
+    const LIST = { type: "list", items: [{ id: "a", text: "あ" }] };
+    // v1 のスライドと v2 のスライドの間に別のスライドがある
+    let M = await build(deck4({ a: { title: "A", parts: [{ figure: "g1" }] }, c: { title: "C", parts: [{ figure: "l1" }] }, b: { title: "B", parts: [{ figure: "g2", morph: "g1" }] } },
+      [SC("s1", "a"), SC("s2", "c"), SC("s3", "b")], { g1: G1, g2: G2, l1: LIST }));
+    hasErr(M, /morph「g1」は直前のシーンのスライドにない/);
+    // 逆向き（morph が後のスライドを指す）
+    M = await build(deck4({ a: { title: "A", parts: [{ figure: "g1", morph: "g2" }] }, b: { title: "B", parts: [{ figure: "g2" }] } }, [SC("s1", "a"), SC("s2", "b")], { g1: G1, g2: G2 }));
+    hasErr(M, /morph「g2」は直前のシーンのスライドにない/);
+    // 輪（a ↔ b）
+    M = await build(deck4({ a: { title: "A", parts: [{ figure: "g1", morph: "g2" }] }, b: { title: "B", parts: [{ figure: "g2", morph: "g1" }] } }, [SC("s1", "a"), SC("s2", "b")], { g1: G1, g2: G2 }));
+    hasErr(M, /morph「g2」は直前のシーンのスライドにない/);
+  },
+  async morph_pairs_and_interpolates() {
+    const M = await build(morphDeck());
+    assert.deepStrictEqual(M.errors, []);
+    const ms = M.acts.filter(a => a.verb === "morph");
+    assert.strictEqual(ms.length, 1);
+    const a = ms[0], to = a.pairs.map(p => p.to);
+    for (const k of ["g2/app", "g2/api", "g2/db", "g2/app>api"]) assert.ok(to.includes(k), `pairs に ${k} がない: ${to}`);
+    assert.ok(!to.includes("g2/cache"), "pairs に g2/cache がある");
+    assert.strictEqual(a.dur, 0.8);
+    let fr = UZ.frame(M, a.start + 0.4);
+    assert.strictEqual(fr.st["g1/api"].show, 0, "v1 の対応する要素を重ねて描いている");
+    assert.strictEqual(fr.st["g2/api"].show, 1, "v2 が v1 の表示を引き継いでいない");
+    assert.strictEqual(fr.figs.g2.opacity, 1, "v2 の図が fade in している（対応する要素がちらつく）");
+    for (const it of Object.values(M.figs.g1.items)) assert.ok(M.figs.g2.items[it.id] || it.id === "api>db", `v1 だけの要素 ${it.id} がある`);
+    for (const k of Object.keys(fr.st)) if (k.startsWith("g2/")) assert.ok(!fr.st[k].rect && !fr.st[k].pts, `graph の系列で ${k} を要素ごとに補間している`);
+    fr = UZ.frame(M, a.start + 0.8);
+    assert.strictEqual(fr.st["g2/api"].show, 1);
+    // graph の系列: 写し方を補間する。v1 も同じ写し方で fade out する
+    // （G1 → G2 は外接矩形が同じで写し方が変わらないので、DB の先に鎖を伸ばし、倍率の上限では区画に収まらない v2 にする）
+    const ext = ["cache", "backup", "archive", "report"];
+    const MG = await build(morphDeck({ show2: "v2/cache", v2: { type: "graph", nodes: [...G1.nodes, ...ext.map(id => ({ id, label: id }))], edges: [...G1.edges, ...ext.map((id, i) => ({ from: i ? ext[i - 1] : "db", to: id }))] } }));
+    assert.deepStrictEqual(MG.errors, []);
+    const ag = MG.acts.find(x => x.verb === "morph");
+    const P1 = MG.scenes[0].place.g1, P2 = MG.scenes[1].place.v2;
+    fr = UZ.frame(MG, ag.start + 0.4);
+    const pl = fr.figs.v2.place;
+    for (const k of ["s", "ox", "oy"]) assert.ok(pl[k] >= Math.min(P1[k], P2[k]) - 1e-9 && pl[k] <= Math.max(P1[k], P2[k]) + 1e-9, `${k} が間にない: ${pl[k]}（${P1[k]} と ${P2[k]}）`);
+    assert.ok(Math.abs(pl.s - P1.s) > 1e-6 && Math.abs(pl.s - P2.s) > 1e-6, `倍率が途中の値でない（${P1.s} → ${pl.s} → ${P2.s}）`);
+    assert.deepStrictEqual(fr.figs.g1.place, pl);
+    assert.strictEqual(fr.st["g1/api"].show, 0);
+    for (const it of Object.values(MG.figs.g1.items)) assert.ok(MG.figs.v2.items[it.id], `v1 だけの要素 ${it.id} がある（G1 ⊂ v2）`);
+    fr = UZ.frame(MG, ag.start + 0.8);
+    assert.deepStrictEqual(fr.figs.v2.place, P2);
+    assert.strictEqual(fr.st["v2/api"].show, 1);
+    // list（項目を 1 つ挿入）: 要素ごとの補間
+    const L1 = { type: "list", items: [{ id: "a", text: "認証" }, { id: "b", text: "検索" }, { id: "c", text: "通知" }] };
+    const L2 = { type: "list", items: [{ id: "a", text: "認証" }, { id: "x", text: "決済" }, { id: "b", text: "検索" }, { id: "c", text: "通知" }] };
+    const ML = await build(morphDeck({ v1: L1, v2: L2, show2: "x" }));
+    assert.deepStrictEqual(ML.errors, []);
+    const al = ML.acts.find(x => x.verb === "morph");
+    assert.ok(al.pairs.some(p => p.to === "v2/b" && p.fromBox), "list の pairs に fromBox がない");
+    fr = UZ.frame(ML, al.start + 0.4);
+    for (const id of ["b", "c"]) { const o = fr.st[`v2/${id}`].off; assert.ok(Math.abs(o[0]) + Math.abs(o[1]) > 0.5, `v2/${id} の off が 0（${o}）`); }
+    assert.strictEqual(fr.st["v1/b"].show, 0);
+    fr = UZ.frame(ML, al.start + 0.8);
+    assert.deepStrictEqual(fr.st["v2/b"].off, [0, 0]);
+  },
+  async morph_new_items_follow_start() {
+    let M = await build(morphDeck());
+    let a = M.acts.find(x => x.verb === "morph");
+    const showAt = M.acts.find(x => x.verb === "show" && x.keys.includes("g2/cache")).start;
+    assert.ok(showAt > a.start + 0.8, "検査の前提: cache を出すのが Morph の後でない");
+    assert.strictEqual((UZ.frame(M, a.start + 0.8).st["g2/cache"] || { show: 0 }).show, 0);
+    assert.ok(UZ.frame(M, showAt + 1).st["g2/cache"].show > 0.99);
+    M = await build(morphDeck({ complete: true }));
+    a = M.acts.find(x => x.verb === "morph");
+    assert.ok(UZ.frame(M, a.start + 0.8).st["g2/cache"].show > 0, "start: complete なのに cache が出ない");
+  },
+  async morph_inherits_hidden() {
+    const M = await build(morphDeck({ show1: "app" }));
+    const a = M.acts.find(x => x.verb === "morph");
+    const fr = UZ.frame(M, a.start + 0.4);
+    assert.strictEqual(fr.st["g2/app"].show, 1);
+    assert.strictEqual((fr.st["g2/api"] || { show: 0 }).show, 0, "v1 で出していない api が v2 で出る");
+  },
+  async morph_back_to_v1() {
+    const M = await build(morphDeck({ back: true }));
+    assert.deepStrictEqual(M.errors, []);
+    const s3 = M.scenes[2];
+    const fr = UZ.frame(M, s3.start + 1.0);
+    assert.strictEqual(fr.st["g1/api"].show, 1);
+    assert.strictEqual(fr.figs.g1.opacity, 1);
+  },
+  async morph_auto_ids_not_matched() {
+    const C1 = { type: "compare", items: [{ id: "card", label: "カード", points: ["速い", { id: "cheap", text: "安い" }] }, { id: "other", label: "ほか", points: ["遅い"] }] };
+    const C2 = { type: "compare", items: [{ id: "card", label: "カード", points: ["速い", { id: "cheap", text: "安い" }, "軽い"] }, { id: "other", label: "ほか", points: ["遅い"] }] };
+    const M = await build(morphDeck({ v1: C1, v2: C2, show2: "v2/card.3" }));
+    assert.deepStrictEqual(M.errors, []);
+    const to = M.acts.find(x => x.verb === "morph").pairs.map(p => p.to);
+    assert.ok(to.includes("v2/card") && to.includes("v2/cheap"), JSON.stringify(to));
+    assert.ok(!to.some(k => /card\.\d|other\.\d/.test(k)), `自動の id をつないでいる: ${to}`);
+    hasWarn(M, /Morph でつなぐなら id を書く/);
+  },
+  async morph_unsupported_type_crossfades() {
+    const V1 = { type: "venn", sets: [{ id: "a", label: "現場" }, { id: "b", label: "データ" }] };
+    const V2 = { type: "venn", sets: [{ id: "a", label: "現場" }, { id: "b", label: "データ" }, { id: "c", label: "画面" }] };
+    const M = await build(morphDeck({ v1: V1, v2: V2, show2: "c" }));
+    assert.deepStrictEqual(M.errors, []);
+    assert.deepStrictEqual(M.acts.find(x => x.verb === "morph").pairs, []);
+    hasWarn(M, /Morph で要素をつなげない type/);
+  },
+  async morph_final_frame_is_v2() {
+    const M = await build(morphDeck());
+    const fr = UZ.finalFrame(M, "b");
+    assert.strictEqual(fr.figs.g1.opacity, 0);
+    assert.strictEqual(fr.figs.g2.opacity, 1);
+    for (const [k, s] of Object.entries(fr.st)) assert.ok(!s.rect && !s.pts, `${k} に Morph の途中の形がある`);
   },
   async non_series_graph_unchanged() {
     // 系列に入らない graph は、この変更の前と同じ座標（examples の見本）
