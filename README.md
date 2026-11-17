@@ -2,6 +2,10 @@
 
 題材を、自然な日本語ナレーション付きの「動く図解」にする Claude のプラグインです。題材は、コード・リポジトリ・PR・Web ページ・手元の文書・題目だけ、のどれでも構いません。claude.ai / Claude Desktop のチャットでも、Claude Code でも動くことを目指しています。
 
+このプラグインで作った紹介動画です（92 秒、音声あり。声は VOICEVOX:春日部つむぎ）。
+
+https://github.com/user-attachments/assets/9ed4e95e-8be0-4580-8e0b-047645785e70
+
 > **開発中（0.1.0）**: プレーヤー（M1）、声（M2: VOICEVOX での合成と時刻表）、進行の手順（M3）と、会話で構成を固める進め方への作り直し（R1・R2）、公開した後の直しと声の試聴（R3 の道具）までできました。スライドを先に作る進め方への作り直し（R4）と、Claude Code と claude.ai の両方での通しの確認も済んでいます。設計は [docs/design.md](docs/design.md) を見てください。
 
 ## できること（目標）
@@ -20,7 +24,7 @@
 
 | 部品 | 場所 | 役割 |
 |---|---|---|
-| スキル `make` | `skills/make/` | 本体。会話で構成を固めるところから公開までを進める。`/ugoku-zukai:make`、または「動く図解にして」で起動 |
+| スキル `make` | `skills/make/` | 本体。会話で構成を固めるところから公開までを進める。`/ugoku-zukai:make`、または「〜を動画で説明して」のように頼むと起動 |
 | サブエージェント 6 つ | `agents/` | Claude Code で使う作り手（researcher / writer / animator）と評価役（fact-checker / writing-reviewer / director）。claude.ai のチャットでは使われず、スキルが 1 つの会話で役を順番に演じる |
 | プレーヤー | `skills/make/player/` | 台本を描く JS（配置・描画・テーマ）。node の検査と同じコードを使う |
 | 見本 | `skills/make/examples/` | 図の種類ごとの見本台本と、デザインから作ったテーマの例。`python3 tools/build_gallery.py` で見本帳を作る |
@@ -53,7 +57,7 @@ claude plugin install ugoku-zukai@ugoku-zukai
 python3 tools/build_claude_ai_zip.py   # dist/ugoku-zukai-make.zip ができる
 ```
 
-**使い方**: 「〜を動く図解にして」「このリポジトリを動画で紹介して」のように頼むか、`/ugoku-zukai:make` で始めます。
+**使い方**: 「〜を動画にして」「〜を動画で説明して」「このリポジトリを動画で紹介して」のように頼むか、`/ugoku-zukai:make` で始めます。
 
 ## クレジットとライセンス
 

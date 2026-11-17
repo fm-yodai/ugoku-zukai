@@ -175,6 +175,27 @@
    "accent_type": 1,
    "word_type": "COMMON_NOUN",
    "priority": 3
+  },
+  {
+   "surface": "README",
+   "pronunciation": "リードミー",
+   "accent_type": 3,
+   "word_type": "PROPER_NOUN",
+   "priority": 8
+  },
+  {
+   "surface": "PR",
+   "pronunciation": "ピーアール",
+   "accent_type": 3,
+   "word_type": "COMMON_NOUN",
+   "priority": 8
+  },
+  {
+   "surface": "claude.ai",
+   "pronunciation": "クロードドットエーアイ",
+   "accent_type": 4,
+   "word_type": "PROPER_NOUN",
+   "priority": 8
   }
  ]
 }

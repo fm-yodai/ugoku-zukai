@@ -151,7 +151,7 @@ v1 は Manim の中で、重なりやはみ出しを機械で検査していた�
 ugoku-zukai/
 ├─ .claude-plugin/plugin.json       プラグインの定義
 ├─ .claude-plugin/marketplace.json  単体で入れるためのマーケットプレイス定義（claude plugin marketplace add fm-yodai/ugoku-zukai）
-├─ skills/make/                     本体スキル（/ugoku-zukai:make、「動く図解にして」）
+├─ skills/make/                     本体スキル（/ugoku-zukai:make、「動画で説明して」）
 │   ├─ SKILL.md            進行役。環境の判定と、両環境の手順
 │   ├─ references/         v1 の基準・構成の型・文章の規則（移植済み）。ショット DSL・manim-web.md は M1・M5 で書く
 │   ├─ player/             プレーヤー本体（共通 JS）・テーマ（M1）
@@ -650,6 +650,11 @@ claude.ai のチャットで「UXデザイン支援とは何か」（春日部�
 - 履歴を書き換えた（git filter-repo）: コミットの作者とコミッターのメールアドレスを GitHub の noreply に、Artifact の URL を名前だけに、`/home/yodai` を `~` にした。試作の生成物（`prototypes/compare/manim/media/` と `render.log`）は履歴から消した
 - PR の ref（`refs/pull/1/head`）は force push では消えないので、GitHub のリポジトリを消して作り直し、private のまま push し直した。PR #1 のページはなくなった
 - `LICENSE` を置き、README の入れ方を 3 つの環境の手順に書き直した
+
+### 紹介動画の作業から直したこと（2026-11-17）
+
+- **頼み方の例**: 「〜を動く図解にして」は日本語として使われない、と利用者が判断した。README と設計書の例を「〜を動画にして」「〜を動画で説明して」「このリポジトリを動画で紹介して」にし、SKILL.md の description では「動く図解にして」を起動語として残したまま末尾に回した（「動画にして」を足した）。プラグインの呼び名「動く図解」は変えない
+- **読み辞書**: `assets/voicevox_user_dict.json` に README（リードミー）・PR（ピーアール）・claude.ai（クロードドットエーアイ）を足した。PR は辞書がなくても正しく読むが、`check_text.py` の S-M4 で read を求められないように足した
 
 ### 残り
 
