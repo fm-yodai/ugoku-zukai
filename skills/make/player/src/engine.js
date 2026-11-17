@@ -303,7 +303,12 @@
             act.keys = keys;
             if (verb === "show" || verb === "hide") {
               act.stagger = a.stagger ?? (keys.length > 1 ? STAGGER : 0);
-              act.each = a.dur ?? DUR[verb];
+              act.each = a.dur ?? (verb === "show" && a.draw ? 1.4 : DUR[verb]);   // draw は線が伸びる分だけ、既定でゆっくり出す
+              if (verb === "show" && a.draw) {
+                act.draw = true;
+                const lined = keys.some(k => { const [f, ...r] = k.split("/"); const it = figs[f] && figs[f].items[r.join("/")]; return it && (it.kind === "box" || it.kind === "edge" || it.kind === "frame"); });
+                if (keys.length && !lined) warn(`${where}: draw は線のない要素には効かない（枠・辺・グループの枠に使う）`);
+              }
               dur = act.each + act.stagger * Math.max(0, keys.length - 1);
             }
             if (verb === "focus") act.figsOf = [...new Set(keys.map(k => k.split("/")[0]))];
@@ -711,8 +716,8 @@
       if (t < a.start) break;
       const p = clamp((t - a.start) / Math.max(0.001, a.dur));
       switch (a.verb) {
-        case "show": a.keys.forEach((k, i) => { const s = get(k); s.show = Math.max(s.show, clamp((t - a.start - i * a.stagger) / a.each)); }); break;
-        case "hide": a.keys.forEach((k, i) => { const s = get(k); s.show = Math.min(s.show, 1 - clamp((t - a.start - i * a.stagger) / a.each)); }); break;
+        case "show": a.keys.forEach((k, i) => { const s = get(k); s.show = Math.max(s.show, clamp((t - a.start - i * a.stagger) / a.each)); if (a.draw) s.draw = true; }); break;
+        case "hide": a.keys.forEach((k, i) => { const s = get(k); delete s.draw; s.show = Math.min(s.show, 1 - clamp((t - a.start - i * a.stagger) / a.each)); }); break;
         case "pulse": for (const k of a.keys) { if (p < 1) get(k).pulse = Math.sin(Math.PI * p); } break;
         case "focus": {
           const set = new Set(a.keys);

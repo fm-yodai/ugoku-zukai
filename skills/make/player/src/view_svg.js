@@ -3,6 +3,9 @@
   "use strict";
   const NS = "http://www.w3.org/2000/svg";
   const { clamp, smooth, ease, outBack } = UZ;
+  // 箱の出方の区間（show を 0→1 として [始まり, 長さ]）。既定と、draw（線が先に伸びる）
+  const D0 = { line: 0.75, fill: [0.35, 0.55], text: [0.45, 0.5], label: [0.5, 0.5], smark: [0.6, 0.4] };
+  const D = { line: 0.7, fill: [0.65, 0.35], text: [0.7, 0.3], label: [0.7, 0.3], smark: [0.7, 0.3] };
   const C = UZ.color;
 
   function el(tag, attrs, parent) {
@@ -209,7 +212,8 @@
           E.texts = (it.texts || []).map(T => this.textSpec(E.g, T));
         } else if (it.kind === "frame") {
           E.g = el("g", null, L.back);
-          E.stroke = el("rect", { x: it.x, y: it.y, width: it.w, height: it.h, rx: it.r, fill: C.rgba(it.stroke, 0.04), stroke: C.rgba(it.stroke, 0.7), "stroke-width": 1.6, "stroke-dasharray": "8 6" }, E.g);
+          E.fill = el("rect", { x: it.x, y: it.y, width: it.w, height: it.h, rx: it.r, fill: C.rgba(it.stroke, 0.04) }, E.g);
+          E.stroke = el("rect", { x: it.x, y: it.y, width: it.w, height: it.h, rx: it.r, fill: "none", stroke: C.rgba(it.stroke, 0.7), "stroke-width": 1.6, "stroke-dasharray": "8 6" }, E.g);
           E.texts = (it.texts || []).map(T => this.textSpec(E.g, T));
         } else if (it.kind === "mark") {
           E.g = el("g", null, L.fx);
@@ -230,6 +234,27 @@
         }
         this.els[it.key] = E;
       }
+    }
+    // 破線を「伸びて描かれる」ように見せる: pathLength=1 のダッシュで描く実線を mask にして破線に被せる
+    // （破線の stroke-dasharray と、描画の stroke-dashoffset は両立しない）。mask の id は部品のキーと進み具合から決める
+    // （View ごとの連番にすると、--scenes で書いたコマが全体のときと変わる）。on = false で外す
+    dashMask(E, key, it, p, on, pts) {
+      const line = E.stroke && it.kind === "frame" ? E.stroke : E.line;
+      if (!on) { if (E.dm) line.removeAttribute("mask"); return; }
+      if (!E.dm) {
+        const b = it.bbox || { x: it.x, y: it.y, w: it.w, h: it.h };
+        const m = el("mask", { maskUnits: "userSpaceOnUse", x: b.x - 20, y: b.y - 20, width: b.w + 40, height: b.h + 40 }, this.defs);
+        const w = (it.width || 1.6) + 6;
+        const base = { fill: "none", stroke: "#fff", "stroke-width": w, pathLength: 1, "stroke-dasharray": "1 1" };
+        E.dmPath = it.kind === "frame" ? el("rect", { x: it.x, y: it.y, width: it.w, height: it.h, rx: it.r, ...base }, m) : el("path", { d: ptsD(it.pts), "stroke-linejoin": "round", ...base }, m);
+        E.dm = m;
+      }
+      if (it.kind === "edge" && pts && E._dmPts !== pts) { E._dmPts = pts; E.dmPath.setAttribute("d", ptsD(pts)); }   // Morph で経路が変わったとき
+      const off = (1 - p).toFixed(4);
+      E.dmPath.setAttribute("stroke-dashoffset", off);
+      const id = `uz-dm-${key.replace(/[^A-Za-z0-9_-]/g, "_")}-${Math.round((1 - p) * 1000)}`;
+      E.dm.setAttribute("id", id);
+      line.setAttribute("mask", `url(#${id})`);
     }
     glyph(parent, kind, x, y, color, scale) {
       const g = el("g", { transform: `translate(${x},${y}) scale(${scale})` }, parent);
@@ -275,14 +300,16 @@
         const op = (x) => (x * dim).toFixed(3);
         const off = s.off || [0, 0];
         if (it.kind === "box") {
-          const draw = smooth(clamp(show / 0.75));
+          // draw（show の draw: true）: 線が先に伸び（0〜0.7）、塗り（0.65〜）と文字（0.7〜）が後から出る
+          const dr = s.draw ? D : D0;
+          const draw = smooth(clamp(show / dr.line));
           E.stroke.setAttribute("stroke-dashoffset", (1 - draw).toFixed(4));
           E.stroke.style.opacity = op(show > 0 ? 1 : 0);
-          const fillO = smooth((show - 0.35) / 0.55);
+          const fillO = smooth((show - dr.fill[0]) / dr.fill[1]);
           E.fill.style.opacity = op(fillO); if (E.head) E.head.style.opacity = op(fillO);
-          for (const tx of E.texts) tx.style.opacity = op(smooth((show - 0.45) / 0.5));
-          if (E.label) E.label.style.opacity = op(smooth((show - 0.5) / 0.5));
-          if (E.smark) E.smark.style.opacity = op(smooth((show - 0.6) / 0.4));
+          for (const tx of E.texts) tx.style.opacity = op(smooth((show - dr.text[0]) / dr.text[1]));
+          if (E.label) E.label.style.opacity = op(smooth((show - dr.label[0]) / dr.label[1]));
+          if (E.smark) E.smark.style.opacity = op(smooth((show - dr.smark[0]) / dr.smark[1]));
           if (it.count && E.texts[it.count.index]) {
             const c = it.count, v = c.to * ease(clamp((show - 0.3) / 0.7));
             const str = c.prefix + UZ.fmtNum(show >= 1 ? c.to : v, c.decimals ?? (c.to % 1 ? 1 : 0));
@@ -324,8 +351,15 @@
             E.line.setAttribute("d", ptsD(P));
             if (E.head) E.head.setAttribute("d", headD(P, it.headScale || 1));
           }
-          if (it.dashed) E.line.style.opacity = op(smooth(show));
-          else { E.line.setAttribute("stroke-dashoffset", (1 - smooth(clamp(show / 0.9))).toFixed(4)); E.line.style.opacity = op(show > 0 ? 1 : 0); }
+          if (s.draw) {
+            const p = smooth(clamp(show / 0.7));
+            if (it.dashed) { this.dashMask(E, key, it, p, show < 1, s.pts || it.pts); E.line.style.opacity = op(show > 0 ? 1 : 0); }
+            else { E.line.setAttribute("stroke-dashoffset", (1 - p).toFixed(4)); E.line.style.opacity = op(show > 0 ? 1 : 0); }
+          } else {
+            if (E.dm) this.dashMask(E, key, it, 1, false);
+            if (it.dashed) E.line.style.opacity = op(smooth(show));
+            else { E.line.setAttribute("stroke-dashoffset", (1 - smooth(clamp(show / 0.9))).toFixed(4)); E.line.style.opacity = op(show > 0 ? 1 : 0); }
+          }
           if (E.head) E.head.style.opacity = op(smooth((show - 0.85) / 0.15));
           if (E.label) E.label.style.opacity = op(smooth((show - 0.7) / 0.3));
           let col = s.tint ? C.mix(s.tintFrom || it.stroke, s.tint, s.tintP) : it.stroke;
@@ -367,7 +401,16 @@
             if (s.tint) E.tintR.setAttribute("fill", s.tintOff ? UZ.QUAD_OFF(S) : UZ.QUAD_ON(s.tint));
             if (E.texts[0]) E.texts[0].setAttribute("fill", C.mix(it.texts[0].color || S.ink, s.tint ? (s.tintOff ? S.muted : s.tint) : it.texts[0].color || S.ink, p));
           }
+        } else if (it.kind === "frame" && s.draw) {
+          // 破線の枠: 線が伸び（0〜0.7）、面と文字は後から。破線は mask で隠して伸ばす
+          E.g.style.opacity = op(show > 0 ? 1 : 0);
+          this.dashMask(E, key, it, smooth(clamp(show / 0.7)), show < 1);
+          E.fill.style.opacity = op(smooth((show - 0.65) / 0.35));
+          for (const tx of E.texts) tx.style.opacity = op(smooth((show - 0.7) / 0.3));
+          this.offset(E.g, off);
         } else if (it.kind === "band" || it.kind === "frame" || it.kind === "image") {
+          if (E.dm) this.dashMask(E, key, it, 1, false);
+          if (it.kind === "frame") { E.fill.style.opacity = ""; for (const tx of E.texts) tx.style.opacity = ""; }
           E.g.style.opacity = op(smooth(show));
           this.offset(E.g, off);
         } else if (it.kind === "mark") {

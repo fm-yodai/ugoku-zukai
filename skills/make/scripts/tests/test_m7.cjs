@@ -399,6 +399,64 @@ const tests = {
     const mid = ts.filter(t => t >= mo.start && t < mo.end);
     assert.deepStrictEqual(mid, [], `Morph の途中の時刻で調べている: ${mid}`);
   },
+  async draw_sets_state_and_duration() {
+    const M = await build(camDeck([{ id: "l1", text: "{a}出します。", do: [{ show: "api", draw: true, at: "a" }] }]));
+    assert.deepStrictEqual(M.errors, []);
+    const a = M.acts.find(x => x.verb === "show");
+    assert.strictEqual(a.each, 1.4);
+    assert.strictEqual(UZ.frame(M, a.start + 0.7).st["g1/api"].draw, true);
+    assert.ok(!UZ.frame(M, a.start + 0.7).st["g1/db"] || !UZ.frame(M, a.start + 0.7).st["g1/db"].draw);
+    const M2 = await build(camDeck([{ id: "l1", text: "{a}出します。", do: [{ show: "api", draw: true, dur: 2, at: "a" }] }]));
+    assert.strictEqual(M2.acts.find(x => x.verb === "show").each, 2);
+    const M3 = await build(camDeck([{ id: "l1", text: "{a}出します。", do: [{ show: "api", at: "a" }] }]));
+    assert.strictEqual(M3.acts.find(x => x.verb === "show").each, 0.7);
+  },
+  async draw_without_lines_warns() {
+    const sb = deck4({ a: { title: "A", parts: [{ id: "tx", type: "text", blocks: [{ id: "p", kind: "para", text: "ただの文。" }], area: { col: [1, 6], row: [1, 3] } }] } }, [SC("s1", "a", [{ id: "l1", text: "{a}出します。", do: [{ show: "tx", draw: true, at: "a" }] }])]);
+    const M = await build(sb);
+    assert.deepStrictEqual(M.errors, []);
+    hasWarn(M, /draw は線のない要素には効かない/);
+  },
+  async draw_renders_partial_frame() {
+    const { makeDocument, serialize } = require("../svg_dom.cjs");
+    const fs = require("fs"), path = require("path"), vm = require("vm");
+    globalThis.document = makeDocument();
+    if (!UZ.View) vm.runInThisContext(fs.readFileSync(path.join(__dirname, "../../player/src/view_svg.js"), "utf8"), { filename: "view_svg.js" });
+    const G = { type: "graph", nodes: [{ id: "app", label: "アプリ" }, { id: "api", label: "API" }, { id: "db", label: "DB" }], edges: [{ from: "app", to: "api", style: "dashed" }, { from: "api", to: "db" }], groups: [{ id: "grp", label: "内側", members: ["api", "db"] }] };
+    const M = await build(camDeck([{ id: "l1", text: "{a}出します。", do: [{ show: "g1", draw: true, at: "a" }] }], { g1: G }));
+    assert.deepStrictEqual(M.errors, []);
+    const a = M.acts.find(x => x.verb === "show");
+    const svg = makeDocument().createElementNS("http://www.w3.org/2000/svg", "svg");
+    const v = new UZ.View(svg, M);
+    v.render(a.start + 0.5);
+    const E = k => v.els[k];
+    const off = e => +e.getAttribute("stroke-dashoffset");
+    const api = E("g1/api");
+    assert.ok(off(api.stroke) > 0 && off(api.stroke) < 1, `箱の枠が途中でない: ${off(api.stroke)}`);
+    assert.ok(+api.fill.style.opacity === 0, `塗りが先に出ている: ${api.fill.style.opacity}`);
+    const fr = E("g1/grp");
+    assert.ok(fr && fr.dm, "frame の mask がない");
+    assert.ok(off(fr.dmPath) > 0 && off(fr.dmPath) < 1, `frame の mask が途中でない: ${off(fr.dmPath)}`);
+    assert.ok(/^url\(#uz-dm-/.test(fr.stroke.getAttribute("mask")));
+    const ed = Object.values(v.els).find(e => e.it.kind === "edge" && e.it.dashed);
+    const edKey = Object.keys(v.els).find(k => v.els[k] === ed);
+    let te = a.start; while (te < a.end && !(UZ.frame(M, te).st[edKey].show > 0.3)) te += 0.05;   // 辺は後から出るので、途中になる時刻まで進める
+    v.render(te);
+    assert.ok(ed && ed.dm && off(ed.dmPath) > 0 && off(ed.dmPath) < 1, "破線のエッジの mask が途中でない");
+    // 描き終えたら mask を外す
+    v.render(a.end + 0.1);
+    assert.strictEqual(fr.stroke.getAttribute("mask"), null);
+    // 同じ t なら、別の View でも同じ id
+    const svg2 = makeDocument().createElementNS("http://www.w3.org/2000/svg", "svg");
+    new UZ.View(svg2, M).render(a.start + 0.5);
+    v.render(a.start + 0.5);
+    assert.strictEqual(serialize(svg2).match(/uz-dm-[^")]+/g).join(), serialize(svg).match(/uz-dm-[^")]+/g).join());
+    // draw なしは出方が変わらない
+    const M0 = await build(camDeck([{ id: "l1", text: "{a}出します。", do: [{ show: "g1", at: "a" }] }], { g1: G }));
+    const s0 = makeDocument().createElementNS("http://www.w3.org/2000/svg", "svg");
+    new UZ.View(s0, M0).render(M0.acts.find(x => x.verb === "show").start + 0.3);
+    assert.ok(!/uz-dm-/.test(serialize(s0)));
+  },
   async non_series_graph_unchanged() {
     // 系列に入らない graph は、この変更の前と同じ座標（examples の見本）
     const fs = require("fs"), path = require("path");
