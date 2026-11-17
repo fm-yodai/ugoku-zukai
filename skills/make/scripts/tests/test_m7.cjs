@@ -480,6 +480,23 @@ const tests = {
       assert.strictEqual(e.getAttribute("stroke-dashoffset"), null);
     }
   },
+  async draw_frame_applies_dim_once() {
+    const { makeDocument } = require("../svg_dom.cjs");
+    const fs = require("fs"), path = require("path"), vm = require("vm");
+    globalThis.document = makeDocument();
+    if (!UZ.View) vm.runInThisContext(fs.readFileSync(path.join(__dirname, "../../player/src/view_svg.js"), "utf8"), { filename: "view_svg.js" });
+    const G = { type: "graph", nodes: [{ id: "app", label: "アプリ" }, { id: "api", label: "API" }, { id: "db", label: "DB" }], edges: [{ from: "app", to: "api" }, { from: "api", to: "db" }], groups: [{ id: "grp", label: "内側", members: ["db"] }] };
+    const M = await build(camDeck([{ id: "l1", text: "{a}出して{b}注目します。", do: [{ show: "g1", draw: true, at: "a" }, { focus: "app", at: "b" }] }], { g1: G }));
+    assert.deepStrictEqual(M.errors, []);
+    const t = M.duration - 0.05, dim = UZ.frame(M, t).st["g1/grp"].dim;
+    assert.ok(dim < 0.9, `検査の前提: frame が dim されていない: ${dim}`);
+    const svg = makeDocument().createElementNS("http://www.w3.org/2000/svg", "svg");
+    const v = new UZ.View(svg, M); v.render(t);
+    const E = v.els["g1/grp"];
+    assert.ok(Math.abs(+E.g.style.opacity - dim) < 0.01, `g の opacity: ${E.g.style.opacity} / dim ${dim}`);
+    assert.strictEqual(+E.fill.style.opacity, 1, `面に dim が重ねて掛かる: ${E.fill.style.opacity}`);
+    assert.strictEqual(+E.texts[0].style.opacity, 1, `文字に dim が重ねて掛かる: ${E.texts[0].style.opacity}`);
+  },
   async non_series_graph_unchanged() {
     // 系列に入らない graph は、この変更の前と同じ座標（examples の見本）
     const fs = require("fs"), path = require("path");

@@ -432,8 +432,9 @@
           // 破線の枠: 線が伸び（0〜0.7）、面と文字は後から。破線は mask で隠して伸ばす
           E.g.style.opacity = op(show > 0 ? 1 : 0);
           this.dashMask(E, key, it, smooth(clamp(show / 0.7)), show < 1);
-          E.fill.style.opacity = op(smooth((show - 0.65) / 0.35));
-          for (const tx of E.texts) tx.style.opacity = op(smooth((show - 0.7) / 0.3));
+          // 暗さ（dim）は E.g に 1 回だけ掛ける。子に掛けると 2 回掛かる
+          E.fill.style.opacity = smooth((show - 0.65) / 0.35).toFixed(3);
+          for (const tx of E.texts) tx.style.opacity = smooth((show - 0.7) / 0.3).toFixed(3);
           this.offset(E.g, off);
         } else if (it.kind === "band" || it.kind === "frame" || it.kind === "image") {
           if (E.dm) this.dashMask(E, key, it, 1, false);
