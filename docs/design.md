@@ -656,8 +656,13 @@ claude.ai のチャットで「UXデザイン支援とは何か」（春日部�
 - **頼み方の例**: 「〜を動く図解にして」は日本語として使われない、と利用者が判断した。README と設計書の例を「〜を動画にして」「〜を動画で説明して」「このリポジトリを動画で紹介して」にし、SKILL.md の description では「動く図解にして」を起動語として残したまま末尾に回した（「動画にして」を足した）。プラグインの呼び名「動く図解」は変えない
 - **読み辞書**: `assets/voicevox_user_dict.json` に README（リードミー）・PR（ピーアール）・claude.ai（クロードドットエーアイ）を足した。PR は辞書がなくても正しく読むが、`check_text.py` の S-M4 で read を求められないように足した
 
+### 公開と案内（2026-11-17）
+
+- リポジトリを public にし、社内のメンバーにチャットで試してほしいと案内した
+- Releases に v0.1.0 を作り、スキルの zip（`ugoku-zukai-make.zip`、`tools/build_claude_ai_zip.py` で作る）を置いた。README には、Add marketplace で入らないときの控えとして 1 行だけ書いた
+- 版を上げるときは、`.claude-plugin/plugin.json` の `version` を上げ、zip を作り直して新しい Release に置く
+
 ### 残り
 
-1. claude.ai か Desktop で、private のうちに一度プラグインとして入れ、`make` が動くか（スキルのフォルダが見つかるか、frontmatter で止まらないか）を確かめる
-2. public に切り替え、Releases にスキルの zip を置く
-3. メンバーに使ってもらい、skill-creator の evals と、学んだことを重ねて読む仕組み（§13 で M6 に回したもの）が要るかを決める
+1. メンバーに使ってもらい、感想を集める。どの環境で使ったか、どこで詰まったか、mp4 が欲しいか（M4 を再開するか）を聞く
+2. 感想を見て、skill-creator の evals と、学んだことを重ねて読む仕組み（§13 で M6 に回したもの）が要るかを決める
