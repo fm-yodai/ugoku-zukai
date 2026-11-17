@@ -121,6 +121,36 @@
     const credits = [];
     for (const f of Object.values(FIGS)) if (f.type === "image" && typeof f.credit === "string" && f.credit && !credits.includes(f.credit)) credits.push(f.credit);
 
+    // ---- Morph の系列: morph でつながる graph（v1 → v2 → …）。場面の順に集め、1 枚のキャンバスに組む ----
+    const nextOf = {}, prevOf = {};
+    for (const sc of scenes) {
+      if (sc.slide == null) continue;
+      sb.slides[sc.slide].parts.forEach((p, i) => {
+        const fid = sc.figs[i], mv = p && p.morph;
+        if (typeof mv !== "string" || FIGS[fid].type !== "graph" || !FIGS[mv] || FIGS[mv].type !== "graph") return;
+        if ((nextOf[mv] && nextOf[mv] !== fid) || (prevOf[fid] && prevOf[fid] !== mv)) {
+          err(`スライド「${sc.slide}」: morph の系列が分かれている（「${mv}」→「${nextOf[mv] || fid}」と「${prevOf[fid] || mv}」→「${fid}」。graph の morph は 1 本の列にする）`);
+          return;
+        }
+        nextOf[mv] = fid; prevOf[fid] = mv;
+      });
+    }
+    if (errors.length) return { errors, warnings };
+    const series = [], seriesOf = {};
+    for (const head of Object.keys(nextOf)) {
+      if (prevOf[head]) continue;
+      const list = [head];
+      while (nextOf[list[list.length - 1]] && !list.includes(nextOf[list[list.length - 1]])) list.push(nextOf[list[list.length - 1]]);
+      const sr = { figs: list };
+      series.push(sr);
+      for (const fid of list) seriesOf[fid] = sr;
+    }
+    const canvases = new Map();
+    for (const sr of series) {
+      const last = FIGS[sr.figs[sr.figs.length - 1]];
+      canvases.set(sr, await UZ.graphCanvas(sr.figs.map(fid => FIGS[fid]), S0, (last.direction || "right").toLowerCase()));
+    }
+
     // ---- 図の配置（最初に出る場面の区画で 1 回だけ。色も、その場面の地で決まる）----
     const figs = {};
     const SD = UZ.darkStyleOf(S);
@@ -145,21 +175,11 @@
           const pick = fits.find(x => !base || x.T.lineCount == null || x.T.lineCount <= base.T.lineCount);
           if (pick) L = { ...pick.T, maxScale: 1, fillK: pick.k };
         }
-        // Morph の graph は、前の図（v1）のレイアウトに寄せる。v1 がまだ配置されていなければ（場面の順の誤り）寄せずに組む
-        const mv = sc.slide != null ? (sb.slides[sc.slide].parts[i] || {}).morph : null;
-        const anchor = f.type === "graph" && mv && figs[mv] && figs[mv].type === "graph" ? graphAnchor(figs[mv]) : null;
-        if (!L) L = await UZ.FIG[f.type].layout(f, S, { area: A, tryBoth: !f.direction, assets, anchor });
-        if (L.morphBroken && L.morphBroken.length) warn(`スライド「${sc.slide}」: 部品「${fid}」の Morph の並びを保てない（${L.morphBroken.join("、")} の順が「${mv}」と入れ替わる）。edges の向きか direction を直す`);
+        if (!L) L = await UZ.FIG[f.type].layout(f, S, { area: A, tryBoth: !f.direction, assets, canvas: seriesOf[fid] ? canvases.get(seriesOf[fid]) : undefined });
         const items = {};
         for (const it of L.items) { it.fig = fid; it.key = `${fid}/${it.id}`; items[it.id] = it; }
-        figs[fid] = { id: fid, type: f.type, spec: f, w: L.w, h: L.h, items, order: L.order, autoShow: !!L.autoShow, fixed: !!L.fixed, extra: L, dark: !!sc.slideDark, morphFrom: anchor ? mv : null };
+        figs[fid] = { id: fid, type: f.type, spec: f, w: L.w, h: L.h, items, order: L.order, autoShow: !!L.autoShow, fixed: !!L.fixed, extra: L, dark: !!sc.slideDark };
       }
-    }
-    // Morph の anchor: v1 の向きと、ノードの矩形
-    function graphAnchor(F) {
-      const nodes = {};
-      for (const it of Object.values(F.items)) if (it.kind === "box") nodes[it.id] = { x: it.x, y: it.y, w: it.w, h: it.h };
-      return { dir: F.extra.dir, nodes };
     }
     // ---- id の解決 ----
     function resolve(sc, ref, ctxv) {
@@ -415,7 +435,8 @@
 
     // 注記・印・戻りの矢印のぶん、図の外枠を広げる
     for (const F of Object.values(figs)) {
-      let x0 = 0, y0 = 0, x1 = F.w, y1 = F.h;
+      // 系列の graph は、キャンバス座標での自分の外接矩形（extra.x0・y0 から w・h まで）
+      let x0 = F.extra.x0 ?? 0, y0 = F.extra.y0 ?? 0, x1 = F.w, y1 = F.h;
       for (const it of Object.values(F.items)) {
         const bs = [];
         if (it.kind === "note" || it.kind === "mark" || it.isReply) bs.push(it.bbox);
@@ -435,33 +456,7 @@
       const oy = area.y + (va === "top" ? 0 : va === "bottom" ? dy : dy / 2) - F.y0 * s;
       return { s, ox, oy };
     };
-    // Morph の graph（anchor あり）: 倍率は v1 の画面上の倍率のまま（区画に収まらなければ、収まる一番大きい倍率）にし、
-    // 共通ノードの中心が、v1 が直前に出た場面での画面上の位置に一番近づく平行移動を選ぶ。差の平均（最小二乗）だと、
-    // 間に入ったノードに押し出された共通ノード（cache が入ったときの db など）に全体が引っぱられるので、差の中央値（絶対値の和が最小）を使う。
-    // 図が区画からはみ出さないように平行移動を抑える。揃え（valign・halign）は使わない
-    const placeMorph = (fid, area, p1) => {
-      const F = figs[fid], F1 = figs[F.morphFrom], w = F.x1 - F.x0, h = F.y1 - F.y0;
-      const s = Math.min(p1.s, area.w / w, area.h / h);
-      const shared = Object.values(F.items).filter(it => it.kind === "box" && F1.items[it.id] && F1.items[it.id].kind === "box");
-      if (!shared.length) return place(fid, area);   // 共通ノードがなければ、ふつうに置く
-      const mid = (it, k) => k === "x" ? it.x + it.w / 2 : it.y + it.h / 2;
-      const fit = k => {
-        const d = shared.map(it => (p1["o" + k] + p1.s * mid(F1.items[it.id], k)) - s * mid(it, k)).sort((a, b) => a - b), n = d.length;
-        return n % 2 ? d[(n - 1) / 2] : (d[n / 2 - 1] + d[n / 2]) / 2;
-      };
-      const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
-      const ox = clamp(fit("x"), area.x - F.x0 * s, area.x + area.w - F.x1 * s);
-      const oy = clamp(fit("y"), area.y - F.y0 * s, area.y + area.h - F.y1 * s);
-      return { s, ox, oy };
-    };
-    const lastPlace = {};   // 図ごとに、直前に出た場面での place
-    for (const sc of scenes) {
-      sc.place = Object.fromEntries(sc.figs.map((fid, i) => {
-        const F = figs[fid], p1 = F.morphFrom && lastPlace[F.morphFrom];
-        return [fid, p1 ? placeMorph(fid, sc.areas[i], p1) : place(fid, sc.areas[i])];
-      }));
-      Object.assign(lastPlace, sc.place);
-    }
+    for (const sc of scenes) sc.place = Object.fromEntries(sc.figs.map((fid, i) => [fid, place(fid, sc.areas[i])]));
     acts.sort((a, b) => a.start - b.start);
     const lastLine = timeline.lines[timeline.lines.length - 1];
     const speechEnd = lastLine.start + lastLine.dur;
@@ -483,7 +478,7 @@
     }
     const sp = (sb.voice && sb.voice.speaker) ?? UZ.DEFAULT_SPEAKER;
     const credit = sb.credit || (sb.voice && sb.voice.credit) || timeline.credit || `VOICEVOX:${UZ.SPEAKER_NAMES[sp] || "話者 " + sp}`;
-    return { errors, warnings, sb, theme, S, timeline, TL, scenes, figs, slides, assets, credits, acts, itemByKey, duration, endCard, credit, title: sb.title || "" };
+    return { errors, warnings, sb, theme, S, timeline, TL, scenes, figs, series, slides, assets, credits, acts, itemByKey, duration, endCard, credit, title: sb.title || "" };
   };
 
   // 折れ線の角を、半径 r ぶん手前から曲線でつなぐ
@@ -528,7 +523,7 @@
         const box = { x: cx - w / 2, y: cy - h / 2, w, h };
         let sc = (f === 0.5 ? 0 : 3) - L * 0.01;
         for (const o of obst) { sc += UZ.rectOverlap(box, o.kind === "box" ? o.bbox : o.label.bbox, 8) * 5; }
-        if (box.x < 0 || box.y < 0 || box.x + w > F.w || box.y + h > F.h) sc += 40;
+        if (box.x < (F.extra.x0 ?? 0) || box.y < (F.extra.y0 ?? 0) || box.x + w > F.w || box.y + h > F.h) sc += 40;
         if (sc < bestS) { bestS = sc; best = [cx, cy]; }
       }
     }
@@ -546,7 +541,7 @@
   function placeNote(F, n, S) {
     const size = 18, lines = UZ.wrap(n.text, size, 300, 500, 3);
     const tw = Math.max(...lines.map(s => UZ.textW(s, size, 500))), th = lines.length * 25;
-    const tb = n.target ? F.items[n.target].bbox : { x: F.w / 2, y: F.h, w: 0, h: 0 };
+    const tb = n.target ? F.items[n.target].bbox : { x: ((F.extra.x0 ?? 0) + F.w) / 2, y: F.h, w: 0, h: 0 };
     const gap = n.link ? 26 : 10;
     const cands = [
       [tb.x + tb.w / 2 - tw / 2, tb.y + tb.h + gap], [tb.x + tb.w / 2 - tw / 2, tb.y - gap - th],
@@ -564,7 +559,7 @@
       let s = i * 2;
       for (const o of others) { s += UZ.rectOverlap(b, o.bbox) * 4; if (o.label) s += UZ.rectOverlap(b, o.label.bbox) * 4; }
       for (const fr of frames) { const ov = UZ.rectOverlap(b, fr.bbox); const inside = b.x >= fr.bbox.x && b.y >= fr.bbox.y && b.x + b.w <= fr.bbox.x + fr.bbox.w && b.y + b.h <= fr.bbox.y + fr.bbox.h; if (ov > 0 && !inside) s += ov * 4; }
-      if (b.x < 0 || b.y < 0 || b.x + b.w > F.w || b.y + b.h > F.h) s += 40;
+      if (b.x < (F.extra.x0 ?? 0) || b.y < (F.extra.y0 ?? 0) || b.x + b.w > F.w || b.y + b.h > F.h) s += 40;
       if (s < bestS) { bestS = s; best = [x, y]; }
     });
     const t = UZ.mkText(lines, best[0], best[1] + th / 2, size, { anchor: "start", weight: 500, color: S.accent, lineH: 25 });

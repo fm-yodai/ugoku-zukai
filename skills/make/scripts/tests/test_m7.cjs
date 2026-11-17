@@ -17,15 +17,19 @@ const M7 = format => deck4({ a: { title: "A", parts: [{ figure: "g1" }] }, b: { 
   [SC("s1", "a", [{ id: "l1", text: "{a}出して{b}寄ります。", do: [{ show: "g1", draw: true }, { zoom: "api", at: "b" }] }]),
    SC("s2", "b", [{ id: "l2", text: "{a}移ります。", do: [{ pan: "db", at: "a" }] }])], { g1: G1, g2: G2 }, format);
 
-// 2 つの箱の中心を、流れの方向（flow）と直交する方向（orth）に分けて返す
-const centers = (F, dir) => Object.fromEntries(Object.values(F.items).filter(it => it.kind === "box").map(it => {
-  const cx = it.x + it.w / 2, cy = it.y + it.h / 2;
-  return [it.id, dir === "down" ? { flow: cy, orth: cx, fw: it.h } : { flow: cx, orth: cy, fw: it.w }];
-}));
-// v1 → v2 の 2 枚（v1 は全幅、v2 は col 1-8）
-const morphDeck = (g1, g2) => deck4({ a: { title: "A", parts: [{ figure: "g1" }] }, b: { title: "B", parts: [{ figure: "g2", morph: "g1", area: { col: [1, 8], row: [1, 6] } }] } },
-  [SC("s1", "a", [{ id: "l1", text: "{a}出します。", do: [{ show: "g1", at: "a" }] }]),
-   SC("s2", "b", [{ id: "l2", text: "{a}出します。", do: [{ show: "g2", at: "a" }] }])], { g1: g1, g2: g2 });
+// 系列の検査用: v1 → v2（→ v3）を 1 枚ずつ並べる。figures = { g1, g2, … }、links = [[図, morph 先], …]
+const seriesDeck = (figures, links) => deck4(
+  Object.fromEntries(links.map(([fid, mv], i) => [`s${i + 1}`, { title: fid, parts: [mv ? { figure: fid, morph: mv } : { figure: fid }] }])),
+  links.map(([fid], i) => SC(`c${i + 1}`, `s${i + 1}`, [{ id: `l${i + 1}`, text: "{a}出します。", do: [{ show: fid, at: "a" }] }])), figures);
+const boxOf = (F, id) => { const it = F.items[id]; return it && [it.x, it.y, it.w, it.h]; };
+// 系列でない graph の座標の指紋（この変更の前の値をテストに埋める）
+const crypto = require("crypto");
+const graphPrint = M => {
+  const out = {};
+  for (const [fid, F] of Object.entries(M.figs)) if (F.type === "graph") out[fid] = { w: F.w, h: F.h, x0: F.x0, y0: F.y0, items: Object.values(F.items).map(it => [it.id, it.x, it.y, it.w, it.h, it.pts, it.label && [it.label.x, it.label.y]]) };
+  return crypto.createHash("sha1").update(JSON.stringify(out)).digest("hex");
+};
+
 
 const tests = {
   async format4_accepted() {   // /4 で morph・zoom・pan・draw を書いてもエラーにならない
@@ -52,57 +56,59 @@ const tests = {
     hasErr(await mk({ zoom: "api", pad: -1 }), /pad は 0 以上の数/);
     hasErr(await mk({ show: "api", draw: "yes" }), /draw は true か false/);
   },
-  async graph_anchor_keeps_order() {
-    // 枝分かれのある v1（app → api → db と api → log）に、cache と queue を足した v2
-    const B1 = { type: "graph", nodes: [{ id: "app", label: "アプリ" }, { id: "api", label: "API" }, { id: "db", label: "DB" }, { id: "log", label: "ログ" }],
-      edges: [{ from: "app", to: "api" }, { from: "api", to: "db" }, { from: "api", to: "log" }] };
-    const B2 = { type: "graph", nodes: [{ id: "queue", label: "キュー" }, { id: "log", label: "ログ" }, { id: "app", label: "アプリ" }, { id: "api", label: "API" }, { id: "cache", label: "キャッシュ" }, { id: "db", label: "DB" }],
-      edges: [{ from: "app", to: "api" }, { from: "api", to: "log" }, { from: "api", to: "cache" }, { from: "cache", to: "db" }, { from: "api", to: "queue" }] };
-    for (const [g1, g2, shared] of [[G1, G2, ["app", "api", "db"]], [B1, B2, ["app", "api", "db", "log"]]]) {
-      const M = await build(morphDeck(g1, g2));
-      assert.deepStrictEqual(M.errors, []);
-      const d1 = M.figs.g1.extra.dir, d2 = M.figs.g2.extra.dir;
-      assert.strictEqual(d2, d1, "v2 の向きが v1 と違う");
-      const c1 = centers(M.figs.g1, d1), c2 = centers(M.figs.g2, d2);
-      for (const a of shared) for (const b of shared) {
-        if (a >= b) continue;
-        const sameLayer = Math.abs(c1[a].flow - c1[b].flow) < (c1[a].fw + c1[b].fw) / 2;
-        const k = sameLayer ? "orth" : "flow";
-        assert.strictEqual(Math.sign(c2[a][k] - c2[b][k]), Math.sign(c1[a][k] - c1[b][k]), `${a} と ${b} の ${k} の順が v1 と違う`);
-      }
-      assert.ok(!(M.warnings || []).some(w => /Morph の並びを保てない/.test(w)), JSON.stringify(M.warnings));
-    }
-  },
-  async graph_anchor_keeps_screen_position() {
-    // v1・v2 とも全面（収まる）。共通ノードの画面上の中心が、v1 の場面と v2 の場面でほぼ同じ場所にとどまる。
-    // 許す差はノードの幅の 1/4。cache が間に入る api → db の db は流れの方向に押し出されるので、
-    // 挿入点より前の app・api だけを見る（db は直交する方向だけ見る）
-    const sb = morphDeck(G1, G2);
-    delete sb.slides.b.parts[0].area;
-    const M = await build(sb);
+  async series_shared_nodes_same_canvas_coords() {
+    const M = await build(seriesDeck({ g1: G1, g2: G2 }, [["g1"], ["g2", "g1"]]));
     assert.deepStrictEqual(M.errors, []);
-    const [s1, s2] = M.scenes;
-    const scr = (sc, fid, id) => { const p = sc.place[fid], it = M.figs[fid].items[id]; return { x: p.ox + p.s * (it.x + it.w / 2), y: p.oy + p.s * (it.y + it.h / 2), w: p.s * it.w }; };
-    assert.strictEqual(s2.place.g2.s, s1.place.g1.s, "v2 の倍率が v1 と違う");
-    for (const id of ["app", "api", "db"]) {
-      const a = scr(s1, "g1", id), b = scr(s2, "g2", id), tol = a.w / 4;
-      if (id !== "db") assert.ok(Math.abs(a.x - b.x) < tol, `${id} の x が ${Math.abs(a.x - b.x).toFixed(1)} 動く（許す差 ${tol.toFixed(1)}）`);
-      assert.ok(Math.abs(a.y - b.y) < tol, `${id} の y が ${Math.abs(a.y - b.y).toFixed(1)} 動く（許す差 ${tol.toFixed(1)}）`);
+    assert.deepStrictEqual(M.series, [{ figs: ["g1", "g2"] }]);
+    for (const id of ["app", "api", "db"]) assert.deepStrictEqual(boxOf(M.figs.g2, id), boxOf(M.figs.g1, id), `${id} の座標が違う`);
+    assert.deepStrictEqual(M.figs.g2.items["app>api"].pts, M.figs.g1.items["app>api"].pts);
+    assert.ok(!M.figs.g1.items.cache, "g1 に cache がある");
+  },
+  async series_framing_fits_own_bbox() {
+    // g1 の写し方は g1 自身の外接矩形で決まる（g2 の大きさに引きずられない）
+    // g2 は g1 の先に鎖を伸ばし、倍率の上限（1.3）では区画に収まらない大きさにする（g1 の要素はキャンバスの左の部分にある）
+    const ids = ["app", "api", "db", "backup", "archive", "report"];
+    const LONG = { type: "graph", nodes: ids.map(id => ({ id, label: id })), edges: ids.slice(1).map((id, i) => ({ from: ids[i], to: id })) };
+    const M = await build(seriesDeck({ g1: G1, g2: LONG }, [["g1"], ["g2", "g1"]]));
+    assert.deepStrictEqual(M.errors, []);
+    for (const [i, fid] of [[0, "g1"], [1, "g2"]]) {
+      const sc = M.scenes[i], p = sc.place[fid], F = M.figs[fid], A = sc.areas[0];
+      const own = Object.values(F.items).filter(it => it.kind === "box" || it.kind === "edge").map(it => it.bbox);
+      const x0 = Math.min(...own.map(b => b.x)), x1 = Math.max(...own.map(b => b.x + b.w));
+      assert.ok(F.x0 <= x0 && F.x1 >= x1 && F.x1 - F.x0 < x1 - x0 + 30, `${fid} の外枠が自分の要素の外接矩形でない`);
+      const sw = (F.x1 - F.x0) * p.s, sh = (F.y1 - F.y0) * p.s;
+      assert.ok(Math.abs(sw - A.w) < 1 || Math.abs(sh - A.h) < 1 || Math.abs(p.s - 1.3) < 1e-9, `${fid}: 区画に合わせて写していない（s=${p.s}）`);
+      assert.ok(Math.abs(p.s - Math.min(A.w / (F.x1 - F.x0), A.h / (F.y1 - F.y0), 1.3)) < 1e-9, `${fid}: 倍率が自分の外接矩形で決まっていない`);
+      assert.ok(p.ox + F.x0 * p.s >= A.x - 0.5 && p.ox + F.x1 * p.s <= A.x + A.w + 0.5, `${fid} が横にはみ出す`);
     }
+    assert.ok(M.scenes[0].place.g1.s > M.scenes[1].place.g2.s, `g1 が g2 より大きく写っていない（${M.scenes[0].place.g1.s} と ${M.scenes[1].place.g2.s}）`);
   },
-  async graph_anchor_place_stays_inside_area() {
-    // v2 を col 1-8 に置く（v1 の倍率では収まらない）: 図が区画の中に収まる
-    const M = await build(morphDeck(G1, G2));
-    const sc = M.scenes[1], p = sc.place.g2, F = M.figs.g2, A = sc.areas[0];
-    assert.ok(p.s <= M.scenes[0].place.g1.s + 1e-9);
-    assert.ok(p.ox + F.x0 * p.s >= A.x - 0.5 && p.ox + F.x1 * p.s <= A.x + A.w + 0.5, "横にはみ出す");
-    assert.ok(p.oy + F.y0 * p.s >= A.y - 0.5 && p.oy + F.y1 * p.s <= A.y + A.h + 0.5, "縦にはみ出す");
+  async series_three_slides_with_removed_node() {
+    // v1 にある log が v2 で消え、v3 で queue が足される。v1 の log は、v3 のどのノードとも重ならない（和集合で場所が取ってある）
+    const V1 = { type: "graph", nodes: [...G1.nodes, { id: "log", label: "ログ" }], edges: [...G1.edges, { from: "api", to: "log" }] };
+    const V3 = { type: "graph", nodes: [...G2.nodes, { id: "queue", label: "キュー" }], edges: [...G2.edges, { from: "api", to: "queue" }] };
+    const M = await build(seriesDeck({ v1: V1, v2: G2, v3: V3 }, [["v1"], ["v2", "v1"], ["v3", "v2"]]));
+    assert.deepStrictEqual(M.errors, []);
+    assert.deepStrictEqual(M.series, [{ figs: ["v1", "v2", "v3"] }]);
+    const [lx, ly, lw, lh] = boxOf(M.figs.v1, "log");
+    for (const it of Object.values(M.figs.v3.items).filter(it => it.kind === "box")) {
+      const hit = lx < it.x + it.w && it.x < lx + lw && ly < it.y + it.h && it.y < ly + lh;
+      assert.ok(!hit, `v1 の log が v3 の ${it.id} に重なる`);
+    }
+    assert.deepStrictEqual(boxOf(M.figs.v3, "app"), boxOf(M.figs.v1, "app"));
   },
-  async graph_anchor_warns_when_order_breaks() {
-    // v2 で app と api の向きを逆にすると、流れの方向の順が v1 と入れ替わる
-    const R = { type: "graph", nodes: G1.nodes, edges: [{ from: "api", to: "app" }, { from: "api", to: "db" }] };
-    const M = await build(morphDeck(G1, R));
-    hasWarn(M, /Morph の並びを保てない/);
+  async series_branch_is_error() {
+    const G3 = { type: "graph", nodes: [...G1.nodes, { id: "log", label: "ログ" }], edges: G1.edges };
+    const M = await build(seriesDeck({ g1: G1, g2: G2, g3: G3 }, [["g1"], ["g2", "g1"], ["g3", "g1"]]));
+    hasErr(M, /morph の系列が分かれている/);
+  },
+  async non_series_graph_unchanged() {
+    // 系列に入らない graph は、この変更の前と同じ座標（examples の見本）
+    const fs = require("fs"), path = require("path");
+    for (const [name, want] of [["graph-flow.json", "51afd16b04f39b48f53f1839bae1795a683f41c2"], ["graph-state.json", "e909c63a9ebfa6049d40fc96e4e07aa2d452011e"], ["mixed.json", "b025d228599406535197115dd408b891192025f0"]]) {
+      const M = await build(JSON.parse(fs.readFileSync(path.join(__dirname, "../../examples", name), "utf8")));
+      assert.strictEqual(graphPrint(M), want, `${name} の graph の座標が変わった`);
+    }
   },
 };
 
