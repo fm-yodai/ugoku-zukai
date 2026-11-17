@@ -10,6 +10,17 @@
 
   const polyLen = P => P.reduce((a, q, i) => i ? a + Math.hypot(q[0] - P[i - 1][0], q[1] - P[i - 1][1]) : 0, 0);
 
+  const ellLen = (a, b) => Math.PI * (3 * (a + b) - Math.sqrt((3 * a + b) * (a + 3 * b)));   // 楕円の周長（Ramanujan の近似）
+  // 箱の枠の長さ（形ごと。R は大きさを変えた箱の矩形）
+  function boxLen(it, R) {
+    const w = R.w, h = R.h;
+    if (it.shape === "ellipse") return ellLen(w / 2, h / 2);
+    if (it.shape === "diamond") return 4 * Math.hypot(w / 2, h / 2);
+    if (it.shape === "poly") return polyLen([...it.poly, it.poly[0]]);
+    if (it.shape === "store") return 1.5 * ellLen(w / 2, 9) + 2 * (h - 18);
+    return 2 * (w + h) - (8 - 2 * Math.PI) * it.r;
+  }
+
   function el(tag, attrs, parent) {
     const e = document.createElementNS(NS, tag);
     if (attrs) for (const k in attrs) if (attrs[k] != null) e.setAttribute(k, attrs[k]);
@@ -167,7 +178,7 @@
           };
           E.fill = mk(it.fill, "none", shadow ? { filter: "url(#uz-shadow)" } : {});
           if (it.header) E.head = el("path", { d: `M${it.x},${it.y + it.header.h} V${it.y + it.r} Q${it.x},${it.y} ${it.x + it.r},${it.y} H${it.x + it.w - it.r} Q${it.x + it.w},${it.y} ${it.x + it.w},${it.y + it.r} V${it.y + it.header.h} Z`, fill: it.header.fill }, E.g);
-          E.stroke = mk("none", it.stroke, { pathLength: 1, "stroke-dasharray": "1 1" });
+          E.stroke = mk("none", it.stroke, {});
           if (glow) E.stroke.setAttribute("filter", "url(#uz-glow)");
           E.texts = (it.texts || []).map(T => this.textSpec(E.g, T));
           if (it.label) E.label = this.textSpec(E.g, it.label, { halo: true });
@@ -175,8 +186,9 @@
           if (it.life) E.life = el("path", { d: ptsD(it.life.pts), stroke: S.line, "stroke-width": 2, "stroke-dasharray": "6 6", fill: "none" }, L.back);
         } else if (it.kind === "edge") {
           E.g = el("g", null, it.isReply ? L.fx : L.edge);
+          E._elen = polyLen(it.pts);
           E.line = el("path", { d: ptsD(it.pts), fill: "none", stroke: it.stroke, "stroke-width": it.width, "stroke-linejoin": "round", "stroke-linecap": "round",
-            ...(it.dashed ? { "stroke-dasharray": "7 6" } : { pathLength: 1, "stroke-dasharray": "1 1" }) }, E.g);
+            ...(it.dashed ? { "stroke-dasharray": "7 6" } : {}) }, E.g);
           if (it.head) E.head = el("path", { d: headD(it.pts, it.headScale || 1), fill: it.stroke, stroke: it.stroke, "stroke-width": 1, "stroke-linejoin": "round" }, E.g);
           if (it.label) E.label = this.textSpec(it.isReply ? E.g : L.fx, it.label, { halo: true });
         } else if (it.kind === "text") {
@@ -237,7 +249,7 @@
         this.els[it.key] = E;
       }
     }
-    // 破線を「伸びて描かれる」ように見せる: pathLength=1 のダッシュで描く実線を mask にして破線に被せる
+    // 破線を「伸びて描かれる」ように見せる: 実線のダッシュで描く線を mask にして破線に被せる
     // （破線の stroke-dasharray と、描画の stroke-dashoffset は両立しない）。mask の id は部品のキーと進み具合から決める
     // （View ごとの連番にすると、--scenes で書いたコマが全体のときと変わる）。on = false で外す
     dashMask(E, key, it, p, on, pts) {
@@ -260,6 +272,14 @@
       const id = `uz-dm-${key.replace(/[^A-Za-z0-9_-]/g, "_")}-${Math.round((1 - p) * 1000)}`;
       E.dm.setAttribute("id", id);
       line.setAttribute("mask", `url(#${id})`);
+    }
+    // 線を p（0〜1）まで伸ばす。p が 1 なら dasharray を外す
+    strokeDraw(e, L, p) {
+      if (p >= 0.9999) { if (e._dashed) { e._dashed = false; e.removeAttribute("stroke-dasharray"); e.removeAttribute("stroke-dashoffset"); } return; }
+      e._dashed = true;
+      const l = L.toFixed(2);
+      e.setAttribute("stroke-dasharray", `${l} ${l}`);
+      e.setAttribute("stroke-dashoffset", ((1 - p) * L).toFixed(2));
     }
     glyph(parent, kind, x, y, color, scale) {
       const g = el("g", { transform: `translate(${x},${y}) scale(${scale})` }, parent);
@@ -308,7 +328,6 @@
           // draw（show の draw: true）: 線が先に伸び（0〜0.7）、塗り（0.65〜）と文字（0.7〜）が後から出る
           const dr = s.draw ? D : D0;
           const draw = smooth(clamp(show / dr.line));
-          E.stroke.setAttribute("stroke-dashoffset", (1 - draw).toFixed(4));
           E.stroke.style.opacity = op(show > 0 ? 1 : 0);
           const fillO = smooth((show - dr.fill[0]) / dr.fill[1]);
           E.fill.style.opacity = op(fillO); if (E.head) E.head.style.opacity = op(fillO);
@@ -335,6 +354,9 @@
             // 見出しの帯（compare のカード）は、箱の形に合わせて伸び縮みする
             if (E.head) { if (s.rect) E.head.setAttribute("transform", `translate(${R.x},${R.y}) scale(${R.w / it.w},${R.h / it.h}) translate(${-it.x},${-it.y})`); else E.head.removeAttribute("transform"); }
           }
+          // 枠の描画: 実際の長さで伸ばす（resvg は pathLength を見ない）。描き終えたら dasharray を外して、どの描画系でも実線にする
+          if (E._lenGeo !== geo || E._len == null) { E._lenGeo = geo; E._len = boxLen(it, R); }
+          this.strokeDraw(E.stroke, E._len, draw);
           // 面の色（Morph で role が変わったとき）
           const fillC = s.fillFrom != null ? mixFill(s.fillFrom, it.fill, s.tintP) : it.fill;
           if (E._fillC !== fillC && (E._fillC != null || fillC !== it.fill)) { E._fillC = fillC; E.fill.setAttribute("fill", fillC); }
@@ -353,17 +375,17 @@
           if ((E._pts || "") !== pk) {
             E._pts = pk;
             const P = s.pts || it.pts;
-            E.line.setAttribute("d", ptsD(P));
+            E.line.setAttribute("d", ptsD(P)); E._elen = polyLen(P);
             if (E.head) E.head.setAttribute("d", headD(P, it.headScale || 1));
           }
           if (s.draw) {
             const p = smooth(clamp(show / 0.7));
             if (it.dashed) { this.dashMask(E, key, it, p, show < 1, s.pts || it.pts); E.line.style.opacity = op(show > 0 ? 1 : 0); }
-            else { E.line.setAttribute("stroke-dashoffset", (1 - p).toFixed(4)); E.line.style.opacity = op(show > 0 ? 1 : 0); }
+            else { this.strokeDraw(E.line, E._elen, p); E.line.style.opacity = op(show > 0 ? 1 : 0); }
           } else {
             if (E.dm) this.dashMask(E, key, it, 1, false);
             if (it.dashed) E.line.style.opacity = op(smooth(show));
-            else { E.line.setAttribute("stroke-dashoffset", (1 - smooth(clamp(show / 0.9))).toFixed(4)); E.line.style.opacity = op(show > 0 ? 1 : 0); }
+            else { this.strokeDraw(E.line, E._elen, smooth(clamp(show / 0.9))); E.line.style.opacity = op(show > 0 ? 1 : 0); }
           }
           if (E.head) E.head.style.opacity = op(smooth((show - 0.85) / 0.15));
           if (E.label) E.label.style.opacity = op(smooth((show - 0.7) / 0.3));

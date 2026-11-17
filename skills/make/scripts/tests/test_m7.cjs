@@ -432,7 +432,7 @@ const tests = {
     const E = k => v.els[k];
     const off = (e, o) => o ? +e.getAttribute("stroke-dashoffset") / o.dmLen : +e.getAttribute("stroke-dashoffset");
     const api = E("g1/api");
-    assert.ok(off(api.stroke) > 0 && off(api.stroke) < 1, `箱の枠が途中でない: ${off(api.stroke)}`);
+    assert.ok(off(api.stroke, { dmLen: api._len }) > 0 && off(api.stroke, { dmLen: api._len }) < 1, `箱の枠が途中でない: ${off(api.stroke)}`);
     assert.ok(+api.fill.style.opacity === 0, `塗りが先に出ている: ${api.fill.style.opacity}`);
     const fr = E("g1/grp");
     assert.ok(fr && fr.dm, "frame の mask がない");
@@ -456,6 +456,29 @@ const tests = {
     const s0 = makeDocument().createElementNS("http://www.w3.org/2000/svg", "svg");
     new UZ.View(s0, M0).render(M0.acts.find(x => x.verb === "show").start + 0.3);
     assert.ok(!/uz-dm-/.test(serialize(s0)));
+  },
+  async stroke_draw_is_solid_when_settled() {
+    // 枠と実線の辺は、pathLength に頼らず実際の長さで伸ばす。描き終えたら dasharray を外す（resvg でも実線）
+    const { makeDocument } = require("../svg_dom.cjs");
+    const fs = require("fs"), path = require("path"), vm = require("vm");
+    globalThis.document = makeDocument();
+    if (!UZ.View) vm.runInThisContext(fs.readFileSync(path.join(__dirname, "../../player/src/view_svg.js"), "utf8"), { filename: "view_svg.js" });
+    const M = await build(camDeck([{ id: "l1", text: "{a}出します。", do: [{ show: "g1", at: "a" }] }]));
+    const a = M.acts.find(x => x.verb === "show");
+    const svg = makeDocument().createElementNS("http://www.w3.org/2000/svg", "svg");
+    const v = new UZ.View(svg, M);
+    const ed = Object.values(v.els).find(e => e.it.kind === "edge" && !e.it.dashed), bx = v.els["g1/app"];
+    let te = a.start; while (te < a.end && !(UZ.frame(M, te).st["g1/app"].show > 0.3)) te += 0.02;
+    v.render(te);
+    for (const [n, e] of [["箱", bx.stroke], ["辺", ed.line]]) {
+      const da = e.getAttribute("stroke-dasharray");
+      assert.ok(da && da !== "1 1" && /^[\d.]+ [\d.]+$/.test(da), `${n}の途中の dasharray: ${da}`);
+    }
+    v.render(a.end + 0.1);
+    for (const [n, e] of [["箱", bx.stroke], ["辺", ed.line]]) {
+      assert.strictEqual(e.getAttribute("stroke-dasharray"), null, `${n}が描き終えても dasharray が残る`);
+      assert.strictEqual(e.getAttribute("stroke-dashoffset"), null);
+    }
   },
   async non_series_graph_unchanged() {
     // 系列に入らない graph は、この変更の前と同じ座標（examples の見本）
