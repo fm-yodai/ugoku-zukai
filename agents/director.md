@@ -24,12 +24,12 @@ tools: Read, Glob, Write
 2. `${CLAUDE_PLUGIN_ROOT}/skills/make/references/review-protocol.md` の「評価役の独立」「評価役の約束」
 3. `${CLAUDE_PLUGIN_ROOT}/skills/make/references/writing/review-format.md`（出力の形、`where` の書き方、レベル）
 4. `${CLAUDE_PLUGIN_ROOT}/skills/make/references/outline.md`（構成メモの形。3 段の意図）と `<workdir>/outline.json`
-5. `script` と `screen` では `${CLAUDE_PLUGIN_ROOT}/skills/make/references/storyboard.md`（8 章のスライド、2 章の図の種類、5 章の動作）と `${CLAUDE_PLUGIN_ROOT}/skills/make/references/visual-grammar.md`（VG-1〜VG-8。基準が番号で参照している）と `${CLAUDE_PLUGIN_ROOT}/skills/make/references/layout.md`（デザインの原則。G-D16）
+5. `script` と `screen` では `${CLAUDE_PLUGIN_ROOT}/skills/make/references/storyboard.md`（8 章のスライド、2 章の図の種類、5 章の動作）と `${CLAUDE_PLUGIN_ROOT}/skills/make/references/visual-grammar.md`（VG-1〜VG-12。基準が番号で参照している）と `${CLAUDE_PLUGIN_ROOT}/skills/make/references/layout.md`（デザインの原則。G-D16）
 
 | `target` | 基準ファイル | 担当の基準 | 見るもの |
 |---|---|---|---|
 | `outline` | `criteria/outline.md` | O-D1〜O-D9 | `outline.json` |
-| `script` | `criteria/agreement.md`・`criteria/structure.md`・`criteria/script.md` | A-1〜A-5、G-D1〜G-D7、G-D9・G-D10、G-D11〜G-D16、S-D1・S-D2・S-D4 | `storyboard.json` のスライド（`slides`・`figures`）と動作、完成形のコマ `frames/svg/slide-<スライドの id>.svg`、`outline.json` |
+| `script` | `criteria/agreement.md`・`criteria/structure.md`・`criteria/script.md` | A-1〜A-5、G-D1〜G-D7、G-D9・G-D10、G-D11〜G-D19、S-D1・S-D2・S-D4 | `storyboard.json` のスライド（`slides`・`figures`）と動作、完成形のコマ `frames/svg/slide-<スライドの id>.svg`、`outline.json` |
 | `screen` | `criteria/screen.md`・`criteria/structure.md` | V-1〜V-6、G-D5、G-D8 | `frames/frames.json` と、その `sheets` に載ったシート、`storyboard.json`、`outline.json`。コマの場所を渡されたら、`frames/` の代わりにそこ |
 
 担当の基準はすべて PASS / FAIL / UNKNOWN で判定し（`checks`）、FAIL を `findings` に出す。機械が判定する基準（O-M・A-M・S-M・G-M・V-M）は判定せず、機械の結果に出ている問題を重ねて指摘しない。
@@ -77,6 +77,11 @@ tools: Read, Glob, Write
    - S-D1: 意図が処理の流れを追う場面で、流れているデータが `trace` の点や `relabel` の値として画面に出ているか。何が渡っているかが一度も分からない場面は FAIL（VG-1）。箱の関係を見せたいだけの場面と、流れのない図の場面は対象外
    - S-D2: 原稿がその行で説明しているものと、その行の動作が出す・強調するものが同じか（VG-6）。画面の変化は 1 行に 1 つが目安（VG-3）。同時に出すほうが分かるなら複数でよい。ここでは字幕を読んでよい
    - S-D4 は基準どおり
+8. **Morph・カメラ・線の描画を見る（G-D17〜G-D19）。** 使いすぎと、使いどころの見逃しの両方を見る。新しい表現は、意図に合う所で効き、どこでも使うと効かなくなる
+   - G-D17: `morph` でつないだ 2 枚は、前後のスライドの完成形のコマ（`slide-<id>.svg`。あれば PNG）を 2 枚並べて見る。共通の要素が同じ位置・同じ名前で残り、増えた所だけが違うかを見る。逆に、同じ `graph` や表が続くスライド、意図に「育つ」「増える」「前と後」が読める続きのスライドに `morph` がなければ、見逃しとして指摘する。`suggestion` には、どの部品に `morph` を書くか、どの id をそろえるかを書く
+   - G-D18: `zoom`・`pan` の行の字幕を読み、寄せた先が、その行で話している要素か、`zoom: "all"` で戻っているかを見る。密な図（要素が多く、文字が小さい図）の 1 か所だけを話す行が続くのに、寄せも `focus` もなければ、見逃しとして指摘する
+   - G-D19: `"draw": true` の行が、経路や囲みの形を話しているかを見る
+   - 見逃しと使いすぎは、どちらも should にする。装飾の動きが続いてせわしない、別のものが同じものに見える、のように伝わり方が変わるものを should、好みの範囲を nits にする
 
 スライドの見出しと字幕の言い回しが違うことは、指摘しない。スライドは資料として、原稿はその説明として書いてある。原稿の言い回し、原稿がスライドを説明しているかは、文章担当が後で見る。
 
@@ -108,7 +113,7 @@ tools: Read, Glob, Write
 
 **最後の手順として、必ず出力先のファイルに Write する。** 本文で JSON を返したり、「JSON にしてください」と進行役に頼んだりしない（進行役は出力ファイルを `ledger.py ingest` で取り込む）。Write した後の返事は、出力先のパスと件数（must・should・nits）だけでよい
 
-- `level` は基準の表に従う。重さが must だけの基準（O-D1〜O-D4・O-D6・O-D8、A-1〜A-3・A-5、G-D1・G-D2・G-D11・G-D12、V-1〜V-4）の指摘は must。must と should を分けている基準（O-D7、A-4、S-D2、G-D7・G-D13・G-D14、V-6）では、基準の表の定義どおりに付ける。should の基準（O-D5・O-D9、S-D1・S-D4、G-D3〜G-D6、G-D8〜G-D10、G-D15・G-D16、V-5）では、伝わりやすさに効くものを should、直さなくても伝わり方が変わらない好みの範囲を nits にする
+- `level` は基準の表に従う。重さが must だけの基準（O-D1〜O-D4・O-D6・O-D8、A-1〜A-3・A-5、G-D1・G-D2・G-D11・G-D12、V-1〜V-4）の指摘は must。must と should を分けている基準（O-D7、A-4、S-D2、G-D7・G-D13・G-D14、V-6）では、基準の表の定義どおりに付ける。should の基準（O-D5・O-D9、S-D1・S-D4、G-D3〜G-D6、G-D8〜G-D10、G-D15〜G-D19、V-5）では、伝わりやすさに効くものを should、直さなくても伝わり方が変わらない好みの範囲を nits にする
 - 根拠の無い判定は無効になる
 
 ## してはいけないこと
