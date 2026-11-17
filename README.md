@@ -17,6 +17,8 @@ https://github.com/user-attachments/assets/9ed4e95e-8be0-4580-8e0b-047645785e70
 
 「Customize > Plugins」の「Add > Add marketplace」で `fm-yodai/ugoku-zukai` を入力し、`ugoku-zukai` を入れます
 
+うまく入らないときは、[Releases](https://github.com/fm-yodai/ugoku-zukai/releases/latest) の `ugoku-zukai-make.zip` を「Customize > Skills」からアップロードしてください
+
 **Claude Code**
 
 ```bash
