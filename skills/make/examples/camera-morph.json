@@ -29,18 +29,17 @@
         { "id": "cache", "label": "キャッシュ", "role": "process" },
         { "id": "db", "label": "DB", "role": "store" },
         { "id": "replica", "label": "読み取りレプリカ", "role": "added", "shape": "store" } ],
-      "groups": [ { "id": "dbs", "label": "データの保存先", "members": ["db", "replica"] } ],
       "edges": [
         { "from": "user", "to": "app", "label": "ページを開く" },
         { "from": "app", "to": "cache", "label": "先に探す" },
         { "from": "app", "to": "db", "label": "書く" },
         { "from": "app", "to": "replica", "label": "読む" },
         { "from": "db", "to": "replica", "label": "変更を複製" } ] },
-    "added-v2": { "type": "list", "numbered": true, "items": [
+    "added-v2": { "type": "list", "numbered": true, "fit": "content", "valign": "top", "halign": "start", "items": [
       { "id": "i-cache", "text": "キャッシュ：よく読まれるページを覚えておき、DB を読まずに返す" } ] },
-    "added-v3": { "type": "list", "numbered": true, "items": [
+    "added-v3": { "type": "list", "numbered": true, "fit": "content", "valign": "top", "halign": "start", "items": [
       { "id": "i-cache", "text": "キャッシュ：よく読まれるページを覚えておき、DB を読まずに返す" },
-      { "id": "i-replica", "text": "読み取りレプリカ：DB の複製。読み取りを受け持ち、DB を書き込みに専念させる" } ] },
+      { "id": "i-replica", "text": "読み取りレプリカ：DB の複製が、読み取りを受け持つ" } ] },
     "growth": { "type": "cycle", "center": "利用者が増えるたびに",
       "steps": [
         { "id": "watch", "label": "負荷を見る", "role": "actor" },
@@ -50,7 +49,7 @@
   "slides": {
     "arch-v1": {
       "title": "最初の構成",
-      "statement": "最初は、アプリと DB が 1 つずつの小さな構成で始めます。",
+      "statement": "利用者が増えると、同じページの読み取りが DB に集中します。",
       "parts": [ { "figure": "v1" } ]
     },
     "arch-v2": {
@@ -58,7 +57,7 @@
       "statement": "よく読まれるページは、キャッシュが DB の手前で返します。",
       "parts": [
         { "figure": "v2", "morph": "v1", "area": { "col": [1, 12], "row": [1, 4] } },
-        { "figure": "added-v2", "fit": "content", "valign": "top", "halign": "start", "area": { "col": [1, 12], "row": [5, 6] } }
+        { "figure": "added-v2", "area": { "col": [1, 7], "row": [5, 6] } }
       ]
     },
     "arch-v3": {
@@ -66,7 +65,7 @@
       "statement": "読み取りはレプリカに分け、DB は書き込みに専念させます。",
       "parts": [
         { "figure": "v3", "morph": "v2", "area": { "col": [1, 12], "row": [1, 4] } },
-        { "figure": "added-v3", "morph": "added-v2", "fit": "content", "valign": "top", "halign": "start", "area": { "col": [1, 12], "row": [5, 6] } }
+        { "figure": "added-v3", "morph": "added-v2", "area": { "col": [1, 7], "row": [5, 6] } }
       ]
     },
     "how-to-grow": {
@@ -98,13 +97,13 @@
         "do": [ { "at": "a", "pulse": "app>db" } ] } ] },
     { "id": "s4", "chapter": "c3", "slide": "arch-v3", "lines": [
       { "id": "l10", "text": "そこで、{a}DB の複製を、もう一つ用意します。", "read": "そこで、{a}デービーの複製を、もう一つ用意します。",
-        "do": [ { "at": "a", "show": ["dbs", "replica"] } ] },
+        "do": [ { "at": "a", "show": "replica" } ] },
       { "id": "l11", "text": "{a}読み取りだけを受け持つ複製なので、読み取りレプリカと呼びます。",
         "do": [ { "at": "a", "show": "i-replica" } ] },
       { "id": "l12", "text": "{a}アプリは、読み取りをレプリカへ送り、書き込みだけを DB へ送ります。", "read": "{a}アプリは、読み取りをレプリカへ送り、書き込みだけをデービーへ送ります。",
         "do": [ { "at": "a", "show": "app>replica", "draw": true } ] },
-      { "id": "l13", "text": "{a}二つの DB のあいだも見てみます。{b}DB への変更は、レプリカに複製されます。", "read": "{a}二つのデービーのあいだも見てみます。{b}デービーへの変更は、レプリカに複製されます。",
-        "do": [ { "at": "a", "zoom": "dbs" }, { "at": "b", "show": "db>replica" } ] },
+      { "id": "l13", "text": "{a}DB への変更は、{b}レプリカに複製されます。", "read": "{a}デービーへの変更は、{b}レプリカに複製されます。",
+        "do": [ { "at": "a", "zoom": ["cache", "db", "replica"], "pad": 20 }, { "at": "b", "show": "db>replica" } ] },
       { "id": "l14", "text": "{a}全体に戻ると、読み取りはキャッシュとレプリカが受け持ち、DB は書き込みに専念できます。", "read": "{a}全体に戻ると、読み取りはキャッシュとレプリカが受け持ち、デービーは書き込みに専念できます。",
         "do": [ { "at": "a", "zoom": "all" } ] } ] },
     { "id": "s5", "chapter": "c4", "slide": "how-to-grow", "lines": [

@@ -276,7 +276,7 @@
         (ln.do || []).forEach((a, ai) => {
           const verbs = UZ.VERBS.filter(v => Object.prototype.hasOwnProperty.call(a, v));
           if (verbs.length !== 1) E(`${lw} の do[${ai}]: 動詞（${UZ.VERBS.join(" / ")}）をちょうど 1 つ書く（今は ${verbs.join(", ") || "なし"}）`);
-          if (a.zoom != null && typeof a.zoom !== "string") E(`${lw} の do[${ai}]: zoom の対象は文字列（図・部品・要素の id、全体に戻るなら "all"）で書く`);
+          if (a.zoom != null && typeof a.zoom !== "string" && !(Array.isArray(a.zoom) && a.zoom.length && a.zoom.every(z => typeof z === "string" && z !== "all"))) E(`${lw} の do[${ai}]: zoom の対象は文字列（図・部品・要素の id、全体に戻るなら "all"）か、id の配列で書く`);
           if (a.pan != null && typeof a.pan !== "string") E(`${lw} の do[${ai}]: pan の対象は文字列（要素の id）で書く`);
           if ((a.zoom != null || a.pan != null) && a.pad != null && !(typeof a.pad === "number" && Number.isFinite(a.pad) && a.pad >= 0)) E(`${lw} の do[${ai}]: pad は 0 以上の数で書く`);
           if (a.draw != null && typeof a.draw !== "boolean") E(`${lw} の do[${ai}]: draw は true か false で書く`);

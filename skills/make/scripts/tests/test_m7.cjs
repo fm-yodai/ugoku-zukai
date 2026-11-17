@@ -296,6 +296,20 @@ const tests = {
     assert.deepStrictEqual({ s: f3.camera.s, tx: f3.camera.tx, ty: f3.camera.ty }, { s: 1, tx: 0, ty: 0 });
     assert.deepStrictEqual(f3.figs.g1.place, M.scenes[0].place.g1);
   },
+  async zoom_array_frames_union() {   // zoom は id の配列も書ける。外接矩形の中心が body の中心に来る
+    const M = await build(camDeck([{ id: "l1", text: "{a}出して{b}寄ります。", do: [{ show: "g1", at: "a" }, { zoom: ["api", "db"], at: "b" }] }]));
+    assert.deepStrictEqual(M.errors, []);
+    const z = M.acts.find(a => a.verb === "zoom"), fr = UZ.frame(M, z.end + 0.01);
+    assert.ok(fr.camera.s > 1, `倍率が 1 のまま（${fr.camera.s}）`);
+    const B = M.scenes[0].body, pl = fr.figs.g1.place, a = scr(M.figs.g1.items.api.bbox, pl), d = scr(M.figs.g1.items.db.bbox, pl);
+    const x0 = Math.min(a.x, d.x), x1 = Math.max(a.x + a.w, d.x + d.w), y0 = Math.min(a.y, d.y), y1 = Math.max(a.y + a.h, d.y + d.h);
+    assert.ok(x0 >= B.x - 1 && x1 <= B.x + B.w + 1 && y0 >= B.y - 1 && y1 <= B.y + B.h + 1, "api と db が body に収まらない");
+    assert.ok(Math.abs((x0 + x1) / 2 - (B.x + B.w / 2)) < 5, `api と db の中心が body の中心に来ない（${(x0 + x1) / 2}）`);
+    const bad = async v => build(camDeck([{ id: "l1", text: "{a}寄ります。", do: [{ show: "g1" }, { zoom: v, at: "a" }] }]));
+    hasErr(await bad([]), /zoom の対象は文字列/);
+    hasErr(await bad(["api", "all"]), /zoom の対象は文字列/);
+    hasErr(await bad(["api", "nai"]), /nai/);
+  },
   async camera_resets_on_slide_change_same_fig() {
     const LIST = { type: "list", items: [{ id: "x", text: "あ" }] };
     const sb = deck4({ a: { title: "A", parts: [{ figure: "g1" }] }, b: { title: "B", parts: [{ figure: "g1", area: { col: [1, 6], row: [1, 6] } }, { figure: "l1", area: { col: [7, 12], row: [1, 6] } }] } },

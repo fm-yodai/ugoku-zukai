@@ -434,10 +434,15 @@
             // 寄せる先は、place が決まってから画面座標にする（下の「カメラ」）。ここでは対象だけを決める
             if (verb === "zoom" && val === "all") act.target = null;
             else {
-              const r = resolve(sc, val, where);
-              if (!r) return;
-              if (!r.whole && !figs[r.fig].items[r.id].bbox) { err(`${where}: 「${val}」には大きさがない（寄せる先にできない）`); return; }
-              act.target = r; act.keys = expand(r);
+              // zoom は id の配列も書ける（数個の要素をまとめて写す）。pan は 1 つ
+              const rs = [];
+              for (const v of Array.isArray(val) ? val : [val]) {
+                const r = resolve(sc, v, where);
+                if (!r) return;
+                if (!r.whole && !figs[r.fig].items[r.id].bbox) { err(`${where}: 「${v}」には大きさがない（寄せる先にできない）`); return; }
+                rs.push(r);
+              }
+              act.target = rs; act.keys = rs.flatMap(expand);
             }
             // Morph のある場面では、Morph が終わってから動かす
             if (morphHere) { start = Math.max(start, sc.start + 0.8); act.start = start; }
@@ -519,10 +524,15 @@
           // 前の動きの途中で始まったら、その時点の状態から動く（跳ばない）
           a.from = last && a.start < last.end ? camAt(last, a.start) : cur;
           let R = null;
-          if (a.target) {
-            const F = figs[a.target.fig], pl = sc.place[a.target.fig];
-            const b = a.target.whole ? { x: F.x0, y: F.y0, w: F.x1 - F.x0, h: F.y1 - F.y0 } : F.items[a.target.id].bbox;
-            R = { x: pl.ox + b.x * pl.s, y: pl.oy + b.y * pl.s, w: b.w * pl.s, h: b.h * pl.s };
+          if (a.target) {   // 対象が数個なら、画面上の外接矩形
+            let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+            for (const t of a.target) {
+              const F = figs[t.fig], pl = sc.place[t.fig];
+              const b = t.whole ? { x: F.x0, y: F.y0, w: F.x1 - F.x0, h: F.y1 - F.y0 } : F.items[t.id].bbox;
+              x0 = Math.min(x0, pl.ox + b.x * pl.s); y0 = Math.min(y0, pl.oy + b.y * pl.s);
+              x1 = Math.max(x1, pl.ox + (b.x + b.w) * pl.s); y1 = Math.max(y1, pl.oy + (b.y + b.h) * pl.s);
+            }
+            R = { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
           }
           let s = 1;   // all は恒等（スライドの写し方）に戻す
           if (R && a.verb === "pan") s = a.from.s;
