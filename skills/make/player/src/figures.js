@@ -456,12 +456,10 @@
     }
     const morphWarn = [];
     for (const e of edges) {
-      let g = edgeGeom[e.id];
-      if (!g && canvas && abs[e.from] && abs[e.to]) {
-        g = routeReplaced(abs[e.from], abs[e.to], f.nodes.filter(n => n.id !== e.from && n.id !== e.to).map(n => abs[n.id]), dir, e.label ? { w: UZ.textW(e.label, lsize) + 10, h: lsize + 8 } : null);
-        if (g.hit) morphWarn.push(e.id);
-      }
+      // 置き換わる辺は、キャンバスが系列で 1 回だけ決めた経路（canvas.replaced）を使う
+      const g = edgeGeom[e.id] || (canvas && canvas.replaced[e.id]);
       if (!g) continue;
+      if (canvas && canvas.replaced[e.id] && g.hit) morphWarn.push(e.id);
       let pts = g.pts;
       let label = null;
       if (g.label && e.label) label = UZ.mkText(e.label, g.label.x + g.label.w / 2, g.label.y + g.label.h / 2, lsize, { color: S.ink });
@@ -630,7 +628,19 @@
       }
     }
     const U = { type: "graph", nodes: Object.values(nodes), edges: Object.values(edges), groups: Object.values(groups) };
-    return (await layoutGraph(U, S, dir, { sizes })).geom;
+    const geom = (await layoutGraph(U, S, dir, { sizes })).geom;
+    // 置き換わる辺の経路を、辺ごとに 1 回だけ決める（どの図でも同じ経路になる）。避ける箱は、その辺を持つ全図のノードの和集合（両端を除く）。
+    // ラベルの大きさは一番長い文言で取る
+    geom.replaced = {};
+    for (const id of replaced) {
+      const own = specs.filter((f, i) => has[i].edges.has(id));
+      const e = own.map(f => f.edges.find(x => eid(x) === id)).reduce((a, b) => lw(b) > lw(a) ? b : a);
+      const avoid = new Set();
+      for (const f of own) for (const n of f.nodes) if (n.id !== e.from && n.id !== e.to) avoid.add(n.id);
+      geom.replaced[id] = routeReplaced(geom.abs[e.from], geom.abs[e.to], [...avoid].map(n => geom.abs[n]), dir,
+        e.label ? { w: UZ.textW(e.label, 19) + 10, h: 19 + 8 } : null);
+    }
+    return geom;
   };
 
   // ======== 下の層: 図形を直接書く（canvas）========

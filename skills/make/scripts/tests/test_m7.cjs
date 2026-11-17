@@ -118,6 +118,18 @@ const tests = {
     const M = await build(seriesDeck({ g1: H1, g2: H2 }, [["g1"], ["g2", "g1"]]));
     hasWarn(M, /Morph の系列で矢印が箱に重なる/);
   },
+  async series_replaced_edge_same_route_in_all_figs() {
+    // a>c は v1・v2 にあり、v3 で a・c が残ったまま消える（置き換わる辺）。v2 にだけある b が v1 の Z の経路をふさぐ。
+    // 経路は系列で 1 回だけ決めるので、v1 と v2 の a>c の pts は一致する
+    const N = ids => ids.map(id => ({ id, label: id }));
+    const E = str => str.split(" ").map(x => { const [from, to] = x.split(">"); return { from, to }; });
+    const v1 = { type: "graph", nodes: N(["a", "c", "z"]), edges: E("a>c c>z") };
+    const v2 = { type: "graph", nodes: N(["a", "b", "c", "z", "m"]), edges: E("a>c c>z m>c b>c") };
+    const v3 = { type: "graph", nodes: N(["a", "b", "c", "z", "m"]), edges: E("a>b b>c c>z m>c") };
+    const M = await build(seriesDeck({ v1, v2, v3 }, [["v1"], ["v2", "v1"], ["v3", "v2"]]));
+    assert.deepStrictEqual(M.errors, []);
+    assert.deepStrictEqual(M.figs.v2.items["a>c"].pts, M.figs.v1.items["a>c"].pts);
+  },
   async series_branch_is_error() {
     const G3 = { type: "graph", nodes: [...G1.nodes, { id: "log", label: "ログ" }], edges: G1.edges };
     const M = await build(seriesDeck({ g1: G1, g2: G2, g3: G3 }, [["g1"], ["g2", "g1"], ["g3", "g1"]]));
