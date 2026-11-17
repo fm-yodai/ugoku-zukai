@@ -1,4 +1,5 @@
-// ugoku-zukai プレーヤー: 配置の検査。各行の終わりと各動作の終わりのコマで、見えている部品の位置を調べる
+// ugoku-zukai プレーヤー: 配置の検査。各行の終わりと各動作の終わりのコマで、見えている部品の位置を調べる。
+// Morph の 0.8 秒の途中のコマは調べない（途中の形は一瞬で、終わりのコマで調べる）。カメラで寄せている間は、body の clip の外を調べない
 (function (UZ) {
   "use strict";
 
@@ -17,6 +18,15 @@
     const times = new Set();
     for (const l of M.timeline.lines) times.add(l.start + l.dur);
     for (const a of M.acts) times.add(a.end + 0.01);
+    // Morph の途中（[start, end)）の時刻は外す。act の終わり + 0.01 は times に入っている
+    const morphs = M.acts.filter(a => a.verb === "morph");
+    for (const t of [...times]) if (morphs.some(a => t >= a.start && t < a.end)) times.delete(t);
+    // カメラ: 寄せる先が、動き終わっても出ていない（まだ show していない要素に寄る）
+    for (const a of M.acts) {
+      if ((a.verb !== "zoom" && a.verb !== "pan") || !a.keys || !a.keys.length) continue;
+      const fr = UZ.frame(M, a.end);
+      if (!a.keys.some(k => fr.st[k] && fr.st[k].show >= 0.5)) add("カメラ", `行 ${a.line}: ${a.verb} の対象「${a.a[a.verb]}」がまだ出ていない（show してから寄る）`, a.start);
+    }
     const B = UZ.AREA.body;
     const bounds = { x: B.x - 16, y: B.y - 40, w: B.w + 32, h: B.h + 52 };
     // テキストの部品は縮めない約束なので、区画に収まらなければ知らせる
@@ -27,6 +37,9 @@
       if (t >= M.endCard) continue;
       const fr = UZ.frame(M, t);
       const vis = [];
+      // 寄せている間は body の clip の外が見えない。はみ出しは調べず、clip の外にある部品は重なりも調べない
+      const clip = fr.camera && fr.camera.on ? fr.camera.clip : null;
+      const outside = b => clip && (b.x + b.w <= clip.x || b.y + b.h <= clip.y || b.x >= clip.x + clip.w || b.y >= clip.y + clip.h);
       for (const [fid, F] of Object.entries(M.figs)) {
         const ff = fr.figs[fid];
         if (!ff || ff.opacity < 0.9 || !ff.place) continue;
@@ -45,14 +58,15 @@
         // 大きさを変えた箱（resize）は、変えた後の形と、付いていった文字の位置で調べる
         const rz = v.s.rect || null, tOff = (rz && v.s.textOff) || [0, 0];
         const bbox = rz || v.it.bbox;
-        if (bbox && v.it.kind !== "band") {
+        if (bbox && outside(tf(bbox, pl))) continue;
+        if (bbox && v.it.kind !== "band" && !clip) {
           const b = tf(bbox, pl);
           if (b.x < bounds.x || b.y < bounds.y || b.x + b.w > bounds.x + bounds.w || b.y + b.h > bounds.y + bounds.h) add("はみ出し", `${name} が図の区画からはみ出す`, t);
         }
         for (const tb of textBoxes(v.it)) {
           const b = tf(tb.what === "text" ? { ...tb.box, x: tb.box.x + tOff[0], y: tb.box.y + tOff[1] } : tb.box, pl);
           if (tb.size * pl.s < UZ.MIN_FONT - 0.01) add("小さい", `${name} の文字が ${(tb.size * pl.s).toFixed(1)}px（${UZ.MIN_FONT}px 未満）`, t);
-          if (b.x < bounds.x || b.y < bounds.y || b.x + b.w > bounds.x + bounds.w || b.y + b.h > bounds.y + bounds.h) add("はみ出し", `${name} の文字が図の区画からはみ出す`, t);
+          if (!clip && (b.x < bounds.x || b.y < bounds.y || b.x + b.w > bounds.x + bounds.w || b.y + b.h > bounds.y + bounds.h)) add("はみ出し", `${name} の文字が図の区画からはみ出す`, t);
           texts.push({ name, b, it: v.it, what: tb.what });
         }
         if ((v.it.kind === "box" || v.it.kind === "frame") && bbox) boxes.push({ name, b: tf(bbox, pl), it: v.it, resized: !!rz });

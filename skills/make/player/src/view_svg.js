@@ -72,7 +72,11 @@
       this.stMark = this.text(this.stG, ["▶"], H.x + 2, SB.y + ST.lineH / 2, 16, { color: S.accent, anchor: "start" });
       const stText = () => this.text(this.stG, [""], H.x + 26, SB.y, ST.size, { weight: ST.weight, color: S.ink, anchor: "start", lineH: ST.lineH });
       this.stT = stText(); this.stT2 = stText();
-      // 図
+      // 図: 1 つのレイヤーにまとめ、カメラで寄せている間だけ body の clipPath をかける（見出し・言いたいこと・字幕・札・クレジットはレイヤーの外）。
+      // clipPath は矩形ごとに初めて使うときに作り、id は矩形の値から決める（コマのシートで View を並べても、同じ id は同じ中身。
+      // 作った順の番号にすると、--scenes で書いたコマと全体のコマで中身が変わる）
+      this.clips = {};
+      this.figLayer = el("g", null, svg);
       this.figG = {};
       for (const F of Object.values(M.figs)) this.buildFig(F);
       this.capG = el("g", null, svg);
@@ -131,7 +135,7 @@
     }
 
     buildFig(F) {
-      const S = F.dark ? (this.SD || (this.SD = UZ.darkStyleOf(this.S))) : this.S, g = el("g", null, this.svg);   // 暗い地のスライドで組んだ部品は、暗い地の色
+      const S = F.dark ? (this.SD || (this.SD = UZ.darkStyleOf(this.S))) : this.S, g = el("g", null, this.figLayer);   // 暗い地のスライドで組んだ部品は、暗い地の色
       const L = { back: el("g", null, g), edge: el("g", null, g), box: el("g", null, g), fx: el("g", null, g) };
       this.figG[F.id] = g;
       const glow = this.M.theme.shape.glow, shadow = this.M.theme.shape.shadow;
@@ -236,6 +240,11 @@
 
     render(t) {
       const M = this.M, S = this.S, fr = UZ.frame(M, t);
+      // カメラの clip（図の place には、カメラが合成済み）
+      const cam = fr.camera, c = cam && cam.on ? cam.clip : null;
+      const cid = c ? `uz-body-${[c.x, c.y, c.w, c.h].map(v => Math.round(v * 10) / 10).join("-").replace(/\./g, "_")}` : "";
+      if (c && !this.clips[cid]) this.clips[cid] = el("rect", { x: c.x, y: c.y, width: c.w, height: c.h }, el("clipPath", { id: cid }, this.defs));
+      if (this._clip !== cid) { this._clip = cid; if (cid) this.figLayer.setAttribute("clip-path", `url(#${cid})`); else this.figLayer.removeAttribute("clip-path"); }
       for (const [fid, g] of Object.entries(this.figG)) {
         const f = fr.figs[fid];
         g.style.opacity = f.opacity;

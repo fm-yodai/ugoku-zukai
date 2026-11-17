@@ -64,6 +64,17 @@
   const LABEL_HOLD = 1.0;   // 点の札を見せておく秒数（この間、点は動かない）
   const DUR = { show: 0.7, hide: 0.5, focus: 0.6, unfocus: 0.6, blur: 0.6, unblur: 0.6, pulse: 0.8, mark: 0.5, unmark: 0.4, trace: 2.0, reply: 0.8, note: 0.6, badge: 0.5, relabel: 0.6, tint: 0.6, move: 1.0, resize: 0.9, zoom: 1.0, pan: 0.9, custom: 2.0 };
   const STAGGER = 0.22;
+  // カメラ（zoom・pan）: 倍率の上限と、寄せたときの既定の余白（画面の px）
+  UZ.CAMERA = { maxZoom: 2.5, pad: 40 };
+  const CAM0 = { s: 1, tx: 0, ty: 0 };
+  // カメラ cam（画面座標 p → p * s + t）を、図の写し方 pl に重ねる
+  const camOn = (cam, pl) => ({ s: cam.s * pl.s, ox: cam.s * pl.ox + cam.tx, oy: cam.s * pl.oy + cam.ty });
+  // 補間は、見えている範囲（画面の点 p に写る図の点 (p - t) / s）が直線的に動くように、1/s と t/s を混ぜる（範囲は body の中に収まったまま）
+  const camMix = (a, b, q) => {
+    const u = mix(1 / a.s, 1 / b.s, q), vx = mix(a.tx / a.s, b.tx / b.s, q), vy = mix(a.ty / a.s, b.ty / b.s, q);
+    return q >= 1 ? { ...b } : { s: 1 / u, tx: vx / u, ty: vy / u };
+  };
+  const camAt = (a, t) => (t >= a.end ? a.to : camMix(a.from, a.to, ease((t - a.start) / Math.max(0.001, a.dur))));
 
   const verbOf = a => UZ.VERBS.find(v => Object.prototype.hasOwnProperty.call(a, v));
   const asList = v => (v == null ? [] : Array.isArray(v) ? v : [v]);
@@ -110,8 +121,12 @@
       if (figs.length > 1 && tones.includes("dark") && !(P.slide && sb.slides[P.slide].tone === "dark")) err(`場面 ${sc.id}: 題の札や目次を他の図と並べるときは、その図に tone: "light" と書く（暗い地は題の札か目次だけの場面で使う）`);
       // スライドの地: tone: "dark" なら、テーマに chapter があれば暗い地（部品も暗い地の色で組む）
       const slideDark = P.slide && sb.slides[P.slide].tone === "dark" && theme.chapter;
-      return { id: sc.id, chapter: sc.chapter, figs, header, areas, captions, lines: sc.lines, tone: slideDark ? "dark" : figs.length === 1 ? tones[0] : "light", slideDark: !!slideDark, slide: P.slide, statement: P.statement };
+      // カメラをかける領域（スライドなら見出しと言いたいことの下、図だけの場面なら body 全体）
+      const body = P.slide ? UZ.slideBody(P.statement.length) : { ...UZ.AREA.body };
+      return { id: sc.id, chapter: sc.chapter, figs, header, areas, captions, lines: sc.lines, tone: slideDark ? "dark" : figs.length === 1 ? tones[0] : "light", slideDark: !!slideDark, slide: P.slide, statement: P.statement, body };
     });
+    // カメラの run: 同じスライドが続く場面の通し番号（図だけの場面は 1 場面で 1 run）。run が変わるとカメラは戻る
+    scenes.forEach((sc, si) => { const pv = scenes[si - 1]; sc.run = pv && sc.slide != null && pv.slide === sc.slide ? pv.run : (pv ? pv.run + 1 : 0); });
 
     // ---- Morph: morph を書いた部品を最初に使う場面の直前の場面が、v1 を置いたスライドでなければ誤り ----
     // （morph が後のスライドを指す逆向きの鎖や、a ↔ b の輪も、ここで止まる）
@@ -245,6 +260,7 @@
     const sizeState = {};  // 大きさを変えた箱の今の形（resize を重ねたとき、前の形から続ける）
 
     for (const sc of scenes) {
+      const si = scenes.indexOf(sc), morphHere = morphs.some(m => m.si === si);
       const first = TL[sc.lines[0].id];
       sc.start = Math.max(0, first.start - 0.35);
       // 最初から完成形で出すスライド（start: "complete"）: 最初に使う場面の頭で、完成形に含める部品をすべて出す
@@ -408,6 +424,18 @@
             if (a.text === "top" && it.texts && it.texts.length) textOff[1] = rect.y + 14 - Math.min(...it.texts.map(t => t.bbox.y));
             act.key = it.key; act.from = cur.rect; act.to = rect; act.textFrom = cur.textOff; act.textTo = textOff;
             sizeState[it.key] = { rect, textOff };
+          } else if (verb === "zoom" || verb === "pan") {
+            // 寄せる先は、place が決まってから画面座標にする（下の「カメラ」）。ここでは対象だけを決める
+            if (verb === "zoom" && val === "all") act.target = null;
+            else {
+              const r = resolve(sc, val, where);
+              if (!r) return;
+              if (!r.whole && !figs[r.fig].items[r.id].bbox) { err(`${where}: 「${val}」には大きさがない（寄せる先にできない）`); return; }
+              act.target = r; act.keys = expand(r);
+            }
+            // Morph のある場面では、Morph が終わってから動かす
+            if (morphHere) { start = Math.max(start, sc.start + 0.8); act.start = start; }
+            act.run = sc.run;
           } else if (verb === "custom") {
             const src = sb.custom && sb.custom[val];
             if (!src) { err(`${where}: custom「${val}」が台本の custom にない`); return; }
@@ -471,6 +499,52 @@
       return { s, ox, oy };
     };
     for (const sc of scenes) sc.place = Object.fromEntries(sc.figs.map((fid, i) => [fid, place(fid, sc.areas[i])]));
+    // ---- カメラ: run ごとに状態を追い、zoom・pan の from・to を決める。場面の終わりのカメラは sc.camEnd ----
+    {
+      const CA = UZ.CAMERA;
+      const perLine = {};
+      let cur = CAM0, last = null, run = -1;
+      for (const sc of scenes) {
+        if (sc.run !== run) { run = sc.run; cur = CAM0; last = null; }
+        const B = sc.body;
+        for (const a of acts.filter(x => (x.verb === "zoom" || x.verb === "pan") && x.scene === sc.id).sort((x, y) => x.start - y.start)) {
+          const where = `行 ${a.line}（${a.verb}）`;
+          perLine[a.line] = (perLine[a.line] || 0) + 1;
+          // 前の動きの途中で始まったら、その時点の状態から動く（跳ばない）
+          a.from = last && a.start < last.end ? camAt(last, a.start) : cur;
+          let R = null;
+          if (a.target) {
+            const F = figs[a.target.fig], pl = sc.place[a.target.fig];
+            const b = a.target.whole ? { x: F.x0, y: F.y0, w: F.x1 - F.x0, h: F.y1 - F.y0 } : F.items[a.target.id].bbox;
+            R = { x: pl.ox + b.x * pl.s, y: pl.oy + b.y * pl.s, w: b.w * pl.s, h: b.h * pl.s };
+          }
+          let s = 1;   // all は恒等（スライドの写し方）に戻す
+          if (R && a.verb === "pan") s = a.from.s;
+          else if (R) {
+            const pad = a.a.pad ?? CA.pad;
+            s = Math.min((B.w - 2 * pad) / Math.max(1, R.w), (B.h - 2 * pad) / Math.max(1, R.h), CA.maxZoom);
+            if (!(s >= 1)) { warn(`${where}: 寄せる倍率が 1 未満になる（pad ${pad} が大きい）。倍率 1 で止める`); s = 1; }
+          }
+          // 対象の中心を body の中心へ。拡大した body が body の枠を覆い続ける範囲に収める
+          let tx = 0, ty = 0;
+          if (R && s > 1) {
+            tx = clamp(B.x + B.w / 2 - s * (R.x + R.w / 2), (B.x + B.w) * (1 - s), B.x * (1 - s));
+            ty = clamp(B.y + B.h / 2 - s * (R.y + R.h / 2), (B.y + B.h) * (1 - s), B.y * (1 - s));
+          }
+          a.to = { s, tx, ty };
+          a.target = R;
+          if (R) {
+            const V = { x: R.x * s + tx, y: R.y * s + ty, w: R.w * s, h: R.h * s };
+            if (V.x < B.x - 1 || V.y < B.y - 1 || V.x + V.w > B.x + B.w + 1 || V.y + V.h > B.y + B.h + 1) warn(`${where}: zoom 先が body に収まらない（倍率 ${s.toFixed(2)}。小さな要素に寄せるか、先に zoom: "all" で戻す）`);
+          }
+          cur = a.to; last = a;
+        }
+        // 場面の終わり（次の場面の頭）のカメラ。動きの途中で場面が変わったら、その時点の状態
+        const nx = scenes[scenes.indexOf(sc) + 1];
+        sc.camEnd = last && nx ? camAt(last, nx.start) : cur;
+      }
+      for (const [ln, n] of Object.entries(perLine)) if (n >= 3) warn(`行 ${ln}: カメラが 1 行で ${n} 回動く（せわしない。2 回までにして、行を分ける）`);
+    }
     // ---- Morph: v1 と v2 で同じ id の要素を対応づける（act は場面の頭から 0.8 秒）----
     // graph の系列は、対応する要素がキャンバス上で同じ座標なので、写し方の補間（frame）だけで動く。
     // list・compare・table は、v1 の要素の画面上の位置を v2 の写し方で逆変換した位置（fromBox・fromPts）から動かす
@@ -480,7 +554,7 @@
       const pairs = [], auto = [];
       if (!MORPH_TYPES.includes(F2.type)) warn(`スライド「${sc.slide}」: 部品「${mo.to}」: Morph で要素をつなげない type（${F2.type}）。「${mo.from}」を消しながら「${mo.to}」を出す`);
       else {
-        const P1 = prev.place[mo.from], P2 = sc.place[mo.to], k = P1.s / P2.s;
+        const P1 = camOn(prev.camEnd, prev.place[mo.from]), P2 = sc.place[mo.to], k = P1.s / P2.s;   // v1 は、前の場面の最後のカメラで写った位置
         const loc = ([x, y]) => [(P1.ox + x * P1.s - P2.ox) / P2.s, (P1.oy + y * P1.s - P2.oy) / P2.s];
         for (const it2 of Object.values(F2.items)) {
           const it1 = F1.items[it2.id];
@@ -555,6 +629,7 @@
     return out;
   }
   const center = b => [b.x + b.w / 2, b.y + b.h / 2];
+  const unionRect = (a, b) => { const x = Math.min(a.x, b.x), y = Math.min(a.y, b.y); return { x, y, w: Math.max(a.x + a.w, b.x + b.w) - x, h: Math.max(a.y + a.h, b.y + b.h) - y }; };
   // 戻りの矢印は、行きの辺のラベルと反対の側へずらす
   function pickOffset(F, pts, path) {
     const labels = [];
@@ -742,16 +817,29 @@
     // graph の系列は、v2 の写し方を v1 の写し方から補間し、fade out する v1 も同じ写し方で写す
     const morphTo = {}, morphFrom = {};
     if (prev) for (const a of M.acts) if (a.verb === "morph" && a.scene === sc.id) { morphTo[a.to] = a; morphFrom[a.from] = a; }
+    // カメラ: 今の run の、t 以前の最後の zoom・pan を補間する（なければ恒等 = スライドの写し方）
+    let cam = CAM0;
+    for (const a of M.acts) {
+      if (t < a.start) break;
+      if ((a.verb === "zoom" || a.verb === "pan") && a.run === sc.run) cam = camAt(a, t);
+    }
+    // 前の場面が別の run なら、前の場面の図は前の場面の最後のカメラのまま写る（同じ図が続くときは、そこから新しい区画へ補間する）
+    const newRun = prev && prev.run !== sc.run;
+    const prevPl = fid => (newRun ? camOn(prev.camEnd, prev.place[fid]) : prev.place[fid]);
     for (const fid of sc.figs) {
       let pl = sc.place[fid];
-      const mo = morphTo[fid], from = prev && (prev.place[fid] || (mo && mo.series ? prev.place[mo.from] : null));
+      const mo = morphTo[fid], from = prev && (prev.place[fid] ? prevPl(fid) : mo && mo.series ? prevPl(mo.from) : null);
       if (from) { const a = from, b = pl, q = ease((t - sc.start) / 0.8); pl = { s: mix(a.s, b.s, q), ox: mix(a.ox, b.ox, q), oy: mix(a.oy, b.oy, q) }; }
-      figsF[fid] = { opacity: prev && (prev.figs.includes(fid) || (mo && mo.pairs.length)) ? 1 : k, place: pl };
+      figsF[fid] = { opacity: prev && (prev.figs.includes(fid) || (mo && mo.pairs.length)) ? 1 : k, place: camOn(cam, pl) };
     }
     if (prev) for (const fid of prev.figs) if (!sc.figs.includes(fid)) {
       const mo = morphFrom[fid];
-      figsF[fid] = { opacity: 1 - k, place: mo && mo.series && figsF[mo.to] ? figsF[mo.to].place : prev.place[fid] };
+      figsF[fid] = { opacity: 1 - k, place: mo && mo.series && figsF[mo.to] ? figsF[mo.to].place : prevPl(fid) };
     }
+    // body の clip: 寄せている間と、寄せたスライドから次のスライドへ移る 0.8 秒の間（前後の body を合わせた範囲）
+    const leaving = newRun && prev.camEnd.s > 1.001 && t < sc.start + 0.8;
+    const U = leaving ? unionRect(prev.body, sc.body) : sc.body;
+    const camera = { s: cam.s, tx: cam.tx, ty: cam.ty, clip: { ...U }, on: cam.s > 1.001 || leaving };
     for (const a of M.acts) if (a.verb === "custom" && a.scene !== sc.id) delete customs[a.key];
     // 終わりの札
     const endP = smooth((t - M.endCard) / 0.6);
@@ -771,7 +859,7 @@
     const header = { text: sc.header, opacity: (prev && prev.header !== sc.header ? k : 1) * (1 - endP), prev: prev && prev.header !== sc.header ? { text: prev.header, opacity: 1 - k } : null };
     const stSame = prev && prev.statement.join("\n") === sc.statement.join("\n");
     const statement = { lines: sc.statement, opacity: (prev && !stSame ? k : 1) * (1 - endP), prev: prev && !stSame && prev.statement.length ? { lines: prev.statement, opacity: 1 - k } : null };
-    return { t, st, figs: figsF, scene: sc, statement, captions: sc.captions.map(c => ({ ...c, opacity: (prev && prev.figs.includes(c.fig) && prev.captions.some(x => x.text === c.text) ? 1 : k) * (1 - endP) })), header, sub, badge, customs, end: endP, dark };
+    return { t, st, figs: figsF, camera, scene: sc, statement, captions: sc.captions.map(c => ({ ...c, opacity: (prev && prev.figs.includes(c.fig) && prev.captions.some(x => x.text === c.text) ? 1 : k) * (1 - endP) })), header, sub, badge, customs, end: endP, dark };
   };
   // ================= スライドの完成形のコマ =================
   // 完成形 = 宣言した部品がすべて出た状態。完成形に含めない部品（transient）と、動作で足したもの（印・注記・点・戻りの矢印）は出さない。
@@ -792,7 +880,7 @@
     }
     // 大きさを変えた箱（resize）は、変えた後の形で出す（中に入れた部品と重ならないように）
     for (const a of M.acts) if (a.verb === "resize" && sl.scenes.includes(a.scene) && st[a.key]) { st[a.key].rect = { ...a.to }; st[a.key].textOff = a.textTo.slice(); }
-    return { t: sc.start, st, figs: figsF, scene: sc, statement: { lines: sc.statement, opacity: 1, prev: null }, captions: [],
+    return { t: sc.start, st, figs: figsF, camera: { ...CAM0, clip: { ...sc.body }, on: false }, scene: sc, statement: { lines: sc.statement, opacity: 1, prev: null }, captions: [],
       header: { text: sc.header, opacity: 1, prev: null }, sub: null, badge: { text: "", show: 0, from: "" }, customs: {}, end: 0, dark: sc.tone === "dark" ? 1 : 0 };
   };
   const lineCache = new WeakMap();

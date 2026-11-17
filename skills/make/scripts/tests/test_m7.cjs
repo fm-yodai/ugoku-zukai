@@ -41,6 +41,11 @@ const graphPrint = M => {
   return crypto.createHash("sha1").update(JSON.stringify(out)).digest("hex");
 };
 
+// カメラの検査用: スライド a（g1 = G1）を 1 場面で使う。lines = 行の列
+const camDeck = (lines, figures) => deck4({ a: { title: "A", parts: [{ figure: "g1" }] } }, [SC("s1", "a", lines)], figures || { g1: G1 });
+// 図の座標の矩形を、写し方 pl で画面座標にする
+const scr = (b, pl) => ({ x: pl.ox + b.x * pl.s, y: pl.oy + b.y * pl.s, w: b.w * pl.s, h: b.h * pl.s });
+
 
 const tests = {
   async format4_accepted() {   // /4 で morph・zoom・pan・draw を書いてもエラーにならない
@@ -200,7 +205,7 @@ const tests = {
     const L1 = { type: "list", items: [{ id: "a", text: "認証" }, { id: "b", text: "検索" }, { id: "c", text: "通知" }] };
     const L2 = { type: "list", items: [{ id: "a", text: "認証" }, { id: "x", text: "決済" }, { id: "b", text: "検索" }, { id: "c", text: "通知" }] };
     const ML = await build(morphDeck({ v1: L1, v2: L2, show2: "x" }));
-    assert.deepStrictEqual(ML.errors, []);
+    assert.deepStrictEqual(ML.errors, [], JSON.stringify(ML.errors));
     const al = ML.acts.find(x => x.verb === "morph");
     assert.ok(al.pairs.some(p => p.to === "v2/b" && p.fromBox), "list の pairs に fromBox がない");
     fr = UZ.frame(ML, al.start + 0.4);
@@ -259,6 +264,140 @@ const tests = {
     assert.strictEqual(fr.figs.g1.opacity, 0);
     assert.strictEqual(fr.figs.g2.opacity, 1);
     for (const [k, s] of Object.entries(fr.st)) assert.ok(!s.rect && !s.pts, `${k} に Morph の途中の形がある`);
+  },
+  // ---- カメラ（zoom・pan）----
+  async zoom_scales_body_only() {
+    const M = await build(camDeck([{ id: "l1", text: "{a}出して{b}寄ります。", do: [{ show: "g1", at: "a" }, { zoom: "api", at: "b" }] }]));
+    assert.deepStrictEqual(M.errors, []);
+    const z = M.acts.find(a => a.verb === "zoom");
+    assert.ok(z && z.run === 0 && z.from.s === 1, `zoom の act: ${JSON.stringify(z && { run: z.run, from: z.from })}`);
+    const before = UZ.frame(M, z.start - 0.01), fr = UZ.frame(M, z.end + 0.01);
+    assert.strictEqual(before.camera.s, 1);
+    assert.ok(fr.camera.s > 1, `倍率が 1 のまま（${fr.camera.s}）`);
+    const P = M.scenes[0].place.g1, pl = fr.figs.g1.place, c = fr.camera;
+    assert.ok(Math.abs(pl.s - P.s * c.s) < 1e-9 && Math.abs(pl.ox - (c.s * P.ox + c.tx)) < 1e-9 && Math.abs(pl.oy - (c.s * P.oy + c.ty)) < 1e-9, "place にカメラが合成されていない");
+    assert.deepStrictEqual(fr.header, before.header);
+    assert.deepStrictEqual(fr.statement, before.statement);
+    const B = M.scenes[0].body, r = scr(M.figs.g1.items.api.bbox, pl);
+    assert.deepStrictEqual(fr.camera.clip, B);
+    assert.ok(Math.abs(r.x + r.w / 2 - (B.x + B.w / 2)) < 5 && Math.abs(r.y + r.h / 2 - (B.y + B.h / 2)) < 5, `api が body の中心に来ない: ${JSON.stringify(r)}`);
+  },
+  async zoom_all_and_pan() {
+    const M = await build(camDeck([{ id: "l1", text: "{a}出して{b}寄ります。", do: [{ show: "g1", at: "a" }, { zoom: "api", pad: 120, at: "b" }] },
+      { id: "l2", text: "{a}移ります。", do: [{ pan: "db", at: "a" }] }, { id: "l3", text: "{a}戻ります。", do: [{ zoom: "all", at: "a" }] }]));
+    assert.deepStrictEqual(M.errors, []);
+    const [z, p, all] = ["zoom", "pan", "zoom"].map((v, i) => M.acts.filter(a => a.verb === "zoom" || a.verb === "pan")[i]);
+    assert.strictEqual(p.verb, "pan");
+    const f1 = UZ.frame(M, z.end + 0.01), f2 = UZ.frame(M, p.end + 0.01), f3 = UZ.frame(M, all.end + 0.01);
+    const B = M.scenes[0].body, cx = (fr, id) => { const r = scr(M.figs.g1.items[id].bbox, fr.figs.g1.place); return Math.abs(r.x + r.w / 2 - (B.x + B.w / 2)); };
+    assert.ok(Math.abs(f2.camera.s - f1.camera.s) < 1e-9, `pan で倍率が変わった（${f1.camera.s} → ${f2.camera.s}）`);
+    assert.ok(cx(f2, "db") < cx(f1, "db") - 10, `pan で db に寄っていない（${cx(f1, "db")} → ${cx(f2, "db")}）`);
+    assert.deepStrictEqual(p.from, z.to);
+    assert.deepStrictEqual({ s: f3.camera.s, tx: f3.camera.tx, ty: f3.camera.ty }, { s: 1, tx: 0, ty: 0 });
+    assert.deepStrictEqual(f3.figs.g1.place, M.scenes[0].place.g1);
+  },
+  async camera_resets_on_slide_change_same_fig() {
+    const LIST = { type: "list", items: [{ id: "x", text: "あ" }] };
+    const sb = deck4({ a: { title: "A", parts: [{ figure: "g1" }] }, b: { title: "B", parts: [{ figure: "g1", area: { col: [1, 6], row: [1, 6] } }, { figure: "l1", area: { col: [7, 12], row: [1, 6] } }] } },
+      [SC("s1", "a", [{ id: "l1", text: "{a}出して{b}寄ります。", do: [{ show: "g1", at: "a" }, { zoom: "api", at: "b" }] }]),
+       SC("s2", "b", [{ id: "l2", text: "{a}並べます。", do: [{ show: "l1", at: "a" }] }])], { g1: G1, l1: LIST });
+    const M = await build(sb);
+    assert.deepStrictEqual(M.errors, []);
+    const [s1, s2] = M.scenes;
+    assert.ok(s1.run !== s2.run, "スライドが変わったのに run が同じ");
+    const end1 = UZ.frame(M, s2.start - 0.001);
+    assert.ok(end1.camera.s > 1);
+    const fr = UZ.frame(M, s2.start + 0.4), show = M.acts.find(a => a.verb === "show" && a.scene === "s2");
+    assert.strictEqual(fr.camera.s, 1);
+    assert.strictEqual(UZ.frame(M, show.start + 0.3).camera.s, 1);
+    // 前のスライドの最後の写り（カメラ込み）から、新しい区画の place へ補間する
+    const A = end1.figs.g1.place, Bp = s2.place.g1, pl = fr.figs.g1.place;
+    for (const k of ["s", "ox", "oy"]) assert.ok(pl[k] > Math.min(A[k], Bp[k]) - 1e-9 && pl[k] < Math.max(A[k], Bp[k]) + 1e-9 && Math.abs(pl[k] - Bp[k]) > 1e-6, `${k} が補間の途中でない: ${pl[k]}（${A[k]} → ${Bp[k]}）`);
+    assert.deepStrictEqual(UZ.frame(M, s2.start + 0.9).figs.g1.place, Bp);
+  },
+  async zoom_waits_for_morph() {
+    const sb = morphDeck();
+    sb.scenes[1].lines[0].do = [{ zoom: "api" }, { show: "cache" }];
+    const M = await build(sb);
+    assert.deepStrictEqual(M.errors, []);
+    const mo = M.acts.find(a => a.verb === "morph"), z = M.acts.find(a => a.verb === "zoom");
+    assert.ok(z.start >= mo.end - 1e-9, `zoom（${z.start}）が morph の終わり（${mo.end}）より前に始まる`);
+  },
+  async zoom_then_morph_starts_from_zoomed() {
+    // list: a で b に寄ってから、b のスライドへ Morph。fromBox は、寄せた後の画面上の位置から作る
+    const L1 = { type: "list", items: [{ id: "a", text: "認証" }, { id: "b", text: "検索" }, { id: "c", text: "通知" }] };
+    const L2 = { type: "list", items: [{ id: "a", text: "認証" }, { id: "x", text: "決済" }, { id: "b", text: "検索" }, { id: "c", text: "通知" }] };
+    const zoomFirst = (sb, to) => { sb.scenes[0].lines[0] = { id: "l1", text: "{a}出して{b}寄ります。", do: [{ show: sb.scenes[0].lines[0].do[0].show, at: "a" }, { zoom: to, at: "b" }] }; return sb; };
+    const ML = await build(zoomFirst(morphDeck({ v1: L1, v2: L2, show2: "x" }), "b"));
+    assert.deepStrictEqual(ML.errors, [], JSON.stringify(ML.errors));
+    const s2 = ML.scenes[1], end1 = UZ.frame(ML, s2.start - 0.001);
+    assert.ok(end1.camera.s > 1, "検査の前提: a の終わりで寄っていない");
+    const want = scr(ML.figs.v1.items.b.bbox, end1.figs.v1.place);
+    const pr = ML.acts.find(a => a.verb === "morph").pairs.find(p => p.to === "v2/b");
+    const got = scr(pr.fromBox, s2.place.v2);
+    for (const k of ["x", "y", "w", "h"]) assert.ok(Math.abs(got[k] - want[k]) <= 1, `fromBox の ${k} が寄せた後の位置と違う（${got[k]} と ${want[k]}）`);
+    // graph の系列: v2 の写し方は、a の終わりの（寄せた）写し方から始まる
+    const MG = await build(zoomFirst(morphDeck(), "api"));
+    assert.deepStrictEqual(MG.errors, [], JSON.stringify(MG.errors));
+    const g2s = MG.scenes[1], e1 = UZ.frame(MG, g2s.start - 0.001), f0 = UZ.frame(MG, g2s.start);
+    for (const k of ["s", "ox", "oy"]) assert.ok(Math.abs(f0.figs.g2.place[k] - e1.figs.g1.place[k]) < 1e-6, `系列の v2 が寄せた写し方から始まらない（${k}: ${f0.figs.g2.place[k]} と ${e1.figs.g1.place[k]}）`);
+  },
+  async frame_is_pure_under_seek() {
+    const M = await build(camDeck([{ id: "l1", text: "{a}出して{b}寄ります。", do: [{ show: "g1", at: "a" }, { zoom: "api", at: "b" }] },
+      { id: "l2", text: "{a}移って{b}戻ります。", do: [{ pan: "db", at: "a" }, { zoom: "all", at: "b" }] }]));
+    assert.deepStrictEqual(M.errors, []);
+    const k = M.duration / 12, seen = {};
+    for (const x of [10, 2, 7, 2, 10]) {
+      const t = x * k, fr = UZ.frame(M, t), sig = JSON.stringify({ c: fr.camera, st: fr.st, f: fr.figs });
+      if (seen[t] != null) assert.strictEqual(sig, seen[t], `t=${t} のコマが呼び出し順で変わる`);
+      seen[t] = sig;
+    }
+  },
+  async camera_checks() {
+    const one = async (lines, figs) => build(camDeck(lines, figs));
+    // まだ出していない要素に寄る
+    let M = await one([{ id: "l1", text: "{a}出して{b}寄ります。", do: [{ show: "app", at: "a" }, { zoom: "db", at: "b" }] }]);
+    assert.deepStrictEqual(M.errors, []);
+    assert.ok(UZ.checkLayout(M).some(i => i.kind === "カメラ"), JSON.stringify(UZ.checkLayout(M)));
+    // 1 行で 3 回
+    M = await one([{ id: "l1", text: "{a}出して{b}寄り{c}移り{d}移ります。", do: [{ show: "g1", at: "a" }, { zoom: "api", at: "b" }, { pan: "db", at: "c" }, { pan: "app", at: "d" }] }]);
+    hasWarn(M, /カメラが 1 行で 3 回/);
+    // pad が大きくて倍率が 1 未満
+    M = await one([{ id: "l1", text: "{a}出して{b}寄ります。", do: [{ show: "g1", at: "a" }, { zoom: "api", pad: 400, at: "b" }] }]);
+    hasWarn(M, /倍率が 1 未満/);
+    // 倍率の上限で寄ったまま、図全体へ移る（図全体は body に収まらない）
+    M = await one([{ id: "l1", text: "{a}出して{b}寄ります。", do: [{ show: "g1", at: "a" }, { zoom: "api", at: "b" }] }, { id: "l2", text: "{a}移ります。", do: [{ pan: "g1", at: "a" }] }]);
+    hasWarn(M, /zoom 先が body に収まらない/);
+    // 寄せて body の外に出た要素は、clip されるので「はみ出し」にしない
+    M = await one([{ id: "l1", text: "{a}出して{b}寄ります。", do: [{ show: "g1", at: "a" }, { zoom: "api", at: "b" }] }]);
+    const fr = UZ.frame(M, M.acts.find(a => a.verb === "zoom").end + 0.01);
+    const db = scr(M.figs.g1.items.db.bbox, fr.figs.g1.place);
+    assert.ok(db.x + db.w > fr.camera.clip.x + fr.camera.clip.w + 20, "検査の前提: db が body の外にはみ出していない");
+    const iss = UZ.checkLayout(M);
+    assert.ok(!iss.some(i => i.kind === "はみ出し" || i.kind === "カメラ"), JSON.stringify(iss));
+    assert.ok(!(M.warnings || []).some(w => /カメラ|倍率|zoom 先/.test(w)), JSON.stringify(M.warnings));
+  },
+  async final_frame_has_no_camera() {
+    const M = await build(camDeck([{ id: "l1", text: "{a}出して{b}寄ります。", do: [{ show: "g1", at: "a" }, { zoom: "api", at: "b" }] }]));
+    const fr = UZ.finalFrame(M, "a");
+    assert.deepStrictEqual(fr.figs.g1.place, M.scenes[0].place.g1);
+    assert.strictEqual(fr.camera.s, 1);
+    assert.strictEqual(fr.camera.on, false);
+  },
+  async check_skips_mid_morph() {
+    // 行が Morph の 0.8 秒の途中で終わっても、途中のコマで配置を調べない
+    const sb = morphDeck();
+    sb.scenes[1].lines[0] = { id: "l2", text: "はい。" };
+    const tl = { source: "estimate", lines: [{ id: "l1", scene: "s1", start: 0.8, dur: 2, marks: { a: 0.1 } }, { id: "l2", scene: "s2", start: 3.5, dur: 0.3, marks: {} }] };
+    const M = await UZ.build(sb, TH, tl);
+    assert.deepStrictEqual(M.errors, []);
+    const mo = M.acts.find(a => a.verb === "morph");
+    assert.ok(3.8 > mo.start && 3.8 < mo.end, "検査の前提: 行の終わりが Morph の途中でない");
+    const orig = UZ.frame, ts = [];
+    UZ.frame = (m, t) => { ts.push(t); return orig(m, t); };
+    try { UZ.checkLayout(M); } finally { UZ.frame = orig; }
+    const mid = ts.filter(t => t >= mo.start && t < mo.end);
+    assert.deepStrictEqual(mid, [], `Morph の途中の時刻で調べている: ${mid}`);
   },
   async non_series_graph_unchanged() {
     // 系列に入らない graph は、この変更の前と同じ座標（examples の見本）
