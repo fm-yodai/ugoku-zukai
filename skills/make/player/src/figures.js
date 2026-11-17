@@ -454,8 +454,13 @@
         dotAt: [cx, a.y + a.h - 12] });
       order.push(n.id);
     }
+    const morphWarn = [];
     for (const e of edges) {
-      const g = edgeGeom[e.id];
+      let g = edgeGeom[e.id];
+      if (!g && canvas && abs[e.from] && abs[e.to]) {
+        g = routeReplaced(abs[e.from], abs[e.to], f.nodes.filter(n => n.id !== e.from && n.id !== e.to).map(n => abs[n.id]), dir, e.label ? { w: UZ.textW(e.label, lsize) + 10, h: lsize + 8 } : null);
+        if (g.hit) morphWarn.push(e.id);
+      }
       if (!g) continue;
       let pts = g.pts;
       let label = null;
@@ -484,12 +489,49 @@
     if (canvas) {
       // 系列の図: キャンバスと同じだけずらし、外枠は自分の要素の外接矩形（キャンバス座標）にする
       UZ.shiftItems(items, canvas.dx, canvas.dy);
-      return { w: maxX + canvas.dx + pad, h: maxY + canvas.dy + pad, x0: minX + canvas.dx - pad, y0: minY + canvas.dy - pad, items, order: finalOrder, dir };
+      return { w: maxX + canvas.dx + pad, h: maxY + canvas.dy + pad, x0: minX + canvas.dx - pad, y0: minY + canvas.dy - pad, items, order: finalOrder, dir, morphWarn };
     }
     UZ.shiftItems(items, -minX + pad, -minY + pad);
     const out = { w: maxX - minX + pad * 2, h: maxY - minY + pad * 2, items, order: finalOrder, dir };
     if (ctx && ctx.sizes) out.geom = { abs, edgeGeom, width: r.width, height: r.height, dx: -minX + pad, dy: -minY + pad, dir };
     return out;
+  }
+
+  // 置き換わる辺の経路: 流れの方向に向かい合う辺の中点どうしを、まっすぐ（揃っていれば）か、中ほどで 1 回折れる Z で結ぶ。
+  // この図にあるノード（boxes）に重なれば、向きを変えた Z（流れと直交する辺から出る）を試し、どちらも重なればまっすぐにして hit を立てる。
+  // ラベルは一番長い区間の中点に置く（横の区間なら上、縦の区間なら右。ELK のラベルと同じく ALWAYS_UP）
+  function routeReplaced(a, b, boxes, dir, lab) {
+    const down = dir === "down";
+    // 流れの方向を x、直交する方向を y として考え、最後に戻す
+    const T = r => down ? { x: r.y, y: r.x, w: r.h, h: r.w } : r;
+    const P = p => down ? [p[1], p[0]] : p;
+    const A = T(a), B = T(b);
+    const s = [A.x + A.w, A.y + A.h / 2], t = [B.x, B.y + B.h / 2];
+    const cands = [];
+    if (Math.abs(s[1] - t[1]) < 0.5) cands.push([s, [t[0], s[1]]]);
+    else {
+      const mx = (s[0] + t[0]) / 2;
+      cands.push([s, [mx, s[1]], [mx, t[1]], t]);
+      // 向きを変えた Z: 直交する方向の辺から出て、中ほどで流れの方向に渡る
+      const up = t[1] < s[1];
+      const s2 = [A.x + A.w / 2, up ? A.y : A.y + A.h], t2 = [B.x + B.w / 2, up ? B.y + B.h : B.y], my = (s2[1] + t2[1]) / 2;
+      cands.push([s2, [s2[0], my], [t2[0], my], t2]);
+    }
+    const crosses = pts => boxes.some(r0 => { const r = T(r0); return pts.slice(1).some((q, i) => {
+      const p = pts[i], x0 = Math.min(p[0], q[0]), x1 = Math.max(p[0], q[0]), y0 = Math.min(p[1], q[1]), y1 = Math.max(p[1], q[1]);
+      return x0 < r.x + r.w - 0.5 && x1 > r.x + 0.5 && y0 < r.y + r.h - 0.5 && y1 > r.y + 0.5;
+    }); });
+    let pts = cands.find(c => !crosses(c)), hit = false;
+    if (!pts) { pts = [s, [t[0], s[1]]]; hit = true; }
+    let best = 0;
+    pts.forEach((p, i) => { if (i && Math.hypot(p[0] - pts[i - 1][0], p[1] - pts[i - 1][1]) > Math.hypot(pts[best + 1][0] - pts[best][0], pts[best + 1][1] - pts[best][1])) best = i - 1; });
+    const out = pts.map(P);
+    let label = null;
+    if (lab) {
+      const p = out[best], q = out[best + 1], mx = (p[0] + q[0]) / 2, my = (p[1] + q[1]) / 2;
+      label = Math.abs(p[1] - q[1]) < 0.5 ? { x: mx - lab.w / 2, y: my - 6 - lab.h, w: lab.w, h: lab.h } : { x: mx + 6, y: my - lab.h / 2, w: lab.w, h: lab.h };
+    }
+    return { pts: out, label, hit };
   }
 
   // ELK で組む: ノードの絶対座標（abs）と、辺の経路とラベルの位置（edgeGeom）
@@ -562,6 +604,14 @@
   UZ.graphCanvas = async function (specs, S, dir) {
     const nodes = {}, sizes = {}, edges = {}, groups = {};
     const lw = e => e.label ? UZ.textW(e.label, 19) : 0;
+    // 置き換わる辺: ある図にあり、後の図では両端のノードが残っているのに辺がないもの（browser>app が browser>cdn>app になる、など）。
+    // 和集合の組み方に入れず、各図でキャンバスのノードの位置から引き直す。ノードと一緒に消える辺は和集合に入れる
+    const eid = e => e.id || `${e.from}>${e.to}`;
+    const has = specs.map(f => ({ nodes: new Set(f.nodes.map(n => n.id)), edges: new Set(f.edges.map(eid)) }));
+    const replaced = new Set();
+    specs.forEach((f, i) => { for (const e of f.edges) for (let j = i + 1; j < specs.length; j++) {
+      if (!has[j].edges.has(eid(e)) && has[j].nodes.has(e.from) && has[j].nodes.has(e.to)) replaced.add(eid(e));
+    } });
     for (const f of specs) {
       const ns = nodeSpecOf(f);
       for (const n of f.nodes) {
@@ -570,7 +620,8 @@
         sizes[n.id] = z ? { w: Math.max(z.w, a.w), h: Math.max(z.h, a.h) } : { w: a.w, h: a.h };
       }
       for (const e of f.edges) {
-        const id = e.id || `${e.from}>${e.to}`;
+        const id = eid(e);
+        if (replaced.has(id)) continue;
         if (!edges[id] || lw(e) > lw(edges[id])) edges[id] = { ...e, id };
       }
       for (const g of f.groups || []) {

@@ -97,6 +97,27 @@ const tests = {
     }
     assert.deepStrictEqual(boxOf(M.figs.v3, "app"), boxOf(M.figs.v1, "app"));
   },
+  async series_replaced_edge_excluded() {
+    // browser>app は g2 で browser>cdn>app に置き換わる。和集合の組み方に入れないので、g1 の 3 つは 1 列に並び、矢印はまっすぐ
+    const W1 = { type: "graph", nodes: [{ id: "browser", label: "ブラウザ" }, { id: "app", label: "アプリ" }, { id: "db", label: "DB" }], edges: [{ from: "browser", to: "app", label: "依頼する" }, { from: "app", to: "db", label: "読み書きする" }] };
+    const W2 = { type: "graph", nodes: [{ id: "browser", label: "ブラウザ" }, { id: "cdn", label: "CDN" }, { id: "app", label: "アプリ" }, { id: "db", label: "DB" }],
+      edges: [{ from: "browser", to: "cdn", label: "依頼する" }, { from: "cdn", to: "app", label: "転送する" }, { from: "app", to: "db", label: "読み書きする" }] };
+    const M = await build(seriesDeck({ g1: W1, g2: W2 }, [["g1"], ["g2", "g1"]]));
+    assert.deepStrictEqual(M.errors, []);
+    const cy = id => { const it = M.figs.g1.items[id]; return it.y + it.h / 2; };
+    assert.ok(Math.abs(cy("browser") - cy("app")) < 0.5 && Math.abs(cy("app") - cy("db")) < 0.5, `1 列に並ばない: ${["browser", "app", "db"].map(cy)}`);
+    const pts = M.figs.g1.items["browser>app"].pts;
+    assert.ok(pts.every(p => Math.abs(p[1] - pts[0][1]) < 0.5), `browser>app がまっすぐでない: ${JSON.stringify(pts)}`);
+    assert.ok(!(M.warnings || []).some(w => /Morph の系列で矢印が箱に重なる/.test(w)), JSON.stringify(M.warnings));
+  },
+  async series_replaced_edge_warns_when_crossing() {
+    // g1 の a>c は g2 で消える（a・b・c は残る）。和集合は a → b → c の 1 列なので、a>c は g1 にある b を横切る
+    const N = ["a", "b", "c"].map(id => ({ id, label: id }));
+    const H1 = { type: "graph", nodes: N, edges: [{ from: "a", to: "b" }, { from: "b", to: "c" }, { from: "a", to: "c" }] };
+    const H2 = { type: "graph", nodes: N, edges: [{ from: "a", to: "b" }, { from: "b", to: "c" }] };
+    const M = await build(seriesDeck({ g1: H1, g2: H2 }, [["g1"], ["g2", "g1"]]));
+    hasWarn(M, /Morph の系列で矢印が箱に重なる/);
+  },
   async series_branch_is_error() {
     const G3 = { type: "graph", nodes: [...G1.nodes, { id: "log", label: "ログ" }], edges: G1.edges };
     const M = await build(seriesDeck({ g1: G1, g2: G2, g3: G3 }, [["g1"], ["g2", "g1"], ["g3", "g1"]]));

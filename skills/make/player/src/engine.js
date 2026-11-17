@@ -176,6 +176,7 @@
           if (pick) L = { ...pick.T, maxScale: 1, fillK: pick.k };
         }
         if (!L) L = await UZ.FIG[f.type].layout(f, S, { area: A, tryBoth: !f.direction, assets, canvas: seriesOf[fid] ? canvases.get(seriesOf[fid]) : undefined });
+        if (L.morphWarn && L.morphWarn.length) warn(`スライド「${sc.slide}」: 部品「${fid}」: Morph の系列で矢印が箱に重なる（${L.morphWarn.join("、")}）。系列の図のノードか辺を見直す`);
         const items = {};
         for (const it of L.items) { it.fig = fid; it.key = `${fid}/${it.id}`; items[it.id] = it; }
         figs[fid] = { id: fid, type: f.type, spec: f, w: L.w, h: L.h, items, order: L.order, autoShow: !!L.autoShow, fixed: !!L.fixed, extra: L, dark: !!sc.slideDark };
