@@ -73,6 +73,31 @@ const tests = {
       assert.ok(!(M.warnings || []).some(w => /Morph の並びを保てない/.test(w)), JSON.stringify(M.warnings));
     }
   },
+  async graph_anchor_keeps_screen_position() {
+    // v1・v2 とも全面（収まる）。共通ノードの画面上の中心が、v1 の場面と v2 の場面でほぼ同じ場所にとどまる。
+    // 許す差はノードの幅の 1/4。cache が間に入る api → db の db は流れの方向に押し出されるので、
+    // 挿入点より前の app・api だけを見る（db は直交する方向だけ見る）
+    const sb = morphDeck(G1, G2);
+    delete sb.slides.b.parts[0].area;
+    const M = await build(sb);
+    assert.deepStrictEqual(M.errors, []);
+    const [s1, s2] = M.scenes;
+    const scr = (sc, fid, id) => { const p = sc.place[fid], it = M.figs[fid].items[id]; return { x: p.ox + p.s * (it.x + it.w / 2), y: p.oy + p.s * (it.y + it.h / 2), w: p.s * it.w }; };
+    assert.strictEqual(s2.place.g2.s, s1.place.g1.s, "v2 の倍率が v1 と違う");
+    for (const id of ["app", "api", "db"]) {
+      const a = scr(s1, "g1", id), b = scr(s2, "g2", id), tol = a.w / 4;
+      if (id !== "db") assert.ok(Math.abs(a.x - b.x) < tol, `${id} の x が ${Math.abs(a.x - b.x).toFixed(1)} 動く（許す差 ${tol.toFixed(1)}）`);
+      assert.ok(Math.abs(a.y - b.y) < tol, `${id} の y が ${Math.abs(a.y - b.y).toFixed(1)} 動く（許す差 ${tol.toFixed(1)}）`);
+    }
+  },
+  async graph_anchor_place_stays_inside_area() {
+    // v2 を col 1-8 に置く（v1 の倍率では収まらない）: 図が区画の中に収まる
+    const M = await build(morphDeck(G1, G2));
+    const sc = M.scenes[1], p = sc.place.g2, F = M.figs.g2, A = sc.areas[0];
+    assert.ok(p.s <= M.scenes[0].place.g1.s + 1e-9);
+    assert.ok(p.ox + F.x0 * p.s >= A.x - 0.5 && p.ox + F.x1 * p.s <= A.x + A.w + 0.5, "横にはみ出す");
+    assert.ok(p.oy + F.y0 * p.s >= A.y - 0.5 && p.oy + F.y1 * p.s <= A.y + A.h + 0.5, "縦にはみ出す");
+  },
   async graph_anchor_warns_when_order_breaks() {
     // v2 で app と api の向きを逆にすると、流れの方向の順が v1 と入れ替わる
     const R = { type: "graph", nodes: G1.nodes, edges: [{ from: "api", to: "app" }, { from: "api", to: "db" }] };

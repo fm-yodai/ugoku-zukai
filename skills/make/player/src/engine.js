@@ -152,7 +152,7 @@
         if (L.morphBroken && L.morphBroken.length) warn(`スライド「${sc.slide}」: 部品「${fid}」の Morph の並びを保てない（${L.morphBroken.join("、")} の順が「${mv}」と入れ替わる）。edges の向きか direction を直す`);
         const items = {};
         for (const it of L.items) { it.fig = fid; it.key = `${fid}/${it.id}`; items[it.id] = it; }
-        figs[fid] = { id: fid, type: f.type, spec: f, w: L.w, h: L.h, items, order: L.order, autoShow: !!L.autoShow, fixed: !!L.fixed, extra: L, dark: !!sc.slideDark };
+        figs[fid] = { id: fid, type: f.type, spec: f, w: L.w, h: L.h, items, order: L.order, autoShow: !!L.autoShow, fixed: !!L.fixed, extra: L, dark: !!sc.slideDark, morphFrom: anchor ? mv : null };
       }
     }
     // Morph の anchor: v1 の向きと、ノードの矩形
@@ -435,7 +435,33 @@
       const oy = area.y + (va === "top" ? 0 : va === "bottom" ? dy : dy / 2) - F.y0 * s;
       return { s, ox, oy };
     };
-    for (const sc of scenes) sc.place = Object.fromEntries(sc.figs.map((fid, i) => [fid, place(fid, sc.areas[i])]));
+    // Morph の graph（anchor あり）: 倍率は v1 の画面上の倍率のまま（区画に収まらなければ、収まる一番大きい倍率）にし、
+    // 共通ノードの中心が、v1 が直前に出た場面での画面上の位置に一番近づく平行移動を選ぶ。差の平均（最小二乗）だと、
+    // 間に入ったノードに押し出された共通ノード（cache が入ったときの db など）に全体が引っぱられるので、差の中央値（絶対値の和が最小）を使う。
+    // 図が区画からはみ出さないように平行移動を抑える。揃え（valign・halign）は使わない
+    const placeMorph = (fid, area, p1) => {
+      const F = figs[fid], F1 = figs[F.morphFrom], w = F.x1 - F.x0, h = F.y1 - F.y0;
+      const s = Math.min(p1.s, area.w / w, area.h / h);
+      const shared = Object.values(F.items).filter(it => it.kind === "box" && F1.items[it.id] && F1.items[it.id].kind === "box");
+      if (!shared.length) return place(fid, area);   // 共通ノードがなければ、ふつうに置く
+      const mid = (it, k) => k === "x" ? it.x + it.w / 2 : it.y + it.h / 2;
+      const fit = k => {
+        const d = shared.map(it => (p1["o" + k] + p1.s * mid(F1.items[it.id], k)) - s * mid(it, k)).sort((a, b) => a - b), n = d.length;
+        return n % 2 ? d[(n - 1) / 2] : (d[n / 2 - 1] + d[n / 2]) / 2;
+      };
+      const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+      const ox = clamp(fit("x"), area.x - F.x0 * s, area.x + area.w - F.x1 * s);
+      const oy = clamp(fit("y"), area.y - F.y0 * s, area.y + area.h - F.y1 * s);
+      return { s, ox, oy };
+    };
+    const lastPlace = {};   // 図ごとに、直前に出た場面での place
+    for (const sc of scenes) {
+      sc.place = Object.fromEntries(sc.figs.map((fid, i) => {
+        const F = figs[fid], p1 = F.morphFrom && lastPlace[F.morphFrom];
+        return [fid, p1 ? placeMorph(fid, sc.areas[i], p1) : place(fid, sc.areas[i])];
+      }));
+      Object.assign(lastPlace, sc.place);
+    }
     acts.sort((a, b) => a.start - b.start);
     const lastLine = timeline.lines[timeline.lines.length - 1];
     const speechEnd = lastLine.start + lastLine.dur;
