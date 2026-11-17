@@ -2,7 +2,7 @@
 name: make
 description: >
   Use when the user wants a topic explained as a narrated, animated diagram video in Japanese —
-  「動く図解にして」「動画で説明して」「動画で解説」「アニメーションで見せて」「このリポジトリを動画で紹介して」
+  「動画で説明して」「動画にして」「動画で解説」「このリポジトリを動画で紹介して」「アニメーションで見せて」「動く図解にして」
   「この PR を動画で」「〜を動画で教えて」「ugoku-zukai」. Any source works: code files or directories,
   a repository URL, a PR or issue, a web page, a local document (md / PDF / design doc), the previous
   CLI output, or just a subject with nothing to read yet. Also use when the user points at a line of a

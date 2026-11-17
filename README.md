@@ -20,7 +20,7 @@
 
 | 部品 | 場所 | 役割 |
 |---|---|---|
-| スキル `make` | `skills/make/` | 本体。会話で構成を固めるところから公開までを進める。`/ugoku-zukai:make`、または「動く図解にして」で起動 |
+| スキル `make` | `skills/make/` | 本体。会話で構成を固めるところから公開までを進める。`/ugoku-zukai:make`、または「〜を動画で説明して」のように頼むと起動 |
 | サブエージェント 6 つ | `agents/` | Claude Code で使う作り手（researcher / writer / animator）と評価役（fact-checker / writing-reviewer / director）。claude.ai のチャットでは使われず、スキルが 1 つの会話で役を順番に演じる |
 | プレーヤー | `skills/make/player/` | 台本を描く JS（配置・描画・テーマ）。node の検査と同じコードを使う |
 | 見本 | `skills/make/examples/` | 図の種類ごとの見本台本と、デザインから作ったテーマの例。`python3 tools/build_gallery.py` で見本帳を作る |
@@ -53,7 +53,7 @@ claude plugin install ugoku-zukai@ugoku-zukai
 python3 tools/build_claude_ai_zip.py   # dist/ugoku-zukai-make.zip ができる
 ```
 
-**使い方**: 「〜を動く図解にして」「このリポジトリを動画で紹介して」のように頼むか、`/ugoku-zukai:make` で始めます。
+**使い方**: 「〜を動画にして」「〜を動画で説明して」「このリポジトリを動画で紹介して」のように頼むか、`/ugoku-zukai:make` で始めます。
 
 ## クレジットとライセンス
 
