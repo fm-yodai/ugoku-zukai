@@ -8,6 +8,8 @@
   const D = { line: 0.7, fill: [0.65, 0.35], text: [0.7, 0.3], label: [0.7, 0.3], smark: [0.7, 0.3] };
   const C = UZ.color;
 
+  const polyLen = P => P.reduce((a, q, i) => i ? a + Math.hypot(q[0] - P[i - 1][0], q[1] - P[i - 1][1]) : 0, 0);
+
   function el(tag, attrs, parent) {
     const e = document.createElementNS(NS, tag);
     if (attrs) for (const k in attrs) if (attrs[k] != null) e.setAttribute(k, attrs[k]);
@@ -245,12 +247,15 @@
         const b = it.bbox || { x: it.x, y: it.y, w: it.w, h: it.h };
         const m = el("mask", { maskUnits: "userSpaceOnUse", x: b.x - 20, y: b.y - 20, width: b.w + 40, height: b.h + 40 }, this.defs);
         const w = (it.width || 1.6) + 6;
-        const base = { fill: "none", stroke: "#fff", "stroke-width": w, pathLength: 1, "stroke-dasharray": "1 1" };
-        E.dmPath = it.kind === "frame" ? el("rect", { x: it.x, y: it.y, width: it.w, height: it.h, rx: it.r, ...base }, m) : el("path", { d: ptsD(it.pts), "stroke-linejoin": "round", ...base }, m);
+        // resvg は pathLength を見ないので、mask の線は実際の長さで伸ばす（dasharray と dashoffset を長さ倍する）
+        const len = it.kind === "frame" ? 2 * (it.w + it.h) - (8 - 2 * Math.PI) * it.r : polyLen(pts || it.pts);
+        E.dmLen = len;
+        const base = { fill: "none", stroke: "#fff", "stroke-width": w, "stroke-dasharray": `${len.toFixed(2)} ${(len + 10).toFixed(2)}` };
+        E.dmPath = it.kind === "frame" ? el("rect", { x: it.x, y: it.y, width: it.w, height: it.h, rx: it.r, ...base }, m) : el("path", { d: ptsD(pts || it.pts), "stroke-linejoin": "round", ...base }, m);
         E.dm = m;
       }
-      if (it.kind === "edge" && pts && E._dmPts !== pts) { E._dmPts = pts; E.dmPath.setAttribute("d", ptsD(pts)); }   // Morph で経路が変わったとき
-      const off = (1 - p).toFixed(4);
+      if (it.kind === "edge" && pts && E._dmPts !== pts) { E._dmPts = pts; E.dmPath.setAttribute("d", ptsD(pts)); E.dmLen = polyLen(pts); const l = E.dmLen.toFixed(2); E.dmPath.setAttribute("stroke-dasharray", `${l} ${(E.dmLen + 10).toFixed(2)}`); }   // Morph で経路が変わったとき
+      const off = ((1 - p) * E.dmLen).toFixed(2);
       E.dmPath.setAttribute("stroke-dashoffset", off);
       const id = `uz-dm-${key.replace(/[^A-Za-z0-9_-]/g, "_")}-${Math.round((1 - p) * 1000)}`;
       E.dm.setAttribute("id", id);

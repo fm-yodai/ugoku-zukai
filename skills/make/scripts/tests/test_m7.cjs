@@ -430,19 +430,19 @@ const tests = {
     const v = new UZ.View(svg, M);
     v.render(a.start + 0.5);
     const E = k => v.els[k];
-    const off = e => +e.getAttribute("stroke-dashoffset");
+    const off = (e, o) => o ? +e.getAttribute("stroke-dashoffset") / o.dmLen : +e.getAttribute("stroke-dashoffset");
     const api = E("g1/api");
     assert.ok(off(api.stroke) > 0 && off(api.stroke) < 1, `箱の枠が途中でない: ${off(api.stroke)}`);
     assert.ok(+api.fill.style.opacity === 0, `塗りが先に出ている: ${api.fill.style.opacity}`);
     const fr = E("g1/grp");
     assert.ok(fr && fr.dm, "frame の mask がない");
-    assert.ok(off(fr.dmPath) > 0 && off(fr.dmPath) < 1, `frame の mask が途中でない: ${off(fr.dmPath)}`);
+    assert.ok(off(fr.dmPath, fr) > 0 && off(fr.dmPath, fr) < 1, `frame の mask が途中でない: ${off(fr.dmPath, fr)}`);
     assert.ok(/^url\(#uz-dm-/.test(fr.stroke.getAttribute("mask")));
     const ed = Object.values(v.els).find(e => e.it.kind === "edge" && e.it.dashed);
     const edKey = Object.keys(v.els).find(k => v.els[k] === ed);
     let te = a.start; while (te < a.end && !(UZ.frame(M, te).st[edKey].show > 0.3)) te += 0.05;   // 辺は後から出るので、途中になる時刻まで進める
     v.render(te);
-    assert.ok(ed && ed.dm && off(ed.dmPath) > 0 && off(ed.dmPath) < 1, "破線のエッジの mask が途中でない");
+    assert.ok(ed && ed.dm && off(ed.dmPath, ed) > 0 && off(ed.dmPath, ed) < 1, "破線のエッジの mask が途中でない");
     // 描き終えたら mask を外す
     v.render(a.end + 0.1);
     assert.strictEqual(fr.stroke.getAttribute("mask"), null);
