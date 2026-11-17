@@ -3,9 +3,9 @@
   "use strict";
   const { clamp, mix, smooth, ease } = UZ;
 
-  UZ.FORMATS = ["ugoku-zukai/2", "ugoku-zukai/3"];   // /2 = 場面が図を指す形だけ。/3 = スライドも使える
-  UZ.FORMAT = "ugoku-zukai/3";
-  UZ.VERBS = ["show", "hide", "focus", "unfocus", "blur", "unblur", "pulse", "mark", "unmark", "trace", "reply", "note", "badge", "relabel", "tint", "move", "resize", "custom"];
+  UZ.FORMATS = ["ugoku-zukai/2", "ugoku-zukai/3", "ugoku-zukai/4"];   // /2 = 場面が図を指す形だけ。/3 = スライドも使える。/4 = morph・zoom・pan・draw も使える
+  UZ.FORMAT = "ugoku-zukai/4";
+  UZ.VERBS = ["show", "hide", "focus", "unfocus", "blur", "unblur", "pulse", "mark", "unmark", "trace", "reply", "note", "badge", "relabel", "tint", "move", "resize", "zoom", "pan", "custom"];
   const MARK_RE = /\{([A-Za-z0-9_]+)\}/g;
 
   // ---- 字幕の文と印 ----
@@ -62,7 +62,7 @@
 
   // ---- 動作の既定の長さ ----
   const LABEL_HOLD = 1.0;   // 点の札を見せておく秒数（この間、点は動かない）
-  const DUR = { show: 0.7, hide: 0.5, focus: 0.6, unfocus: 0.6, blur: 0.6, unblur: 0.6, pulse: 0.8, mark: 0.5, unmark: 0.4, trace: 2.0, reply: 0.8, note: 0.6, badge: 0.5, relabel: 0.6, tint: 0.6, move: 1.0, resize: 0.9, custom: 2.0 };
+  const DUR = { show: 0.7, hide: 0.5, focus: 0.6, unfocus: 0.6, blur: 0.6, unblur: 0.6, pulse: 0.8, mark: 0.5, unmark: 0.4, trace: 2.0, reply: 0.8, note: 0.6, badge: 0.5, relabel: 0.6, tint: 0.6, move: 1.0, resize: 0.9, zoom: 1.0, pan: 0.9, custom: 2.0 };
   const STAGGER = 0.22;
 
   const verbOf = a => UZ.VERBS.find(v => Object.prototype.hasOwnProperty.call(a, v));

@@ -15,14 +15,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 依存のインストール手順はない（python3 と node をそのまま使う。elkjs は `player/vendor/` に同梱）。
 
 ```bash
-# まとめての検査。ふだんは run_r4.sh だけ回せば全部走る（r4 → r3 → r2 → r1 → m3 → m1 の順に呼ぶ）
+# まとめての検査。ふだんは run_m7.sh だけ回せば全部走る（m7 → r4 → r3 → r2 → r1 → m3 → m1 の順に呼ぶ）
 #   run_m1.sh: 見本台本 × テーマ 3 種の配置検査・テーマの検査・デザイン抽出
 #   run_m3.sh: 字幕と読み・コマ・再生ページ・作業フォルダと、文書とスクリプトの食い違い
 #   run_r1.sh: 構成メモ・台本の章・スライドコンテのページ
 #   run_r2.sh: 指摘の一覧・成功基準・エージェントの定義・進行役の文書
 #   run_r3.sh: 再生ページの位置の表示・公開先の記録と作業フォルダの一覧・声の試聴・直しの文書（VOICEVOX があれば、試聴と声の使い回しも）
+#   run_m7.sh: 台本の形式 /4 と、morph・zoom・pan・draw の検証
 #   run_r4.sh: スライド（区画・テキスト・画像・フレーム・完成形のコマ・blur）、図と動作の追加（包含のベン図・ロードマップの矢印・象限の塗り分け・resize）、スライドの文字の検査、構成メモと台本のスライドの照合、案の見比べ（alts.py）、進行役の文書、評価役と基準の文書（物差しが意図になっているか。前の進め方の言葉が残っていないか）
-bash skills/make/scripts/tests/run_r4.sh
+bash skills/make/scripts/tests/run_m7.sh
 
 # 台本 1 本の検査（形・id の解決・配置）。--timeline で実際の声の長さでも検査する
 node skills/make/scripts/check_storyboard.cjs skills/make/examples/sequence.json --theme koo [--timeline work/voice/timeline.json] [--json]

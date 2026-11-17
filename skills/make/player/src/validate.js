@@ -19,6 +19,18 @@
     if (sb.figures != null && typeof sb.figures !== "object") E("figures（図の宣言）はオブジェクトで書く");
     if (sb.figures == null && sb.slides == null) E("figures（図の宣言）がない");
     if (!Array.isArray(sb.scenes) || !sb.scenes.length) E("scenes（場面の列）がない");
+    // /4 の機能（part の morph・動作の zoom・pan・show の draw）は、/3 以前の format では使えない。種類ごとに 1 件ずつ出す
+    if (UZ.FORMATS.includes(sb.format) && sb.format !== "ugoku-zukai/4") {
+      const need = (what, where) => E(`${where}で ${what} を使っている。使うには format を "ugoku-zukai/4" と書く（今は ${JSON.stringify(sb.format)}）`);
+      const parts = Object.entries(sb.slides && typeof sb.slides === "object" ? sb.slides : {}).flatMap(([sid, sl]) => sl && Array.isArray(sl.parts) ? sl.parts.map(p => [sid, p]) : []);
+      const hit = parts.find(([, p]) => p && p.morph != null);
+      if (hit) need("morph", `スライド「${hit[0]}」`);
+      const acts = (Array.isArray(sb.scenes) ? sb.scenes : []).flatMap(sc => sc && Array.isArray(sc.lines) ? sc.lines.flatMap(ln => ln && Array.isArray(ln.do) ? ln.do.map(a => [ln.id, a]) : []) : []);
+      for (const [what, test] of [["zoom", a => a.zoom != null], ["pan", a => a.pan != null], ["draw", a => a.draw != null]]) {
+        const h = acts.find(([, a]) => a && typeof a === "object" && test(a));
+        if (h) need(what, `行「${h[0]}」`);
+      }
+    }
     if (errors.length) return { errors, warnings };
     UZ.validateSlides(sb, E, W, ID_RE);
     if (errors.length) return { errors, warnings };
@@ -264,6 +276,11 @@
         (ln.do || []).forEach((a, ai) => {
           const verbs = UZ.VERBS.filter(v => Object.prototype.hasOwnProperty.call(a, v));
           if (verbs.length !== 1) E(`${lw} の do[${ai}]: 動詞（${UZ.VERBS.join(" / ")}）をちょうど 1 つ書く（今は ${verbs.join(", ") || "なし"}）`);
+          if (a.zoom != null && typeof a.zoom !== "string") E(`${lw} の do[${ai}]: zoom の対象は文字列（図・部品・要素の id、全体に戻るなら "all"）で書く`);
+          if (a.pan != null && typeof a.pan !== "string") E(`${lw} の do[${ai}]: pan の対象は文字列（要素の id）で書く`);
+          if ((a.zoom != null || a.pan != null) && a.pad != null && !(typeof a.pad === "number" && Number.isFinite(a.pad) && a.pad >= 0)) E(`${lw} の do[${ai}]: pad は 0 以上の数で書く`);
+          if (a.draw != null && typeof a.draw !== "boolean") E(`${lw} の do[${ai}]: draw は true か false で書く`);
+          if (a.draw != null && verbs[0] !== "show") E(`${lw} の do[${ai}]: draw は show にだけ付けられる`);
           if (a.at != null) { used.add(a.at); if (p.marks[a.at] == null) E(`${lw} の do[${ai}]: 印 {${a.at}} が text にない`); }
         });
         for (const k of Object.keys(p.marks)) if (!used.has(k)) W(`${lw}: 印 {${k}} を使う動作がない`);
