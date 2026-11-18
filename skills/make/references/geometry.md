@@ -45,14 +45,14 @@
 | 道具 | 意味 |
 |---|---|
 | `geo.axes(g, { box, x, y, grid?, ticks?, labels?, show? })` | 座標軸。`box` は区画の中の `{x, y, w, h}`（px）、`x`・`y` は数の範囲 `[最小, 最大]`。`grid: true` で格子、`ticks: { x: 1, y: 0.5 }` で目盛りの間隔（省くと 8 つほどに割る）、`labels: { x: "$x$", y: "万円" }` で軸の名前、`show`（0〜1）で軸が伸びて現れる途中を描く。戻り値 `Ax` は `toPx([x, y])`（数 → px）、`toNum([px, py])`（px → 数）、`box`、`x`、`y`、`g` を持つ |
-| `geo.plot(g, Ax, f, { color?, width?, from?, to?, upto?, samples? })` | `y = f(x)` の曲線。`from`〜`to`（省くと x の範囲全体）を描き、`upto`（0〜1）でその途中まで描く。範囲の外と `NaN` の所は線を切る |
+| `geo.plot(g, Ax, f, { color?, width?, from?, to?, upto?, samples? })` | `y = f(x)` の曲線（`width` の既定 3、`samples` は分割の数で既定 200）。`from`〜`to`（省くと x の範囲全体）を描き、`upto`（0〜1）でその途中まで描く。範囲の外と `NaN` の所は線を切る |
 
 ### 点と文字
 
 | 道具 | 意味 |
 |---|---|
-| `geo.point(g, Ax, [x, y], { color?, r?, label? })` | 点。`label` は点の右上に出る |
-| `geo.label(g, [px, py], text, { size?, anchor?, color?, weight? })` | 文字。`[px, py]` は文字の縦の中心。`anchor` は `start`・`middle`（既定）・`end`。`$…$` で囲むと TeX で組む。地の色の縁取りが付き、格子の上でも読める |
+| `geo.point(g, Ax, [x, y], { color?, r?, label?, size?, labelColor? })` | 点（`r` の既定 7）。`label` は点の右上に出る。`size`・`labelColor` はその文字の大きさと色 |
+| `geo.label(g, [px, py], text, { size?, anchor?, color?, weight? })` | 文字（`size` の既定 22）。`[px, py]` は文字の縦の中心。`anchor` は `start`・`middle`（既定）・`end`。`$…$` で囲むと TeX で組む。地の色の縁取りが付き、格子の上でも読める |
 | `geo.number(g, [px, py], value, { decimals?, prefix?, unit?, … })` | 数を文字にして出す（`decimals` の既定は 2。`-0.00` は `0.00` にする）。残りの引数は `geo.label` と同じ |
 
 ### 微分と面積
@@ -60,26 +60,26 @@
 | 道具 | 意味 |
 |---|---|
 | `geo.deriv(f, x)` | `f` の `x` での傾き（数値微分） |
-| `geo.tangent(g, Ax, f, x0, { df?, len?, color?, width?, dash? })` | `x0` での接線。`df` で傾きを渡せる（省くと数値微分）。`len` は x の単位で測った線の長さ（傾きによらず画面の上で同じ長さ） |
-| `geo.secant(g, Ax, f, x0, x1, { extend?, color?, dash? })` | 2 点を通る割線。両側へ 2 点の間の `extend`（既定 0.25）ずつ延ばす |
-| `geo.area(g, Ax, f, a, b, { color?, opacity? })` | `a`〜`b` で曲線と x 軸に挟まれた面を塗る |
-| `geo.riemann(g, Ax, f, a, b, n, { rule?, color?, opacity? })` | `n` 本の長方形（リーマン和）。`rule` は `left`（既定）・`mid`・`right` |
+| `geo.tangent(g, Ax, f, x0, { df?, len?, color?, width?, dash? })` | `x0` での接線（`dash: true` で破線）。`df` で傾きを渡せる（省くと数値微分）。`len` は x の単位で測った線の長さ（傾きによらず画面の上で同じ長さ） |
+| `geo.secant(g, Ax, f, x0, x1, { extend?, color?, width?, dash? })` | 2 点を通る割線。両側へ 2 点の間の `extend`（既定 0.25）ずつ延ばす |
+| `geo.area(g, Ax, f, a, b, { color?, opacity? })` | `a`〜`b` で曲線と x 軸に挟まれた面を塗る（`opacity` の既定 0.35） |
+| `geo.riemann(g, Ax, f, a, b, n, { rule?, color?, opacity? })` | `n` 本の長方形（リーマン和。`n` は丸める）。`rule` は `left`（既定）・`mid`・`right`。`opacity` は塗りの濃さ（既定 0.4） |
 
 ### ベクトルと図形
 
 | 道具 | 意味 |
 |---|---|
-| `geo.vector(g, Ax, from, to, { color?, width?, label? })` | 矢印。`from`・`to` は数の座標。`label` は矢の先に出る |
-| `geo.arc(g, [cx, cy], r, a0, a1, { fill?, color?, width? })` | 弧（px の中心と半径）。角はラジアンで、右が 0、反時計回り。`fill: true` で扇形を塗る |
-| `geo.circle(g, [cx, cy], r, { fill?, color?, width? })` | 円（px） |
-| `geo.polygon(g, pts, { closed?, fill?, color?, width? })` | 折れ線・多角形（px の点の列）。`closed: false` で閉じない |
+| `geo.vector(g, Ax, from, to, { color?, width?, label?, size?, labelColor? })` | 矢印。`from`・`to` は数の座標。`label` は矢の先に出る（`size`・`labelColor` で文字の大きさと色） |
+| `geo.arc(g, [cx, cy], r, a0, a1, { fill?, fillOpacity?, color?, width? })` | 弧（px の中心と半径）。角はラジアンで、右が 0、反時計回り。`fill: true`（線の色）か色の名前で扇形を塗る。`fillOpacity` は塗りの濃さ（既定 0.25） |
+| `geo.circle(g, [cx, cy], r, { fill?, fillOpacity?, color?, width? })` | 円（px）。`fill`・`fillOpacity` は `geo.arc` と同じ |
+| `geo.polygon(g, pts, { closed?, fill?, fillOpacity?, color?, width? })` | 折れ線・多角形（px の点の列）。`closed: false` で閉じない。`fill`・`fillOpacity` は `geo.arc` と同じ |
 | `geo.bar(g, Ax, x, value, { width?, color?, opacity? })` | 棒。`x` を中心に 0 から `value` まで。`width` は x の単位（既定 0.6） |
 
 ### 数式と補助
 
 | 道具 | 意味 |
 |---|---|
-| `geo.tex(g, tex, { x, y, size?, anchor?, color?, display? })` | TeX の数式。`y` は数式の**上端**、`x` は `anchor` で決まる横の位置。`size` は 1em の px（既定 32）。戻り値は `{ w, h, el }`（幅と高さの px）。3 章 |
+| `geo.tex(g, tex, { x, y, size?, anchor?, color?, display? })` | TeX の数式。`y` は数式の**上端**、`x` は `anchor` で決まる横の位置（`anchor` の既定は `start` = `x` が左端。`geo.label` の既定 `middle` と違う）。`size` は 1em の px（既定 32）。`display: true` で別行立ての組み方（`\sum` の添字が上下に付くなど）。戻り値は `{ w, h, el }`（幅と高さの px）。3 章 |
 | `geo.texMorph(g, from, to, p, o)` | 数式 `from` から `to` への変形の途中（`p` は 0〜1）。`o` は `geo.tex` と同じ。3 章 |
 | `geo.col(c)` | 色の名前を色の値にする |
 | `geo.lerp(a, b, p)` | 数か配列の補間 |
@@ -95,7 +95,7 @@
 
 - **値を埋める**: テンプレート文字列で書く（`` `f'(${a.toFixed(2)})=${m.toFixed(2)}` ``）。`(-0.001).toFixed(2)` は `-0.00` になるので、0 を挟んで動く値は直してから埋める（R1）
 - **置き方**: `geo.tex` の `y` は上端。2 つの式を縦に並べるときは、戻り値の `h` を足して次の `y` にする。横に続けるときは `w` を足す
-- **色**: 1 つの式の中で色を分ける命令（`\color`）は使えない。式全体の色は `color` で決まる。項ごとに色を分けたいときは、式を分けて `geo.tex` を横に並べる
+- **色**: 式全体の色は `color` で決まる。項ごとに色を付けるには `\textcolor{色}{…}` で囲む（`x^2+\textcolor{warn}{2x}+1`）。色はテーマのキー（`accent`・`warn`・`good` など。テーマの色に置き換わる）か `#rrggbb` で書く。図の同じものと同じ色にすると、式の項と図の部分が目で結びつく（R1 の傾きの数と接線、見本の展開の項と正方形の部分）。`\color{色}` は後ろ全体の色を切り替える命令なので、囲んだ所だけに効かせたいときは `\textcolor` を使う
 - **文字の中の数式**: `geo.label` と `geo.point`・`geo.vector`・`geo.axes` の `label` は、`$…$` で囲むと TeX で組む
 - **日本語**: MathJax には日本語の字形がない。`\text{速さ}` はテーマの字体の文字で代わりに出るが、式の中で幅が合わないことがある。日本語の説明は式の外に `geo.label` で置く
 - **誤り**: 組めない TeX（閉じていない `{` など）は、その場所に TeX の文字列を赤で出し、検査が誤りにする
@@ -105,11 +105,11 @@
 ```js
 geo.texMorph(g,
   String.raw`(\cssId{x}{x}\cssId{p}{+}\cssId{one}{1})^{\cssId{two}{2}}`,
-  String.raw`\cssId{x}{x}^{\cssId{two}{2}}\cssId{p}{+}2x+\cssId{one}{1}`,
+  String.raw`\textcolor{accent}{\cssId{x}{x}^{\cssId{two}{2}}}\cssId{p}{+}\textcolor{warn}{2x}+\textcolor{good}{\cssId{one}{1}}`,
   v.e, { x: 400, y: 120, size: 64 })
 ```
 
-この例では、`x`・`+`・`1`・指数の `2` が新しい場所へ動き、括弧が消え、`2x` と 2 つ目の `+` が現れる。`p` が 0 と 1 のときは、`geo.tex` で `from`・`to` を描いたのと同じ絵になる。
+この例では、`x`・`+`・`1`・指数の `2` が新しい場所へ動き、括弧が消え、`2x` と 2 つ目の `+` が現れる。前と後で色が違う部分（`x` は白から青へ）は、動きながら色が移る。`p` が 0 と 1 のときは、`geo.tex` で `from`・`to` を描いたのと同じ絵になる。
 
 ## 4. リファレンス（R1〜R6）
 
@@ -141,7 +141,8 @@ geo.texMorph(g,
   const X = w * 0.64;
   geo.tex(g, String.raw`f(x)=\tfrac{1}{4}x^3-x`, { x: X, y: 20, size: 34, color: "accent" });
   geo.tex(el("g", { opacity: v.tr }, g), String.raw`f'(x)=\tfrac{3}{4}x^2-1`, { x: X, y: 90, size: 34, color: "good" });
-  geo.tex(el("g", { opacity: v.tl }, g), `f'(${num(a)})=${num(m)}`, { x: X, y: 190, size: 44, color: "warn" });
+  // 傾きの数は、接線と同じ色にする
+  geo.tex(el("g", { opacity: v.tl }, g), String.raw`f'(${num(a)})=\textcolor{warn}{${num(m)}}`, { x: X, y: 190, size: 44 });
 }
 ```
 
@@ -284,6 +285,6 @@ geo.texMorph(g,
   geo.label(g, [X, 30], "月の伸び率", { anchor: "start", color: "muted", size: 24 });
   geo.number(g, [X, 80], r * 100, { decimals: 1, unit: "%", anchor: "start", color: "accent", size: 48 });
   geo.label(g, [X, 160], "12 月の売上（万円）", { anchor: "start", color: "muted", size: 24 });
-  geo.tex(g, String.raw`100\times${(1 + r).toFixed(3)}^{11}\approx${Math.round(last)}`, { x: X, y: 190, size: 36, color: "warn" });
+  geo.tex(g, String.raw`100\times${(1 + r).toFixed(3)}^{11}\approx\textcolor{warn}{${Math.round(last)}}`, { x: X, y: 190, size: 36 });
 }
 ```

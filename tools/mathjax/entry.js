@@ -6,6 +6,7 @@ const { TeX } = require("mathjax-full/js/input/tex.js");
 require("mathjax-full/js/input/tex/base/BaseConfiguration.js");
 require("mathjax-full/js/input/tex/ams/AmsConfiguration.js");
 require("mathjax-full/js/input/tex/html/HtmlConfiguration.js");
+require("mathjax-full/js/input/tex/color/ColorConfiguration.js");
 const { SVG } = require("mathjax-full/js/output/svg.js");
 const { liteAdaptor } = require("mathjax-full/js/adaptors/liteAdaptor.js");
 const { RegisterHTMLHandler } = require("mathjax-full/js/handlers/html.js");
@@ -14,7 +15,7 @@ const { RegisterHTMLHandler } = require("mathjax-full/js/handlers/html.js");
 const adaptor = liteAdaptor({ cjkCharWidth: 1 });
 RegisterHTMLHandler(adaptor);
 const doc = mathjax.document("", {
-  InputJax: new TeX({ packages: ["base", "ams", "html"] }),
+  InputJax: new TeX({ packages: ["base", "ams", "html", "color"] }),
   OutputJax: new SVG({ fontCache: "none" }),
 });
 

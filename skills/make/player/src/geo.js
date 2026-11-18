@@ -304,9 +304,11 @@
     const placeStr = P => `translate(${n2(P.tx)},${n2(P.ty)}) scale(${n4(P.k)})`;
     // 木の子を el で写す。currentColor は色に置き換える（resvg と同じ絵にするため）。
     // 数式の中の日本語（\text{…}）は、MathJax の serif をやめてテーマの文字で出す（幅は MathJax が 1 文字 1em で見積もっている）
+    // \color{warn}{…} のようにテーマのキーで書いた色は、テーマの色にする（\color{#58c4dd} などはそのまま）
+    const texColor = (v, color) => v === "currentColor" ? color : KEYS.includes(v) ? S[v] : v;
     function copyAttrs(attrs, color) {
       const a = {};
-      for (const k in attrs) if (!skipAttr(k) && k !== "transform") a[k] = attrs[k] === "currentColor" ? color : attrs[k];
+      for (const k in attrs) if (!skipAttr(k) && k !== "transform") a[k] = (k === "fill" || k === "stroke") ? texColor(attrs[k], color) : attrs[k];
       return a;
     }
     function copyNode(node, parent, color, skip) {
@@ -374,9 +376,11 @@
         const w = el("g", { ...copyAttrs(x.inh, color), ...copyAttrs(x.node.attrs, color), transform: matStr(M), opacity: opacity < 1 ? op(opacity) : null }, root);
         copyKids(x.node, w, color);
       };
+      // 形も色も同じなら 1 つを動かす。色（\color）が変わるなら、動かしながら前の色から次の色へ移す
+      const paint = x => { const c = { ...copyAttrs(x.inh, color), ...copyAttrs(x.node.attrs, color) }; return c.fill + "|" + c.stroke; };
       for (const [a, b] of shared) {
         const M = geo.lerp(mul(OA, a.M), mul(OB, b.M), p);
-        if (sameKids(a.node, b.node)) part(a, M, 1);
+        if (sameKids(a.node, b.node) && paint(a) === paint(b)) part(a, M, 1);
         else { part(a, M, 1 - p); part(b, M, p); }
       }
       return { w: geo.lerp(PA.w, PB.w, p), h: geo.lerp(PA.h, PB.h, p), el: root };

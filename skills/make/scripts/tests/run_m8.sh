@@ -9,7 +9,8 @@ node scripts/tests/test_m8.cjs >/dev/null 2>&1 || { ng "test_m8.cjs"; node scrip
 ex=examples/math-geometry.json
 ol=examples/outlines/math-geometry.json
 out=$(node scripts/check_storyboard.cjs $ex --theme kuro --outline $ol --complete 2>&1) || { ng "$ex（check_storyboard --outline --complete）"; echo "$out"; }
-echo "$out" | grep -q "警告" && { ng "$ex の検査に警告がある"; echo "$out"; }
+# 警告は「  警告: …」の行で出る（要約の文言には反応しない）
+echo "$out" | grep -q "^ *警告: " && { ng "$ex の検査に警告がある"; echo "$out"; }
 grep -q '"theme": "kuro"' $ol || ng "$ol のテーマが kuro でない"
 python3 scripts/check_outline.py $ol --ready >/dev/null 2>&1 || { ng "$ol（check_outline --ready）"; python3 scripts/check_outline.py $ol --ready; }
 python3 scripts/check_text.py $ex >/dev/null 2>&1 || { ng "$ex（check_text）"; python3 scripts/check_text.py $ex; }

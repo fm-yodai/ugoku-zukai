@@ -81,6 +81,23 @@ const tests = {
     const hasText = JSON.stringify(r.tree).includes('"text":"速"') && JSON.stringify(r.tree).includes('"text":"さ"');   // MathJax は 1 文字ずつ <text> にする
     assert.ok(hasText && r.w > 1.5, `w=${r.w}`);
   },
+  async tex_color_package() {   // \color{#…}{…} は誤りにならず、その色の fill・stroke を持つ節になる
+    const r = UZMJ.tex2tree("\\color{#58c4dd}{x}");
+    assert.ok(!r.error, r.error);
+    const cols = []; (function walk(n) { if (n.attrs) cols.push(n.attrs.fill, n.attrs.stroke); (n.children || []).forEach(walk); })(r.tree);
+    assert.ok(cols.includes("#58c4dd"), JSON.stringify(cols));
+    // \textcolor は囲んだ所だけに色を付ける（後ろの + b は元の色のまま）
+    const paints = []; (function walk(n, c) { if (n.attrs && n.attrs.fill) c = n.attrs.fill; if (n.tag === "path" || n.tag === "use") paints.push(c); (n.children || []).forEach(k => walk(k, c)); })(UZMJ.tex2tree("\\textcolor{#58c4dd}{a}+b").tree, "");
+    assert.deepStrictEqual(paints, ["#58c4dd", "currentColor", "currentColor"]);
+  },
+  async geo_tex_color_theme_key() {   // \textcolor{warn}{…} のテーマのキーは、テーマの色に置き換わる
+    const { geo, g } = newGeo();
+    geo.tex(g, "a+\\textcolor{warn}{b}", { x: 0, y: 0 });
+    const str = ser(g), S = UZ.styleOf(TH);
+    assert.ok(str.includes(`fill="${S.warn}"`), str.slice(0, 300));
+    assert.ok(!/(fill|stroke)="warn"/.test(str), "キーの名前のまま残っている");
+    assert.deepStrictEqual(geo.errors, []);
+  },
   async tex_error_returns_error() {
     assert.strictEqual(UZMJ.tex2tree("\\frac{1}{").error, "Missing close brace");
     assert.ok(UZMJ.tex2tree("\\foo").error);
