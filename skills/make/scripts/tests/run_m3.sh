@@ -108,9 +108,9 @@ for f in $docs; do
   [ -z "$bad" ] || { echo "NG: $f のコードに bash 専用の書き方がある"; echo "$bad"; fail=1; }
 done
 [ -f SKILL.md ] && [ "$(wc -l < SKILL.md)" -le 200 ] || { echo "NG: SKILL.md が 200 行を超える"; fail=1; }
-# 機械検査の差し戻しは writer の別の呼び方（応答を書かない）。進行役の文書と review-protocol.md から指す
+# 機械検査の差し戻しは writer の別の呼び方（応答を書かない）。writer を呼ぶ Claude Code の文書と review-protocol.md から指す
 grep -q "^## 機械検査の差し戻し" ../../agents/writer.md || { echo "NG: writer.md に「機械検査の差し戻し」の節がない"; fail=1; }
-for f in $docs references/review-protocol.md; do
+for f in SKILL.md references/run-code.md references/review-protocol.md; do
   grep -q "機械検査の差し戻し" "$f" || { echo "NG: $f に「機械検査の差し戻し」がない"; fail=1; }
 done
 # チャットのスキルの探し方は /mnt/skills を先に見る

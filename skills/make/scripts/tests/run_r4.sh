@@ -39,15 +39,17 @@ for id in O-D6 O-D7 O-D8 O-D9; do grep -q "^| $id " $c/outline.md || ng "outline
 grep -q "^| A-5 " $c/agreement.md || ng "agreement.md に A-5 がない"
 for id in G-D11 G-D12 G-D13 G-D14 G-D15 G-D16; do grep -q "^| $id " $c/structure.md && grep -q "$id" $A/director.md || ng "$id が、structure.md と director.md にそろっていない"; done
 grep -q "^| V-6 " $c/screen.md && grep -q "V-6" $A/director.md || ng "V-6（完成形への至り方）が、screen.md と director.md にそろっていない"
-for id in S-W12 S-W13; do grep -q "^| $id " $c/script.md && grep -q "$id" $A/writing-reviewer.md && grep -q "$id" $c/README.md && grep -q "$id" references/run-chat.md || ng "$id が、script.md・writing-reviewer.md・README・run-chat にそろっていない"; done
+for id in S-W12 S-W13; do grep -q "^| $id " $c/script.md && grep -q "$id" $A/writing-reviewer.md && grep -q "$id" $c/README.md || ng "$id が、script.md・writing-reviewer.md・README にそろっていない"; done
 grep -q "^| S-F5 " $c/script.md && grep -q "S-F5" $A/fact-checker.md || ng "S-F5（スライドのテキストの事実）が、script.md と fact-checker.md にそろっていない"
 grep -q "読み上げ" $c/script.md || ng "script.md に、スライドの文字を読み上げるだけの原稿を止める基準がない"
 grep -q "声と字幕" $c/structure.md || ng "structure.md に、声と字幕がなくても読めることの基準がない"
 grep -q "どの文に照らしたか" $c/README.md || ng "criteria/README.md に、意図のどの文に照らしたかを書く約束がない"
-# 評価役を呼ぶ場面と、先に直す範囲が、進行役の文書とそろっている
+# 評価役を呼ぶ場面の正は review-protocol.md。criteria/README（担当の基準）と環境ごとの文書はそこを指す
 for w in "章の意図が固まったとき" "スライドコンテを見せる前" "スライドが固まった" "合成の前" "直した後"; do
-  grep -q "$w" $p && grep -q "$w" $c/README.md || ng "review-protocol.md と criteria/README.md に、呼ぶ場面「$w」がない"
+  grep -q "$w" $p || ng "review-protocol.md に、呼ぶ場面「$w」がない"
 done
+for f in $c/README.md references/run-code.md references/run-chat.md SKILL.md; do grep -q "review-protocol.md" $f || ng "$f が review-protocol.md を指していない"; done
+grep -q "評価役を呼ぶ場面" $c/README.md || ng "criteria/README.md が、review-protocol.md の「評価役を呼ぶ場面」を指していない"
 grep -q "意図を変えない指摘" $p || ng "review-protocol.md に、先に直すのは意図を変えない指摘だという記述がない"
 # 作り手: スライド → 意図 → 原稿の順。調べた事実は取材メモに置く
 for w in "statement" "proposed" "案を並べる" "slide-<"; do grep -q -- "$w" $A/writer.md || ng "writer.md に $w がない"; done

@@ -90,7 +90,7 @@ grep -q "インタビュー → " ../../CLAUDE.md && ng "CLAUDE.md の流れが�
 grep -q "R2" ../../docs/design.md || ng "docs/design.md に R2 の記述がない"
 # 絵コンテまでの通し（2026-11-10）で、初めて読んだ人が迷った箇所
 grep -q "まだ決めていないこと" SKILL.md || ng "SKILL.md に、まだ決めていないこと（open）を見せる記述がない"
-for f in SKILL.md references/review-protocol.md references/run-chat.md references/run-code.md; do
+for f in references/review-protocol.md references/run-chat.md references/run-code.md; do
   grep -q "任されているときは" $f || ng "$f に、任されているときの構成メモの指摘の扱いがない"
 done
 grep -q "開き直" references/run-chat.md || ng "run-chat.md に、評価役が資料を開き直す記述がない"

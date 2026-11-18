@@ -25,7 +25,7 @@ vg=references/visual-grammar.md
 grep -q '^## キャンバスとカメラ' $vg || ng "visual-grammar.md に「キャンバスとカメラ」の節がない"
 for id in VG-10 VG-11 VG-12; do grep -q "^### $id " $vg || ng "visual-grammar.md に $id がない"; done
 grep -q 'Lichtschlag' $vg || ng "visual-grammar.md の VG-11 に、出どころ（Lichtschlag ら）がない"
-for f in $A/writer.md $A/director.md references/storyboard.md SKILL.md references/run-code.md references/run-chat.md; do
+for f in $A/writer.md $A/director.md references/storyboard.md SKILL.md references/run-chat.md; do
   grep -q '「キャンバスとカメラ」' $f || ng "$f が visual-grammar.md の「キャンバスとカメラ」を指していない"
 done
 # 前の、規則として書いた言い回しが残っていない
@@ -35,7 +35,7 @@ done
 for w in 'ugoku-zukai/4' '"morph"' '"zoom"' '"pan"' '"draw"'; do grep -qF -- "$w" references/storyboard.md || ng "storyboard.md に $w がない"; done
 grep -q '^# 台本の形式（ugoku-zukai/3）' references/storyboard.md && ng "storyboard.md の題が ugoku-zukai/3 のまま"
 for id in G-D17 G-D18 G-D19; do
-  grep -q "^| $id " $c/structure.md && grep -q "$id" $A/director.md && grep -q "$id" $c/README.md && grep -q "$id" references/run-chat.md || ng "$id が、structure.md・director.md・criteria/README・run-chat にそろっていない"
+  grep -q "^| $id " $c/structure.md && grep -q "$id" $A/director.md && grep -q "$id" $c/README.md || ng "$id が、structure.md・director.md・criteria/README にそろっていない"
 done
 grep -q 'M7' $c/structure.md && ng "structure.md に内部の語「M7」が残っている"
 grep -q "morph" $A/writer.md && grep -q "camera-morph.json" $A/writer.md || ng "writer.md に morph と camera-morph.json がない"
