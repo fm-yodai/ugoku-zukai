@@ -222,7 +222,7 @@
           E.texts = (it.texts || []).map(T => this.textSpec(E.g, T));
         } else if (it.kind === "band") {
           E.g = el("g", null, L.back);
-          el("rect", { x: it.x, y: it.y, width: it.w, height: it.h, rx: it.r, fill: C.rgba(S.ink, 0.03), stroke: S.line, "stroke-width": 1.2 }, E.g);
+          E.bandR = el("rect", { x: it.x, y: it.y, width: it.w, height: it.h, rx: it.r, fill: C.rgba(S.ink, 0.03), stroke: S.line, "stroke-width": 1.2 }, E.g);
           E.texts = (it.texts || []).map(T => this.textSpec(E.g, T));
         } else if (it.kind === "frame") {
           E.g = el("g", null, L.back);
@@ -413,6 +413,9 @@
           if (E.hl) E.hl.setAttribute("opacity", (s.pulse || 0).toFixed(3));
           if (s.text != null && E.texts[0]) this.relabel(E.texts[0], it.texts[0], s); else if (E.texts[0] && this.unlabel(E.texts[0], it.texts[0])) E.texts[0].style.opacity = "";
           if (s.tint && E.texts[0]) E.texts[0].setAttribute("fill", C.mix(it.texts[0].color || S.ink, s.tint, s.tintP));
+          // 文字の大きさ（Morph で区画の大きさが変わるとき）。0.01 刻みで書き換え、終われば元の大きさ
+          const fk = s.fontK != null && s.fontK !== 1 ? Math.round(s.fontK * 100) / 100 : 1;
+          if (E._fk !== fk) { E._fk = fk; (it.texts || []).forEach((T, i) => { if (E.texts[i]) E.texts[i].setAttribute("font-size", +(T.size * fk).toFixed(2)); }); }
         } else if (it.kind === "bar") {
           const g = ease(clamp(show / 0.85));
           if (it.grow === "right") { E.rect.setAttribute("width", Math.max(0.01, it.w * g)); }
@@ -429,6 +432,9 @@
         } else if (it.kind === "rect") {
           E.g.style.opacity = op(smooth(show));
           this.offset(E.g, off);
+          this.areaGeo(E, it, s, [E.bg, E.tintR]);
+          if (E.rule) { const R = s.rect || it; E.rule.setAttribute("d", `M${R.x},${R.y + R.h} H${R.x + R.w}`); }
+          this.relabelAll(E, it, s);
           if (it.fill === "none") E.bg.setAttribute("fill", C.rgba(s.tint || S.accent, 0.16 * Math.max(s.pulse || 0, s.tint ? s.tintP : 0)));
           if (E.tintR) {
             // 塗り替えは、元の面を消しながら新しい面を重ねる。題の色も、塗りに合わせる
@@ -446,11 +452,15 @@
           E.fill.style.opacity = smooth((show - 0.65) / 0.35).toFixed(3);
           for (const tx of E.texts) tx.style.opacity = smooth((show - 0.7) / 0.3).toFixed(3);
           this.offset(E.g, off);
+          this.areaGeo(E, it, s, [E.fill, E.stroke]);
         } else if (it.kind === "band" || it.kind === "frame" || it.kind === "image") {
           if (E.dm) this.dashMask(E, key, it, 1, false);
           if (it.kind === "frame") { E.fill.style.opacity = ""; for (const tx of E.texts) tx.style.opacity = ""; }
           E.g.style.opacity = op(smooth(show));
           this.offset(E.g, off);
+          if (it.kind === "band") this.areaGeo(E, it, s, [E.bandR]);
+          else if (it.kind === "frame") this.areaGeo(E, it, s, [E.fill, E.stroke]);
+          if (it.kind !== "image") this.relabelAll(E, it, s);
         } else if (it.kind === "custom") {
           const o = smooth(show);
           E.g.style.opacity = op(o);
@@ -553,6 +563,25 @@
       const want = s.textP < 0.5 ? (s.textFrom != null ? s.textFrom : spec.lines.join("\n")) : s.text;
       if (tEl._cur !== want) { tEl._cur = want; this.setLines(tEl, String(want).split("\n")); }
       tEl.style.opacity = (Math.abs(s.textP - 0.5) * 2).toFixed(3);
+    }
+    // 面（rect・band・frame）の大きさの書き換え（Morph の補間）。文字は面の左上に付いていく。els = 形を書き換える要素
+    areaGeo(E, it, s, els) {
+      const R = s.rect || it, geo = s.rect ? [R.x, R.y, R.w, R.h].map(v => v.toFixed(2)).join(",") : "";
+      if ((E._geo || "") === geo) return;
+      E._geo = geo;
+      for (const e of els) if (e) { e.setAttribute("x", R.x); e.setAttribute("y", R.y); e.setAttribute("width", R.w); e.setAttribute("height", R.h); }
+      const to = s.rect && s.textOff ? `translate(${s.textOff[0].toFixed(2)},${s.textOff[1].toFixed(2)})` : null;
+      for (const tx of E.texts || []) { if (to) tx.setAttribute("transform", to); else tx.removeAttribute("transform"); }
+    }
+    // 面の文字を全部入れ替える（Morph で表の見出しが違うとき）。文が同じ文字は触らない
+    relabelAll(E, it, s) {
+      const on = s.texts && s.textsFrom;
+      (E.texts || []).forEach((tx, i) => {
+        const T = it.texts[i];
+        if (!T) return;
+        if (on && s.textsFrom[i] !== s.texts[i]) this.relabel(tx, T, { textFrom: s.textsFrom[i], text: s.texts[i], textP: s.textP });
+        else if (this.unlabel(tx, T)) tx.style.opacity = "";
+      });
     }
     // 入れ替えた文を元に戻す（入れ替えより前へ戻ったときと、Morph が終わったとき）。戻したら true
     unlabel(tEl, spec) {

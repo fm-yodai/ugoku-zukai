@@ -673,8 +673,11 @@
           const it1 = F1.items[it2.id];
           if (!it1 || it1.kind !== it2.kind || !MORPH_KINDS.includes(it2.kind) || it1.isReply || it2.isReply) continue;
           if (it1.autoId || it2.autoId) { auto.push(it2.id); continue; }
-          const pr = { from: it1.key, to: it2.key, kind: it2.kind, fromBox: null, fromPts: null, fromStroke: it1.stroke ?? null, fromFill: it1.fill ?? null, fromText: textOf(it1), toText: textOf(it2) };
+          const pr = { from: it1.key, to: it2.key, kind: it2.kind, fromBox: null, fromPts: null, fromStroke: it1.stroke ?? null, fromFill: it1.fill ?? null, fromText: textOf(it1), toText: textOf(it2),
+            fromTexts: it1.texts ? it1.texts.map(T => T.lines.join("\n")) : null, toTexts: it2.texts ? it2.texts.map(T => T.lines.join("\n")) : null, fromSize: null };
           if (!series) {
+            // 文字の大きさ（text の項目）。v1 の大きさは、v2 の写し方での大きさに直す
+            if (it1.kind === "text" && it1.texts && it1.texts[0] && it2.texts && it2.texts[0]) pr.fromSize = it1.texts[0].size * k;
             const b = boxOfItem(it1);
             if (b) { const [x, y] = loc([b.x, b.y]); pr.fromBox = { x, y, w: b.w * k, h: b.h * k }; }
             if (it1.pts) pr.fromPts = it1.pts.map(loc);
@@ -924,11 +927,16 @@
               if (it.kind === "box") {
                 const R = { x: mix(B.x, it.x, q), y: mix(B.y, it.y, q), w: mix(B.w, it.w, q), h: mix(B.h, it.h, q) };
                 s2.rect = R; s2.textOff = [R.x + R.w / 2 - (it.x + it.w / 2), R.y + R.h / 2 - (it.y + it.h / 2)];
+              } else if (it.kind === "rect" || it.kind === "band" || it.kind === "frame") {
+                // 面の大きさも位置と同じ補間で動かす。文字は左上に付いていく
+                const R = { x: mix(B.x, it.x, q), y: mix(B.y, it.y, q), w: mix(B.w, it.w, q), h: mix(B.h, it.h, q) };
+                s2.rect = R; s2.textOff = [R.x - it.x, R.y - it.y];
               } else {
                 const b = it.kind === "text" ? it.bbox : it;
                 s2.off = [s2.off[0] + (B.x - b.x) * (1 - q), s2.off[1] + (B.y - b.y) * (1 - q)];
               }
             }
+            if (pr.fromSize != null && it.texts[0].size > 0) s2.fontK = mix(pr.fromSize, it.texts[0].size, q) / it.texts[0].size;
             if (pr.fromPts && it.pts) s2.pts = lerpPts(pr.fromPts, it.pts, q);
             const fillDiff = pr.fromFill != null && it.fill != null && pr.fromFill !== it.fill;
             if ((pr.fromStroke != null && it.stroke != null && pr.fromStroke !== it.stroke) || fillDiff) {
@@ -936,6 +944,8 @@
               if (fillDiff) s2.fillFrom = pr.fromFill;
             }
             if (pr.fromText != null && pr.toText != null && pr.fromText !== pr.toText) { s2.textFrom = pr.fromText; s2.text = pr.toText; s2.textP = q; }
+            // 面（rect・band・frame）の文字は複数あるので、全部を並びの順に入れ替える（表の見出しなど）
+            if ((it.kind === "rect" || it.kind === "band" || it.kind === "frame") && pr.fromTexts && pr.toTexts && pr.fromTexts.some((x, i) => x !== pr.toTexts[i])) { s2.textsFrom = pr.fromTexts; s2.texts = pr.toTexts; s2.textP = q; }
           }
           break;
         }

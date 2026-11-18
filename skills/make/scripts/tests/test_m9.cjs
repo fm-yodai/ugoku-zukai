@@ -48,6 +48,17 @@ const morphDeck = (o = {}) => {
   return deck4({ a: { title: "A", parts: [{ figure: f1 }] }, b }, scenes, { [f1]: o.v1 || G1, [f2]: o.v2 || G2 });
 };
 
+// 系列の検査用（test_m7.cjs の seriesDeck と同じ）: v1 → v2（→ v3）を 1 枚ずつ並べる。links = [[図, morph 先], …]
+const seriesDeck = (figures, links) => deck4(
+  Object.fromEntries(links.map(([fid, mv], i) => [`s${i + 1}`, { title: fid, parts: [mv ? { figure: fid, morph: mv } : { figure: fid }] }])),
+  links.map(([fid], i) => SC(`c${i + 1}`, `s${i + 1}`, [{ id: `l${i + 1}`, text: "{a}出します。", do: [{ show: fid, at: "a" }] }])), figures);
+// 区画を変える Morph（/6）: a の f1 → b の f2（morph: f1）。a1・a2 = それぞれの区画
+const areaMorph = (f1, f2, a1, a2) => deck6({ a: { title: "A", parts: [{ figure: "f1", area: a1 }] }, b: { title: "B", parts: [{ figure: "f2", morph: "f1", area: a2 }] } },
+  [SC("s1", "a", [{ id: "l1", text: "{a}出します。", do: [{ show: "f1", at: "a" }] }]), SC("s2", "b")], { f1, f2 });
+const between = (v, a, b, msg) => assert.ok(v > Math.min(a, b) + 1e-6 && v < Math.max(a, b) - 1e-6, `${msg}: ${v} が ${a} と ${b} の間にない`);
+// 線分が矩形（内側）を横切るか
+const segHitsRect = (p, q, r) => Math.min(p[0], q[0]) < r.x + r.w - 0.5 && Math.max(p[0], q[0]) > r.x + 0.5 && Math.min(p[1], q[1]) < r.y + r.h - 0.5 && Math.max(p[1], q[1]) > r.y + 0.5;
+
 const tests = {
   async format6_accepted() {
     assert.strictEqual(UZ.FORMAT, "ugoku-zukai/6");
@@ -107,6 +118,64 @@ const tests = {
     const M = await build(deck6({ a: { title: "A", parts: [{ figure: "g1" }] } }, [SC("s1", "a", [{ id: "l1", text: "{a}出して{b}移ります。", do: [{ show: "g1", at: "a" }, { pan: "db", at: "b" }] }])], { g1: G }));
     assert.deepStrictEqual(M.errors || [], []);
     hasWarn(M, /倍率 1 のまま pan しても動かない/);
+  },
+  async morph_size_interp() {   // Morph で、区画の大きさが変わると、項目の文字の大きさと表の見出しの矩形の幅が前後の間を通る（M7 の制限 4）
+    const A1 = { col: [1, 3], row: [1, 2] }, A2 = { col: [1, 12], row: [1, 6] };
+    const mkL = () => ({ type: "list", items: [{ id: "i1", text: "一つ目の項目" }, { id: "i2", text: "二つ目" }, { id: "i3", text: "三つ目" }] });
+    const M = await build(areaMorph(mkL(), mkL(), A1, A2));
+    assert.deepStrictEqual(M.errors || [], []);
+    const s2 = M.scenes[1], it = M.figs.f2.items.i1, from = M.figs.f1.items.i1.texts[0].size, to = it.texts[0].size;
+    assert.ok(from < to, `前後で文字の大きさが違わない（${from}・${to}）`);
+    const fr = UZ.frame(M, s2.start + 0.4), st = fr.st[it.key];
+    between(st.fontK * to, from, to, "項目の文字の大きさ");
+    assert.strictEqual(UZ.frame(M, s2.start + 1.0).st[it.key].fontK ?? 1, 1, "Morph が終わっても文字の大きさが戻らない");
+    // 描いた SVG の font-size も前後の間
+    const sizes = [...renderSvg(M, s2.start + 0.4).matchAll(/font-size="([0-9.]+)"/g)].map(m => +m[1]);
+    assert.ok(sizes.some(z => z > from + 0.05 && z < to - 0.05), `描いた文字の大きさが前後の間にない: ${[...new Set(sizes)]}`);
+    // 表の見出しの矩形（rect）の幅
+    const T = (c1, c2) => ({ type: "table", columns: [c1, c2], rows: [{ id: "r1", cells: ["あ", "い"] }] });
+    const M2 = await build(areaMorph(T("名前", "値"), T("項目", "数値"), { col: [1, 6], row: [1, 3] }, A2));
+    assert.deepStrictEqual(M2.errors || [], []);
+    const h = M2.figs.f2.items.header, p = M2.acts.find(a => a.verb === "morph").pairs.find(x => x.to === h.key);
+    assert.ok(p && p.fromBox && Math.abs(p.fromBox.w - h.w) > 5, "見出しの矩形の幅が前後で変わらない");
+    const st2 = UZ.frame(M2, M2.scenes[1].start + 0.4).st[h.key];
+    between(st2.rect.w, p.fromBox.w, h.w, "見出しの矩形の幅");
+  },
+  async morph_table_header_swap() {   // 見出しの文字が前後で違うと、入れ替える（項目と同じ）
+    const T = (c1, c2) => ({ type: "table", columns: [c1, c2], rows: [{ id: "r1", cells: ["あ", "い"] }] });
+    const A = { col: [1, 12], row: [1, 6] };
+    const M = await build(areaMorph(T("名前", "値"), T("項目", "数値"), A, A));
+    assert.deepStrictEqual(M.errors || [], []);
+    const h = M.figs.f2.items.header, s2 = M.scenes[1];
+    const early = UZ.frame(M, s2.start + 0.4).st[h.key];
+    assert.deepStrictEqual(early.textsFrom, ["名前", "値"]);
+    assert.deepStrictEqual(early.texts, ["項目", "数値"]);
+    assert.ok(Math.abs(early.textP - 0.5) < 0.05, `入れ替えの進み具合 ${early.textP}`);
+    // 描いた SVG: 前半は前の文字、後半は新しい文字
+    assert.ok(renderSvg(M, s2.start + 0.15).includes("名前") && !renderSvg(M, s2.start + 0.15).includes("項目"), "前半に前の見出しが出ていない");
+    assert.ok(renderSvg(M, s2.start + 0.65).includes("項目") && !renderSvg(M, s2.start + 0.65).includes("名前"), "後半に新しい見出しが出ていない");
+    assert.ok(renderSvg(M, s2.start + 1.2).includes("数値"), "終わっても新しい見出しが出ない");
+  },
+  async series_z_avoids_boxes() {   // 系列で置き換わる辺（a>c）が、間にある箱 b を貫かない（M7 の制限 5）
+    const N = ["a", "b", "c"].map(id => ({ id, label: id }));
+    const H1 = { type: "graph", nodes: N, edges: [{ from: "a", to: "b" }, { from: "b", to: "c" }, { from: "a", to: "c" }] };
+    const H2 = { type: "graph", nodes: N, edges: [{ from: "a", to: "b" }, { from: "b", to: "c" }] };
+    const M = await build(seriesDeck({ g1: H1, g2: H2 }, [["g1"], ["g2", "g1"]]));
+    assert.deepStrictEqual(M.errors || [], []);
+    const e = M.figs.g1.items["a>c"], b = M.figs.g1.items.b;
+    for (let i = 1; i < e.pts.length; i++) assert.ok(!segHitsRect(e.pts[i - 1], e.pts[i], b), `a>c の線が b を貫く: ${JSON.stringify(e.pts)}`);
+    assert.ok(!(M.warnings || []).some(w => /Morph の系列で矢印が箱に重なる/.test(w)), JSON.stringify(M.warnings));
+    const A = M.figs.g1.items.a, C = M.figs.g1.items.c, p0 = e.pts[0], pn = e.pts[e.pts.length - 1];
+    assert.ok(p0[0] >= A.x - 0.5 && p0[0] <= A.x + A.w + 0.5 && p0[1] >= A.y - 0.5 && p0[1] <= A.y + A.h + 0.5, "始点が a の縁にない");
+    assert.ok(pn[0] >= C.x - 0.5 && pn[0] <= C.x + C.w + 0.5 && pn[1] >= C.y - 0.5 && pn[1] <= C.y + C.h + 0.5, "終点が c の縁にない");
+  },
+  async series_replaced_heads_not_overlap() {   // 同じ箱に入る矢印の入り口が重ならない（置き換わる辺と、同じ図の別の辺）
+    const N = ["a", "b", "c"].map(id => ({ id, label: id }));
+    const H1 = { type: "graph", nodes: N, edges: [{ from: "a", to: "b" }, { from: "b", to: "c" }, { from: "a", to: "c" }] };
+    const H2 = { type: "graph", nodes: N, edges: [{ from: "a", to: "b" }, { from: "b", to: "c" }] };
+    const M = await build(seriesDeck({ g1: H1, g2: H2 }, [["g1"], ["g2", "g1"]]));
+    const F = M.figs.g1, ends = ["b>c", "a>c"].map(id => F.items[id].pts[F.items[id].pts.length - 1]);
+    assert.ok(Math.hypot(ends[0][0] - ends[1][0], ends[0][1] - ends[1][1]) >= 10, `c に入る 2 本の矢じりが重ならない: ${JSON.stringify(ends)}`);
   },
 };
 

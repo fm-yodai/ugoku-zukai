@@ -519,13 +519,21 @@
   // 置き換わる辺の経路: 流れの方向に向かい合う辺の中点どうしを、まっすぐ（揃っていれば）か、中ほどで 1 回折れる Z で結ぶ。
   // この図にあるノード（boxes）に重なれば、向きを変えた Z（流れと直交する辺から出る）を試し、どちらも重なればまっすぐにして hit を立てる。
   // ラベルは一番長い区間の中点に置く（横の区間なら上、縦の区間なら右。ELK のラベルと同じく ALWAYS_UP）
-  function routeReplaced(a, b, boxes, dir, lab) {
+  function routeReplaced(a, b, boxes, dir, lab, taken) {
     const down = dir === "down";
     // 流れの方向を x、直交する方向を y として考え、最後に戻す
     const T = r => down ? { x: r.y, y: r.x, w: r.h, h: r.w } : r;
     const P = p => down ? [p[1], p[0]] : p;
+    const T0 = p => down ? [p[1], p[0]] : p;
     const A = T(a), B = T(b);
-    const s = [A.x + A.w, A.y + A.h / 2], t = [B.x, B.y + B.h / 2];
+    const s = [A.x + A.w, A.y + A.h / 2];
+    // 入る位置: 同じ箱の同じ辺にすでに入る矢印（taken）の矢じりと重ならないよう、辺に沿ってずらす（中央から 14 ずつ、交互に）
+    let t = [B.x, B.y + B.h / 2];
+    const tk = (taken || []).map(p => T0(p));
+    for (let n = 1; n <= 6 && tk.some(p => Math.abs(p[1] - t[1]) < 12 && Math.abs(p[0] - t[0]) < 12); n++) {
+      const d = 14 * Math.ceil(n / 2) * (n % 2 ? 1 : -1), y = B.y + B.h / 2 + d;
+      if (y > B.y + 8 && y < B.y + B.h - 8) t = [B.x, y];
+    }
     const cands = [];
     if (Math.abs(s[1] - t[1]) < 0.5) cands.push([s, [t[0], s[1]]]);
     else {
@@ -540,7 +548,12 @@
       const p = pts[i], x0 = Math.min(p[0], q[0]), x1 = Math.max(p[0], q[0]), y0 = Math.min(p[1], q[1]), y1 = Math.max(p[1], q[1]);
       return x0 < r.x + r.w - 0.5 && x1 > r.x + 0.5 && y0 < r.y + r.h - 0.5 && y1 > r.y + 0.5;
     }); });
-    let pts = cands.find(c => !crosses(c)), hit = false;
+    // それでも箱を貫くときは、両端の箱の外側（上か下の空いている側）を回る 5 点の折れ線にする。箱の外へ出たぶんだけ遠い側は選ばない
+    const bs = boxes.map(T), loY = Math.min(A.y, B.y, ...bs.map(r => r.y)) - 28, hiY = Math.max(A.y + A.h, B.y + B.h, ...bs.map(r => r.y + r.h)) + 28;
+    const m = Math.max(6, Math.min(18, (B.x - (A.x + A.w)) / 3));
+    const detour = [[A.x + A.w / 2, A.y, loY], [A.x + A.w / 2, A.y + A.h, hiY]].map(([x0, y0, yo]) => [[x0, y0], [x0, yo], [t[0] - m, yo], [t[0] - m, t[1]], t])
+      .sort((p, q) => Math.abs(p[1][1] - s[1]) - Math.abs(q[1][1] - s[1]));
+    let pts = cands.find(c => !crosses(c)) || detour.find(c => !crosses(c)), hit = false;
     if (!pts) { pts = [s, [t[0], s[1]]]; hit = true; }
     let best = 0;
     pts.forEach((p, i) => { if (i && Math.hypot(p[0] - pts[i - 1][0], p[1] - pts[i - 1][1]) > Math.hypot(pts[best + 1][0] - pts[best][0], pts[best + 1][1] - pts[best][1])) best = i - 1; });
@@ -672,8 +685,14 @@
       const e = own.map(f => f.edges.find(x => eid(x) === id)).reduce((a, b) => lw(b) > lw(a) ? b : a);
       const avoid = new Set();
       for (const f of own) for (const n of f.nodes) if (n.id !== e.from && n.id !== e.to) avoid.add(n.id);
+      // 同じ箱に入る別の矢印（その辺を持つ図の、置き換わらない辺と、すでに経路を決めた置き換わる辺）の入り口
+      const taken = [];
+      for (const f of own) for (const x of f.edges) {
+        const xid = eid(x), g = x.to === e.to && xid !== id && (geom.edgeGeom[xid] || geom.replaced[xid]);
+        if (g && g.pts) taken.push(g.pts[g.pts.length - 1]);
+      }
       geom.replaced[id] = routeReplaced(geom.abs[e.from], geom.abs[e.to], [...avoid].map(n => geom.abs[n]), dir,
-        e.label ? { w: UZ.textW(e.label, 19) + 10, h: 19 + 8 } : null);
+        e.label ? { w: UZ.textW(e.label, 19) + 10, h: 19 + 8 } : null, taken);
     }
     return geom;
   };

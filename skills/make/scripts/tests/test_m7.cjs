@@ -126,13 +126,16 @@ const tests = {
     assert.ok(pts.every(p => Math.abs(p[1] - pts[0][1]) < 0.5), `browser>app がまっすぐでない: ${JSON.stringify(pts)}`);
     assert.ok(!(M.warnings || []).some(w => /Morph の系列で矢印が箱に重なる/.test(w)), JSON.stringify(M.warnings));
   },
-  async series_replaced_edge_warns_when_crossing() {
+  async series_replaced_edge_detours_when_crossing() {   // M9: まっすぐ・Z が箱を貫くときは、外側を回るので警告は出ない（回れないときだけ警告）
     // g1 の a>c は g2 で消える（a・b・c は残る）。和集合は a → b → c の 1 列なので、a>c は g1 にある b を横切る
     const N = ["a", "b", "c"].map(id => ({ id, label: id }));
     const H1 = { type: "graph", nodes: N, edges: [{ from: "a", to: "b" }, { from: "b", to: "c" }, { from: "a", to: "c" }] };
     const H2 = { type: "graph", nodes: N, edges: [{ from: "a", to: "b" }, { from: "b", to: "c" }] };
     const M = await build(seriesDeck({ g1: H1, g2: H2 }, [["g1"], ["g2", "g1"]]));
-    hasWarn(M, /Morph の系列で矢印が箱に重なる/);
+    assert.ok(!(M.warnings || []).some(w => /Morph の系列で矢印が箱に重なる/.test(w)), JSON.stringify(M.warnings));
+    const pts = M.figs.g1.items["a>c"].pts, b = M.figs.g1.items.b;
+    assert.ok(pts.length >= 5, `外側を回る折れ線になっていない: ${JSON.stringify(pts)}`);
+    for (let i = 1; i < pts.length; i++) { const p = pts[i - 1], q = pts[i]; assert.ok(!(Math.min(p[0], q[0]) < b.x + b.w && Math.max(p[0], q[0]) > b.x && Math.min(p[1], q[1]) < b.y + b.h && Math.max(p[1], q[1]) > b.y), "b を貫く"); }
   },
   async series_replaced_edge_same_route_in_all_figs() {
     // a>c は v1・v2 にあり、v3 で a・c が残ったまま消える（置き換わる辺）。v2 にだけある b が v1 の Z の経路をふさぐ。
