@@ -3,8 +3,8 @@
   "use strict";
   const { clamp, mix, smooth, ease } = UZ;
 
-  UZ.FORMATS = ["ugoku-zukai/2", "ugoku-zukai/3", "ugoku-zukai/4", "ugoku-zukai/5"];   // /2 = 場面が図を指す形だけ。/3 = スライドも使える。/4 = morph・zoom・pan・draw も使える。/5 = values・set も使える
-  UZ.FORMAT = "ugoku-zukai/5";
+  UZ.FORMATS = ["ugoku-zukai/2", "ugoku-zukai/3", "ugoku-zukai/4", "ugoku-zukai/5", "ugoku-zukai/6"];   // /2 = 場面が図を指す形だけ。/3 = スライドも使える。/4 = morph・zoom・pan・draw も使える。/5 = values・set も使える。/6 = 立体と奥行きも使える
+  UZ.FORMAT = "ugoku-zukai/6";
   UZ.VERBS = ["show", "hide", "focus", "unfocus", "blur", "unblur", "pulse", "mark", "unmark", "trace", "reply", "note", "badge", "relabel", "tint", "move", "resize", "zoom", "pan", "set", "custom"];
   const MARK_RE = /\{([A-Za-z0-9_]+)\}/g;
 

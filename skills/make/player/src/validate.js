@@ -31,8 +31,8 @@
         if (h) need(what, `行「${h[0]}」`);
       }
     }
-    // /5 の機能（最上位の values・動作の set・custom の部品）は、/4 以前の format では使えない。種類ごとに 1 件ずつ出す
-    if (UZ.FORMATS.includes(sb.format) && sb.format !== "ugoku-zukai/5") {
+    // /5 の機能（最上位の values・動作の set・custom の部品）は、/4 以前の format では使えない（/5 以上で使える）。種類ごとに 1 件ずつ出す
+    if (UZ.FORMATS.includes(sb.format) && !["ugoku-zukai/5", "ugoku-zukai/6"].includes(sb.format)) {
       const need = (what, where) => E(`${where}で ${what} を使っている。使うには format を "ugoku-zukai/5" と書く（今は ${JSON.stringify(sb.format)}）`);
       if (sb.values != null) need("values", "台本の最上位");
       const h = allActs.find(([, a]) => a && typeof a === "object" && Object.prototype.hasOwnProperty.call(a, "set"));
