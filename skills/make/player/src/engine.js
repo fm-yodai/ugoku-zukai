@@ -255,7 +255,7 @@
         const over = sc.slide ? sc.over[i] : null;
         if (figs[fid]) {
           const want = (over && over.fit) ?? specOf(fid).fit;
-          if (want !== figs[fid].layoutFit) warn(`スライド「${sc.slide}」: 部品「${fid}」の fit（${want ?? "指定なし"}）は効かない。図「${fid}」は最初の場面の fit（${figs[fid].layoutFit ?? "指定なし"}）で組んである。部品ごとに fit を変えられない`);
+          if (want !== figs[fid].layoutFit) warn(`${sc.slide ? `スライド「${sc.slide}」` : `場面「${sc.id}」`}: 部品「${fid}」の fit（${want ?? "指定なし"}）は効かない。図「${fid}」は最初の場面の fit（${figs[fid].layoutFit ?? "指定なし"}）で組んである。部品ごとに fit を変えられない`);
           continue;
         }
         const f = over && Object.keys(over).length ? { ...specOf(fid), ...over } : specOf(fid);
@@ -1154,10 +1154,10 @@
     // graph の系列は、v2 の写し方を v1 の写し方から補間し、fade out する v1 も同じ写し方で写す
     const morphTo = {}, morphFrom = {};
     if (prev) for (const a of M.acts) if (a.verb === "morph" && a.scene === sc.id) { morphTo[a.to] = a; morphFrom[a.from] = a; }
-    // 戻る（前の場面が Morph の v2 のスライドで、今の場面がその v1 のスライド）ときは、補間も fade もせず v1 だけを描く（二重に描かない）
+    // 戻る（前の場面が Morph の v2 のスライドで、今の場面がその v1 のスライド。v2 が何場面続いた後でも同じ）ときは、補間も fade もせず v1 だけを描く（二重に描かない）
     const backFrom = {};   // v1 の図 → true（戻って来た図）
     const backTo = {};     // v2 の図 → true（捨てる図）
-    if (prev) for (const a of M.acts) if (a.verb === "morph" && sc.figs.includes(a.from) && !sc.figs.includes(a.to) && prev.figs.includes(a.to) && !prev.figs.includes(a.from) && a.scene === prev.id) { backFrom[a.from] = true; backTo[a.to] = true; }
+    if (prev) for (const a of M.acts) if (a.verb === "morph" && sc.figs.includes(a.from) && !sc.figs.includes(a.to) && prev.figs.includes(a.to) && !prev.figs.includes(a.from)) { backFrom[a.from] = true; backTo[a.to] = true; }
     // カメラ: 今の run の、t 以前の最後の zoom・pan を補間する（なければ恒等 = スライドの写し方）
     let cam = CAM0;
     for (const a of M.acts) {

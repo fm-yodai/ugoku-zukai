@@ -6,7 +6,7 @@
   const C = UZ.color, clamp = UZ.clamp;
   const SPACE = UZ.SPACE = { maxPrims: 6000, grid: 24, gridMax: 64, plateMaxAngle: 70, shadeMin: 0.75 };
   const RAD = Math.PI / 180;
-    const finite = v => typeof v === "number" && Number.isFinite(v);
+  const finite = v => typeof v === "number" && Number.isFinite(v);
 
   const colorOf = UZ.colorOf;   // geo.js と共有（色の名前の解決）
 

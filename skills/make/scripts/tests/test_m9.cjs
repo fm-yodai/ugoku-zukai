@@ -421,6 +421,34 @@ const tests = {
     assert.deepStrictEqual(fr.figs.g1.place, s1.place.g1, "g1 の写し方が s1 と違う（補間している）");
     assert.strictEqual(fr.figs.g1.opacity, 1);
   },
+  async morph_back_after_two_scenes() {   // v2 が 2 場面続いたあとで v1 に戻っても、その場で切り替える（二重に描かない）
+    const sb = morphDeck({ back: true });
+    sb.scenes.splice(2, 0, SC("s2b", "b", [{ id: "l2b", text: "続けて見ます。" }]));
+    const M = await build(sb);
+    assert.deepStrictEqual(M.errors || [], []);
+    const s1 = M.scenes[0], sb3 = M.scenes[3];
+    assert.strictEqual(sb3.id, "s3");
+    for (const dt of [0.05, 0.3, 0.7]) {
+      const fr = UZ.frame(M, sb3.start + dt);
+      assert.strictEqual(fr.figs.g2.opacity, 0, `戻った ${dt} 秒後に g2 を描いている`);
+      assert.strictEqual(fr.figs.g1.opacity, 1, `戻った ${dt} 秒後に g1 の不透明度が 1 でない`);
+      assert.deepStrictEqual(fr.figs.g1.place, s1.place.g1, `戻った ${dt} 秒後に g1 の写し方が s1 と違う（補間している）`);
+    }
+  },
+  async morph_forward_still_interpolates() {   // 進む Morph は今までどおり補間する（戻る判定に巻き込まれない）
+    const M = await build(morphDeck({ back: true }));
+    const s2 = M.scenes[1];
+    const fr = UZ.frame(M, s2.start + 0.2);
+    assert.ok(fr.figs.g1.opacity > 0 && fr.figs.g1.opacity < 1, `進む Morph で g1 が fade out していない: ${fr.figs.g1.opacity}`);
+    assert.ok(fr.figs.g2.opacity > 0, "進む Morph で g2 が出ていない");
+  },
+  async fit_mismatch_warn_names_scene_for_figure_scene() {   // 図だけの場面で fit が違うときは「場面」と書く（undefined を出さない）
+    const area = { col: [1, 12], row: [1, 6] };
+    const sb = deck6({ a: { title: "A", parts: [{ figure: "f1", area, fit: "content" }] } }, [SC("s1", "a"), { id: "s2", figure: "f1", lines: [{ id: "l_s2", text: "説明します。" }] }], { f1: L1 });
+    const M = await build(sb);
+    assert.ok(!(M.warnings || []).some(w => /undefined/.test(w)), JSON.stringify(M.warnings));
+    hasWarn(M, /場面「s2」: 部品「f1」の fit/);
+  },
   async zoom_lowered_warns() {   // fitCamera が倍率を下げたら、台本の書き手に知らせる（M7 の制限 2）
     const nodes = [], edges = [];
     for (let i = 0; i < 8; i++) { nodes.push({ id: "n" + i, label: "ノード" + i }); if (i > 0) edges.push({ from: "n" + Math.floor((i - 1) / 3), to: "n" + i, label: "呼ぶ" }); }
@@ -809,6 +837,13 @@ const tests = {
     has(await errs(sb5), /inside を使っている。使うには format を "ugoku-zukai\/6" と書く/);
     // 中身の図を部品としても置く・板の図のノードに inside は誤り
     has(await errs(deck6({ a: { title: "A", parts: [{ figure: "g", area: { col: [1, 6], row: [1, 6] } }, { figure: "srv", area: { col: [7, 12], row: [1, 6] } }] } }, [SC("s1", "a")], { g: IG(), srv: SRV() })), /中身の図「srv」は、部品や場面の図としては置けない/);
+    // 板の figure に中身の図を指すのも誤り（独立した 2 つのコピーになる）
+    has(await errs(plateDeck([PL("layer1", "srv", 1)], [{ id: "l1", text: "出します。" }], { figures: { g: IG(), srv: SRV() }, part: { area: { col: [1, 6], row: [1, 6] } }, parts: [{ figure: "g", area: { col: [7, 12], row: [1, 6] } }] })), /中身の図「srv」は、部品や場面の図としては置けない/);
+    // /4 で space と set と values を使っても、format の誤りは一番高い /6 の 1 種類だけ
+    const sb4 = spaceDeck(null, SPACE_PART(), "ugoku-zukai/4");
+    const e4 = await errs(sb4);
+    assert.ok(e4.some(x => /"ugoku-zukai\/6" と書く/.test(x)), JSON.stringify(e4));
+    assert.ok(!e4.some(x => /"ugoku-zukai\/5" と書く/.test(x)), `/5 の誤りも出ている: ${JSON.stringify(e4)}`);
     has(await errs(plateDeck([PL("layer1", "g", 1)], [{ id: "l1", text: "出します。" }], { figures: { g: IG(), srv: SRV() } })), /板に置いた図のノードには inside が効かない/);
   },
   async inside_crossfade() {   // 寄る前は箱の名前、寄った後は中身。途中は両方が薄い

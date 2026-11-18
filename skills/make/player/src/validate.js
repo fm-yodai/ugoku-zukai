@@ -115,7 +115,13 @@
       }
     }
     // /5 の機能（最上位の values・動作の set・custom の部品）は、/4 以前の format では使えない（/5 以上で使える）。種類ごとに 1 件ずつ出す
-    if (UZ.FORMATS.includes(sb.format) && !["ugoku-zukai/5", "ugoku-zukai/6"].includes(sb.format)) {
+    // /6 の機能を使っているときは、必要な format のうち一番高い /6 の誤りだけを出す（「/5 と書く」と「/6 と書く」を両方出さない）
+    const figs6 = [...Object.entries(sb.figures && typeof sb.figures === "object" ? sb.figures : {}).map(([fid, f]) => [`図「${fid}」`, f]),
+      ...Object.entries(sb.slides && typeof sb.slides === "object" ? sb.slides : {}).flatMap(([sid, sl]) => sl && Array.isArray(sl.parts) ? sl.parts.map(p => [`スライド「${sid}」`, p]) : [])];
+    const space6 = figs6.find(([, f]) => f && typeof f === "object" && f.type === "space");
+    const inside6 = figs6.find(([, f]) => f && typeof f === "object" && f.type === "graph" && Array.isArray(f.nodes) && f.nodes.some(n => n && n.inside != null));
+    const uses6 = !!(space6 || inside6);
+    if (UZ.FORMATS.includes(sb.format) && !["ugoku-zukai/5", "ugoku-zukai/6"].includes(sb.format) && !uses6) {
       const need = (what, where) => E(`${where}で ${what} を使っている。使うには format を "ugoku-zukai/5" と書く（今は ${JSON.stringify(sb.format)}）`);
       if (sb.values != null) need("values", "台本の最上位");
       const h = allActs.find(([, a]) => a && typeof a === "object" && Object.prototype.hasOwnProperty.call(a, "set"));
@@ -128,12 +134,8 @@
     // /6 の機能（space の部品）は、/5 以前の format では使えない。種類ごとに 1 件ずつ出す
     if (UZ.FORMATS.includes(sb.format) && sb.format !== "ugoku-zukai/6") {
       const need = (what, where) => E(`${where}で ${what} を使っている。使うには format を "ugoku-zukai/6" と書く（今は ${JSON.stringify(sb.format)}）`);
-      const figs = [...Object.entries(sb.figures && typeof sb.figures === "object" ? sb.figures : {}).map(([fid, f]) => [`図「${fid}」`, f]),
-        ...Object.entries(sb.slides && typeof sb.slides === "object" ? sb.slides : {}).flatMap(([sid, sl]) => sl && Array.isArray(sl.parts) ? sl.parts.map(p => [`スライド「${sid}」`, p]) : [])];
-      const c = figs.find(([, f]) => f && typeof f === "object" && f.type === "space");
-      if (c) need("space の部品", c[0]);
-      const g = figs.find(([, f]) => f && typeof f === "object" && f.type === "graph" && Array.isArray(f.nodes) && f.nodes.some(n => n && n.inside != null));
-      if (g) need("inside", g[0]);
+      if (space6) need("space の部品", space6[0]);
+      if (inside6) need("inside", inside6[0]);
     }
     // 名前付きの値: { 名前: 数 }
     const values = sb.values == null ? {} : sb.values;
@@ -428,7 +430,8 @@
       const used = new Set();
       for (const sl of Object.values(sb.slides && typeof sb.slides === "object" ? sb.slides : {})) for (const p of (sl && Array.isArray(sl.parts) ? sl.parts : [])) used.add(UZ.partId(p));
       for (const sc of sb.scenes) if (sc && sc.slide == null) for (const f of Array.isArray(sc.figure) ? sc.figure : [sc.figure]) used.add(f);
-      for (const id of Object.keys(owner)) if (used.has(id)) E(`中身の図「${id}」は、部品や場面の図としては置けない（箱「${owner[id].fig}/${owner[id].node}」に寄ると現れる）`);
+      for (const { plate } of UZ.platesOf(sb)) if (typeof plate.figure === "string") used.add(plate.figure);
+      for (const id of Object.keys(owner)) if (used.has(id)) E(`中身の図「${id}」は、部品や場面の図としては置けない（板の図も同じ。箱「${owner[id].fig}/${owner[id].node}」に寄ると現れる）`);
       // 板に置いた図
       for (const { plate } of UZ.platesOf(sb)) {
         const pf = typeof plate.figure === "string" ? FIGS[plate.figure] : plate.figure;
