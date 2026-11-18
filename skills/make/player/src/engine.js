@@ -195,8 +195,12 @@
     for (const sc of scenes) {
       for (let i = 0; i < sc.figs.length; i++) {
         const fid = sc.figs[i];
-        if (figs[fid]) continue;
         const over = sc.slide ? sc.over[i] : null;
+        if (figs[fid]) {
+          const want = (over && over.fit) ?? FIGS[fid].fit;
+          if (want !== figs[fid].layoutFit) warn(`スライド「${sc.slide}」: 部品「${fid}」の fit（${want ?? "指定なし"}）は効かない。図「${fid}」は最初の場面の fit（${figs[fid].layoutFit ?? "指定なし"}）で組んである。部品ごとに fit を変えられない`);
+          continue;
+        }
         const f = over && Object.keys(over).length ? { ...FIGS[fid], ...over } : FIGS[fid];
         const S = sc.slideDark ? SD : S0;
         const A = sc.areas[i];
@@ -218,7 +222,7 @@
         if (L.morphWarn && L.morphWarn.length) warn(`スライド「${sc.slide}」: 部品「${fid}」: Morph の系列で矢印が箱に重なる（${L.morphWarn.join("、")}）。系列の図のノードか辺を見直す`);
         const items = {};
         for (const it of L.items) { it.fig = fid; it.key = `${fid}/${it.id}`; items[it.id] = it; }
-        figs[fid] = { id: fid, type: f.type, spec: f, w: L.w, h: L.h, items, order: L.order, autoShow: !!L.autoShow, fixed: !!L.fixed, extra: L, dark: !!sc.slideDark };
+        figs[fid] = { id: fid, type: f.type, spec: FIGS[fid], layoutFit: f.fit, w: L.w, h: L.h, items, order: L.order, autoShow: !!L.autoShow, fixed: !!L.fixed, extra: L, dark: !!sc.slideDark };
       }
     }
     // ---- id の解決 ----

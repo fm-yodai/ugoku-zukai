@@ -93,7 +93,14 @@ const tests = {
     const fitK = async part => (await bottom(part)).F.extra.fillK;
     assert.ok((await fitK({})) > 1, "fit を書かない部品は区画に合わせて組む");
     assert.strictEqual(await fitK({ fit: "content" }), undefined, "部品の fit: content が効かない");
-    assert.strictEqual(d.F.spec.fit, "content");
+    assert.strictEqual(d.F.spec.fit, undefined, "spec は図の宣言のまま");
+    // 2 つの場面: 1 つ目の部品の valign は 2 つ目に引き継がれない
+    const two = deck6({ a: { title: "A", parts: [{ figure: "f1", area, valign: "top", fit: "content" }] }, b: { title: "B", parts: [{ figure: "f1", area, fit: "content" }] } }, [SC("s1", "a"), SC("s2", "b")], { f1: { ...L1, valign: "bottom" } });
+    const M2 = await build(two), g = M2.scenes[1], F2 = M2.figs.f1;
+    assert.ok(Math.abs(g.areas[0].y + g.areas[0].h - (g.place.f1.oy + F2.y1 * g.place.f1.s)) <= 1, "2 つ目の場面が 1 つ目の valign を引き継いだ");
+    // fit が最初の場面と違う部品は警告
+    const three = deck6({ a: { title: "A", parts: [{ figure: "f1", area, fit: "content" }] }, b: { title: "B", parts: [{ figure: "f1", area }] } }, [SC("s1", "a"), SC("s2", "b")], { f1: L1 });
+    hasWarn(await build(three), /部品「f1」の fit（指定なし）は効かない.*最初の場面の fit（content）/);
   },
   async pan_noop_warns() {   // 倍率 1 のままの pan は動かない
     const G = { type: "graph", nodes: [{ id: "app", label: "アプリ" }, { id: "api", label: "API" }, { id: "db", label: "DB" }], edges: [{ from: "app", to: "api" }, { from: "api", to: "db" }] };
