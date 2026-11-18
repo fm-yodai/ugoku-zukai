@@ -34,6 +34,20 @@ const renderSvg = (M, t, frameOverride) => {
   return serialize(svg);
 };
 
+// test_m7.cjs の morphDeck と同じ形（/4）
+const deck4 = (slides, scenes, figures = {}) => ({ format: "ugoku-zukai/4", title: "検査", voice: { speaker: 8, speed: 1.1 }, figures, slides, scenes });
+const G1 = { type: "graph", nodes: [{ id: "app", label: "アプリ" }, { id: "api", label: "API" }, { id: "db", label: "DB" }], edges: [{ from: "app", to: "api" }, { from: "api", to: "db" }] };
+const G2 = { type: "graph", nodes: [{ id: "app", label: "アプリ" }, { id: "api", label: "API" }, { id: "cache", label: "キャッシュ" }, { id: "db", label: "DB" }], edges: [{ from: "app", to: "api" }, { from: "api", to: "cache" }, { from: "cache", to: "db" }] };
+const morphDeck = (o = {}) => {
+  const f1 = o.v1 ? "v1" : "g1", f2 = o.v2 ? "v2" : "g2";
+  const b = { title: "B", parts: [{ figure: f2, morph: f1 }] };
+  if (o.complete) b.start = "complete";
+  const scenes = [SC("s1", "a", [{ id: "l1", text: "{a}出します。", do: [{ show: o.show1 ? `${f1}/${o.show1}` : f1, at: "a" }] }]),
+    SC("s2", "b", [{ id: "l2", text: "ここで、新しい部分を{a}足します。", do: [{ show: o.show2 || "cache", at: "a" }] }])];
+  if (o.back) scenes.push(SC("s3", "a", [{ id: "l3", text: "元の形に戻ります。" }]));
+  return deck4({ a: { title: "A", parts: [{ figure: f1 }] }, b }, scenes, { [f1]: o.v1 || G1, [f2]: o.v2 || G2 });
+};
+
 const tests = {
   async format6_accepted() {
     assert.strictEqual(UZ.FORMAT, "ugoku-zukai/6");
@@ -43,6 +57,15 @@ const tests = {
   async format6_allows_values_and_custom() {   // /5 の機能は /6 でも使える
     const M = build(deck6({ a: { title: "A", parts: [{ figure: "f1" }] } }, [SC("s1", "a")], { f1: L1 }, { values: { a: 1 } }));
     assert.deepStrictEqual(M.errors || [], []);
+  },
+  async morph_back_single() {   // 戻るシークで、v2 と v1 を二重に描かない（M7 の制限 1）
+    const M = await build(morphDeck({ back: true }));
+    assert.deepStrictEqual(M.errors || [], []);
+    const s1 = M.scenes[0], s3 = M.scenes[2];
+    const fr = UZ.frame(M, s3.start + 0.1);
+    assert.strictEqual(fr.figs.g2.opacity, 0, "戻った直後に g2 を描いている");
+    assert.deepStrictEqual(fr.figs.g1.place, s1.place.g1, "g1 の写し方が s1 と違う（補間している）");
+    assert.strictEqual(fr.figs.g1.opacity, 1);
   },
 };
 

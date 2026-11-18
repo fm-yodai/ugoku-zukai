@@ -943,6 +943,10 @@
     // graph の系列は、v2 の写し方を v1 の写し方から補間し、fade out する v1 も同じ写し方で写す
     const morphTo = {}, morphFrom = {};
     if (prev) for (const a of M.acts) if (a.verb === "morph" && a.scene === sc.id) { morphTo[a.to] = a; morphFrom[a.from] = a; }
+    // 戻る（前の場面が Morph の v2 のスライドで、今の場面がその v1 のスライド）ときは、補間も fade もせず v1 だけを描く（二重に描かない）
+    const backFrom = {};   // v1 の図 → true（戻って来た図）
+    const backTo = {};     // v2 の図 → true（捨てる図）
+    if (prev) for (const a of M.acts) if (a.verb === "morph" && sc.figs.includes(a.from) && !sc.figs.includes(a.to) && prev.figs.includes(a.to) && !prev.figs.includes(a.from) && a.scene === prev.id) { backFrom[a.from] = true; backTo[a.to] = true; }
     // カメラ: 今の run の、t 以前の最後の zoom・pan を補間する（なければ恒等 = スライドの写し方）
     let cam = CAM0;
     for (const a of M.acts) {
@@ -956,11 +960,11 @@
       let pl = sc.place[fid];
       const mo = morphTo[fid], from = prev && (prev.place[fid] ? prevPl(fid) : mo && mo.series ? prevPl(mo.from) : null);
       if (from) pl = mixPlace(from, pl, ease((t - sc.start) / 0.8));
-      figsF[fid] = { opacity: prev && (prev.figs.includes(fid) || (mo && mo.pairs.length)) ? 1 : k, place: camOn(cam, pl) };
+      figsF[fid] = { opacity: backFrom[fid] || (prev && (prev.figs.includes(fid) || (mo && mo.pairs.length))) ? 1 : k, place: camOn(cam, pl) };
     }
     if (prev) for (const fid of prev.figs) if (!sc.figs.includes(fid)) {
       const mo = morphFrom[fid];
-      figsF[fid] = { opacity: 1 - k, place: mo && mo.series && figsF[mo.to] ? figsF[mo.to].place : prevPl(fid) };
+      figsF[fid] = { opacity: backTo[fid] ? 0 : 1 - k, place: mo && mo.series && figsF[mo.to] ? figsF[mo.to].place : prevPl(fid) };
     }
     // body の clip: 寄せている間と、寄せたスライドから次のスライドへ移る 0.8 秒の間（前後の body を合わせた範囲）
     const leaving = newRun && prev.camEnd.s > 1.001 && t < sc.start + 0.8;
