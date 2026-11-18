@@ -1,10 +1,12 @@
 // プレーヤーの共通 JS を node に読み込む（ブラウザと同じコードで検査するため）
 const fs = require("fs"), path = require("path"), vm = require("vm");
 const PLAYER = path.join(__dirname, "..", "player");
-const SRC = ["util.js", "figures.js", "figures2.js", "figures3.js", "validate.js", "slides.js", "engine.js", "check.js"];
+const SRC = ["util.js", "figures.js", "figures2.js", "figures3.js", "validate.js", "slides.js", "geo.js", "engine.js", "check.js"];
 function load() {
   const ELK = require(path.join(PLAYER, "vendor", "elk.bundled.js"));
   globalThis.UZ = { ELK };
+  // 数式の組版（MathJax の束）。グローバル UZMJ を生やす。ブラウザは template.html の /*UZ:MATH*/ で同じ束を読む
+  vm.runInThisContext(fs.readFileSync(path.join(PLAYER, "vendor", "mathjax-uz.js"), "utf8"), { filename: "mathjax-uz.js" });
   for (const f of SRC) vm.runInThisContext(fs.readFileSync(path.join(PLAYER, "src", f), "utf8"), { filename: f });
   return globalThis.UZ;
 }
@@ -45,4 +47,20 @@ function themeRecord(ref) {
   const id = themeId(ref);
   return id && id.startsWith("同梱:") ? id.slice(3) : (id || path.resolve(ref));
 }
-module.exports = { load, theme, pickTheme, pickThemeRef, themeRecord, PLAYER, SRC };
+// custom の関数に時間の上限を掛ける（node の道具だけ。ブラウザで止まらない関数を止める手段はないので、公開の前の検査で止める）。
+// 上限は 1 秒（環境変数 UZ_CUSTOM_TIMEOUT_MS で変えられる。検査のテスト用）。
+// guarded(f, ms) は f() を ms ミリ秒で打ち切る。打ち切ったら e.uzTimeout = ms の例外を投げる（V8 が止めるので、関数の中の try/catch では受けられない）
+const CUSTOM_TIMEOUT_MS = Math.max(1, Number(process.env.UZ_CUSTOM_TIMEOUT_MS) || 1000);
+const guardScript = new vm.Script("__uzGuarded()", { filename: "custom-guard" });
+function guarded(f, ms = CUSTOM_TIMEOUT_MS) {
+  globalThis.__uzGuarded = f;
+  try { return guardScript.runInThisContext({ timeout: ms }); }
+  catch (e) {
+    if (e && e.code === "ERR_SCRIPT_EXECUTION_TIMEOUT") { const t = new Error(`${ms}ms で終わらない`); t.uzTimeout = ms; throw t; }
+    throw e;
+  }
+  finally { delete globalThis.__uzGuarded; }
+}
+// UZ.checkCustoms の opts.call に渡す口
+const guardedCall = (ms = CUSTOM_TIMEOUT_MS) => (fn, a) => guarded(() => fn(a), ms);
+module.exports = { load, theme, pickTheme, pickThemeRef, themeRecord, PLAYER, SRC, guarded, guardedCall, CUSTOM_TIMEOUT_MS };

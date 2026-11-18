@@ -1,0 +1,48 @@
+{
+  "name": "kuro",
+  "label": "黒 数学動画調（3b1b 調の暗い地）",
+  "mode": "dark",
+  "colors": {
+    "bg": "#171717",
+    "surface": "#242424",
+    "ink": "#f2f2f2",
+    "muted": "#a8a8a8",
+    "line": "#4a4a4a",
+    "accent": "#58c4dd",
+    "good": "#83c167",
+    "bad": "#fc6255",
+    "warn": "#f4d345",
+    "series": ["#58c4dd", "#f4d345", "#83c167", "#fc6255"],
+    "roles": {
+      "process": "#58c4dd",
+      "actor": "#f4d345",
+      "store": "#83c167",
+      "external": "#b0b0b0",
+      "muted": "#8a8a8a",
+      "added": "#83c167",
+      "removed": "#fc6255"
+    },
+    "boxes": {
+      "process": { "fill": "#1d3a44", "border": "#58c4dd" },
+      "actor": { "fill": "#40371a", "border": "#f4d345" },
+      "store": { "fill": "#25361e", "border": "#83c167" },
+      "external": { "fill": "#2e2e2e", "border": "#a0a0a0" },
+      "muted": { "fill": "#262626", "border": "#4a4a4a", "label": "#a8a8a8" },
+      "added": { "fill": "#25361e", "border": "#83c167" },
+      "removed": { "fill": "#40201d", "border": "#fc6255" },
+      "accent": { "fill": "#1d3a44", "border": "#58c4dd" },
+      "good": { "fill": "#25361e", "border": "#83c167" },
+      "bad": { "fill": "#40201d", "border": "#fc6255" },
+      "warn": { "fill": "#40371a", "border": "#f4d345" }
+    }
+  },
+  "font": {
+    "family": "\"Noto Sans JP\", \"Hiragino Kaku Gothic ProN\", \"Yu Gothic\", sans-serif",
+    "weight": 400,
+    "bold": 700,
+    "css": "https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap"
+  },
+  "shape": { "radius": 10, "stroke": 2, "fill": "solid", "fillMix": 0.12, "edgeWidth": 2.2, "glow": false, "shadow": false },
+  "subtitle": { "bg": "#000000", "ink": "#ffffff" },
+  "chapter": { "bg": "#000000", "ink": "#ffffff", "sub": "rgba(255,255,255,.72)", "muted": "rgba(255,255,255,.5)", "line": "rgba(255,255,255,.22)", "accent": "#58c4dd" }
+}

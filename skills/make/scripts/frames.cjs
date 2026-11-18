@@ -13,7 +13,7 @@
 // 終了コード: 0 = PNG まで書けた、1 = 台本の誤りか想定外の誤り、2 = 使い方の誤り（--scenes の場面が台本にないときも。何も書かない）、4 = resvg を読めず SVG と frames.json だけ書いた
 "use strict";
 const fs = require("fs"), path = require("path"), vm = require("vm"), os = require("os"), cp = require("child_process");
-const { load, theme, pickThemeRef, themeRecord, PLAYER } = require("./uz_node.cjs");
+const { load, theme, pickThemeRef, themeRecord, PLAYER, guarded, CUSTOM_TIMEOUT_MS } = require("./uz_node.cjs");
 const { makeDocument, serialize } = require("./svg_dom.cjs");
 const { loadAssets } = require("./assets.cjs");
 
@@ -50,6 +50,16 @@ function jpFonts() {
   if (noto) return ["Noto Sans CJK JP"];
   if (has("IPAGothic")) return ["IPAGothic"];
   return ["Noto Sans CJK JP", "IPAGothic"];
+}
+// 1 コマを描くのに掛ける時間の上限（custom の部品の関数が止まらないとき、固まらずに止まる）。custom の関数 1 回の上限の 5 倍
+const FRAME_TIMEOUT_MS = CUSTOM_TIMEOUT_MS * 5;
+function renderGuarded(view, t, what) {
+  try { guarded(() => view.render(t), FRAME_TIMEOUT_MS); }
+  catch (e) {
+    if (!(e && e.uzTimeout)) throw e;
+    console.error(`誤り: ${what}のコマを描くのが ${FRAME_TIMEOUT_MS / 1000} 秒で終わらない。custom の部品の関数が止まらないか重すぎる。check_storyboard.cjs で、どの行のどの部品かを見る`);
+    process.exit(1);
+  }
 }
 const esc = s => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
@@ -125,7 +135,7 @@ const esc = s => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(
     const settled = actsEnd === -Infinity || actsEnd <= t + 1e-9;
     const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
     forceSub = { id: ln.id, text: textOf[ln.id] };
-    new UZ.View(svg, M).render(t);
+    renderGuarded(new UZ.View(svg, M), t, `行 ${ln.id} `);
     forceSub = null;
     const rel = `svg/${ln.id}.svg`;
     fs.writeFileSync(path.join(outDir, rel), serialize(svg, { xmlns: "http://www.w3.org/2000/svg", width: W, height: H }));
@@ -139,7 +149,7 @@ const esc = s => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(
     if (only && !sl.scenes.some(id => only.includes(id))) continue;
     const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
     forceFrame = UZ.finalFrame(M, sl.id);
-    new UZ.View(svg, M).render(forceFrame.t);
+    renderGuarded(new UZ.View(svg, M), forceFrame.t, `スライド ${sl.id} の完成形`);
     forceFrame = null;
     const rel = `svg/slide-${sl.id}.svg`, str = serialize(svg, { xmlns: "http://www.w3.org/2000/svg", width: W, height: H });
     fs.writeFileSync(path.join(outDir, rel), str);

@@ -14,6 +14,8 @@
   - 箱の塗りの上の本文: 4.5 以上（colors.boxes に面と文字の色を書いた役割は、その面とその文字で見る）
   - 章扉（chapter）の文字・添え字・強調（accent）と章扉の地: 4.5 以上
   - 役割の色どうし（actor / process / store / external）、good と bad: 色差 ΔE 20 以上
+  - 線の色の並び（colors.series）: 2 色以上、同じ色がない、どの 2 色も色差 ΔE 20 以上（12 未満は不合格）、
+    背景とのコントラスト 3 以上（グラフの線。WCAG 1.4.11）。書いていないテーマは、既定の並びの色差が 20 未満なら注意
 """
 import json
 import os
@@ -113,6 +115,7 @@ def check(th):
     d = UC.delta_e(UC.parse(col["good"]), UC.parse(col["bad"]))
     if d < 20:
         fails.append(f"good と bad の色差 ΔE {d:.0f}（20 以上が要る）")
+    check_series(col, bg, need, fails, notes)
     font = th.get("font", {})
     if not font.get("family"):
         fails.append("font.family がない")
@@ -123,6 +126,50 @@ def check(th):
     if not any(j in font.get("family", "") for j in ("JP", "Gothic", "ゴシック", "Hiragino", "Mincho", "明朝", "Maru", "UD")):
         notes.append("日本語を持つフォントが font.family にないかもしれない（Noto Sans JP などを候補に足す）")
     return fails, notes, rows
+
+
+def series_of(col):
+    """線の色の並び。プレーヤーの UZ.seriesOf（figures.js）と同じ約束: colors.series があればそれ（同じ色は除く）、
+    なければ accent・good・warn・bad・ink・muted から同じ色を除いて 4 つまで"""
+    explicit = isinstance(col.get("series"), list) and col["series"]
+    src = col["series"] if explicit else [col.get(k) for k in ("accent", "good", "warn", "bad", "ink", "muted")]
+    out = []
+    for c in src:
+        if c and str(c).lower() not in [str(x).lower() for x in out]:
+            out.append(c)
+    return out if explicit else out[:4]
+
+
+def check_series(col, bg, need, fails, notes):
+    """線の色の並び（colors.series）。custom の部品で、区別が目的の線（曲線と接線など）に s1〜 で使う"""
+    explicit = isinstance(col.get("series"), list) and col["series"]
+    if "series" in col and not explicit:
+        fails.append("colors.series は色の配列で書く（2〜4 色）")
+        return
+    if explicit and len(col["series"]) != len({str(c).lower() for c in col["series"]}):
+        fails.append("colors.series に同じ色がある（並びの色は互いに区別できる色にする）")
+    ser = series_of(col)
+    where = "colors.series" if explicit else "線の色の並び（colors.series がないので、意味の色と本文の色から作った既定）"
+    if len(ser) < 2:
+        fails.append(f"{where} が 2 色に満たない")
+        return
+    parsed = []
+    for c in ser:
+        p = UC.parse(str(c))
+        if not p:
+            fails.append(f"{where} の {c} を色として読めない")
+            return
+        parsed.append(p)
+    for i, c in enumerate(parsed):
+        if explicit:
+            need(f"series[{i}] / bg", c, bg, 3, "グラフの線")
+    for i in range(len(parsed)):
+        for j in range(i + 1, len(parsed)):
+            d = UC.delta_e(parsed[i], parsed[j])
+            if d < 20:
+                # 書いた並びは不合格にする。書いていない（既定の）並びは、colors.series を書くよう注意に留める
+                (fails if d < 12 and explicit else notes).append(f"{where} の {ser[i]} と {ser[j]} の色差 ΔE {d:.0f}（20 以上が望ましい"
+                                                                 + ("" if explicit else "。見分けられる色を colors.series に書く") + "）")
 
 
 def check_design(th, report):

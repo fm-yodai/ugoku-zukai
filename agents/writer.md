@@ -31,8 +31,8 @@ tools: Read, Write, Edit, Glob, Grep, Bash(node ${CLAUDE_PLUGIN_ROOT}/skills/mak
 物差しと、書くための道具は次の所にある。構成メモと台本の形式は最初に読む。ほかは、書きながら要る所を読めばよい。
 
 1. `<workdir>/outline.json`（構成メモ。形は `${CLAUDE_PLUGIN_ROOT}/skills/make/references/outline.md`。3 段の意図）と、あれば `<workdir>/brief.md`（取材メモ。調べて分かった事実と出どころ）
-2. `${CLAUDE_PLUGIN_ROOT}/skills/make/references/storyboard.md`（台本の形式の正。8 章のスライド・部品・区画・完成形、図の種類、場面と行、文中の印、動作の一覧、検査が見ること）と、`${CLAUDE_PLUGIN_ROOT}/skills/make/examples/slide-forms.json`（スライドの形の見本。対になる構成メモは `examples/outlines/slide-forms.json`）。使う図の種類に近い見本もある。Morph・カメラ・線の描画の見本は `${CLAUDE_PLUGIN_ROOT}/skills/make/examples/camera-morph.json`（対になる構成メモは `examples/outlines/camera-morph.json`）
-3. `${CLAUDE_PLUGIN_ROOT}/skills/make/references/visual-grammar.md`（見せ方の考え方 VG-1〜VG-9 と、Morph・カメラ・線の描画を扱うための捉え方「キャンバスとカメラ」VG-10〜VG-12）と `${CLAUDE_PLUGIN_ROOT}/skills/make/references/layout.md`（スライドのデザインの原則）
+2. `${CLAUDE_PLUGIN_ROOT}/skills/make/references/storyboard.md`（台本の形式の正。8 章のスライド・部品・区画・完成形、図の種類、場面と行、文中の印、動作の一覧、検査が見ること）と、`${CLAUDE_PLUGIN_ROOT}/skills/make/examples/slide-forms.json`（スライドの形の見本。対になる構成メモは `examples/outlines/slide-forms.json`）。使う図の種類に近い見本もある。Morph・カメラ・線の描画の見本は `${CLAUDE_PLUGIN_ROOT}/skills/make/examples/camera-morph.json`（対になる構成メモは `examples/outlines/camera-morph.json`）。値・数式・グラフの見本は `${CLAUDE_PLUGIN_ROOT}/skills/make/examples/math-geometry.json`（対になる構成メモは `examples/outlines/math-geometry.json`）
+3. `${CLAUDE_PLUGIN_ROOT}/skills/make/references/visual-grammar.md`（見せ方の考え方 VG-1〜VG-9 と、Morph・カメラ・線の描画を扱うための捉え方「キャンバスとカメラ」VG-10〜VG-12、値に連動して動く図と数式の変形を扱う「値と数式」VG-13・VG-14）と、`${CLAUDE_PLUGIN_ROOT}/skills/make/references/geometry.md`（`custom` の部品が使う座標・グラフ・数式の道具と、組み合わせのリファレンス R1〜R6）と `${CLAUDE_PLUGIN_ROOT}/skills/make/references/layout.md`（スライドのデザインの原則）
 4. `${CLAUDE_PLUGIN_ROOT}/skills/make/references/writing/rules.md`（書き言葉の規則 TW-）と `${CLAUDE_PLUGIN_ROOT}/skills/make/references/writing/spoken.md`（聞いて分かる文の規則 SP-、話の流れ、章扉）
 5. `${CLAUDE_PLUGIN_ROOT}/skills/make/references/criteria/` の `README.md`・`agreement.md`・`structure.md`・`script.md`・`screen.md`（評価役が見ること）と、`${CLAUDE_PLUGIN_ROOT}/skills/make/references/review-protocol.md` の「作り手の約束」
 
@@ -84,6 +84,7 @@ tools: Read, Write, Edit, Glob, Grep, Bash(node ${CLAUDE_PLUGIN_ROOT}/skills/mak
 - 話に合わせて、部品を少しずつ出す（`show`）
 - 1 つの文の間に組み上げる
 - カメラを寄せる・引く・移す（`zoom`・`pan`）、線を描きながら出す（`show` の `"draw": true`）。キャンバスが育つ Morph と合わせて、`visual-grammar.md` の「キャンバスとカメラ」で、聴衆に起こることと代償を考える
+- 名前付きの値を `set` で動かし、`custom` の部品の図と数式をついてこさせる。聴衆に起こることと代償は `visual-grammar.md` の「値と数式」、描く道具は `geometry.md`（題材に近いリファレンスを写して組み替えられる）
 
 どれにするかは、スライドの意図で決める（V-6）。組み合わせてよい。「二つを並べて読み比べる」が意図なら、二つが同時に見えている時間が要る。「順に積み上がることが分かる」が意図なら、少しずつ出す。そのスライドを最後に使う場面が終わるまでに、完成形に至るようにする。
 
@@ -103,7 +104,7 @@ tools: Read, Write, Edit, Glob, Grep, Bash(node ${CLAUDE_PLUGIN_ROOT}/skills/mak
    - `read` は VOICEVOX が読む文である。英字の語や読みの分かれる漢字は `read` に読みを書く（印も同じ位置に置く）。読点は 1 つ約 0.6 秒の間が入るので、規格番号のように 1 桁ずつ読ませる所を読点で区切ると遅くなる。中黒で区切ると間が短い（書き方は `storyboard.md` の `read`）。`read` のかぎ括弧は、閉じの後に間が入り、「〜」と言えば、の助詞が前の語から切れるので、かぎ括弧を外すと自然に読まれる。引用だと耳で分かるようにしたいときは、読点で区切れる
 4. **動作**（各行の `do`）: どの行で何を出し、どこを強調し、何を消すかは、`visual-grammar.md` の VG-1〜VG-9 の見方（聴衆に起こること・代償）で、スライドの意図に照らして選ぶ。印 `at` でその語を話す瞬間に結ぶ。点を消すのは `{"hide": "dot:<名前>"}`、注記を消すのは `{"hide": "note:<id>"}`
 
-下の層（`canvas`・`move`・`custom`）は使わない。今の部品と動詞で言えない見せ方が要るときは、書かずに最後の報告に「ここは今の部品と動詞で言えない」と書く。
+下の層（座標で図形を置く `canvas`、図のローカル座標で部品を動かす `move`、場面の上に自由に描く動作の `{"custom": …}`。`storyboard.md` の 6 章）は使わない。名前の似た部品の `"type": "custom"`（値に連動して描く部品。`storyboard.md` の 8 章、道具は `geometry.md`）は下の層ではなく、上の「値と数式」の見せ方として使える。今の部品・動詞・`custom` の部品で言えない見せ方が要るときは、書かずに最後の報告に「ここは今の部品と動詞で言えない」と書く。
 
 ### 5. 検査する
 

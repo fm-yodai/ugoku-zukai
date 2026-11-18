@@ -229,6 +229,13 @@
           E.fill = el("rect", { x: it.x, y: it.y, width: it.w, height: it.h, rx: it.r, fill: C.rgba(it.stroke, 0.04) }, E.g);
           E.stroke = el("rect", { x: it.x, y: it.y, width: it.w, height: it.h, rx: it.r, fill: "none", stroke: C.rgba(it.stroke, 0.7), "stroke-width": 1.6, "stroke-dasharray": "8 6" }, E.g);
           E.texts = (it.texts || []).map(T => this.textSpec(E.g, T));
+        } else if (it.kind === "custom") {
+          // 自由描画の部品: 外側の g に出し方・薄くするを掛け、内側の g（部品のローカル座標）を毎コマ空にして関数に渡す
+          E.g = el("g", null, L.box);
+          E.inner = el("g", null, E.g);
+          E.S = S;
+          E.geo = UZ.makeGeo(el, S);   // 部品ごとに 1 つ（地の色ごとの S を持つ）。geo.errors は描くたびに空にする
+          try { E.fn = new Function("return (" + this.M.sb.custom[it.fn] + ")")(); } catch (e) { E.fn = null; console.error("custom の読み込みに失敗", it.fn, e); }
         } else if (it.kind === "mark") {
           E.g = el("g", null, L.fx);
           E.bgc = el("circle", { cx: 0, cy: 0, r: 15, fill: S.bg, stroke: S.good, "stroke-width": 2.4 }, E.g);
@@ -316,12 +323,15 @@
               for (const b of [it.label && it.label.bbox, ...(it.texts || []).map(T => T.bbox)]) if (b) { x0 = Math.min(x0, b.x); y0 = Math.min(y0, b.y); x1 = Math.max(x1, b.x + b.w); y1 = Math.max(y1, b.y + b.h); }
               const f = el("filter", { id: `uz-bl-${this.viewN}-${++this.blurN}`, filterUnits: "userSpaceOnUse", x: x0 - 28, y: y0 - 28, width: x1 - x0 + 56, height: y1 - y0 + 56 }, this.defs);
               E.blurF = el("feGaussianBlur", { stdDeviation: bl }, f);
-              E.blurId = f.getAttribute("id");
+              E.blurId = f.getAttribute("id"); E.blurBox = f;
             }
             E.blurF.setAttribute("stdDeviation", bl);
             for (const g of blurEls) g.setAttribute("filter", `url(#${E.blurId})`);
           } else for (const g of blurEls) g.removeAttribute("filter");
         }
+        // custom の部品は、描き場の大きさが場面ごとに変わるので、ぼかす範囲もそのコマの区画にする
+        const bfo = bl && it.kind === "custom" && E.blurBox && fr.figs[it.fig] && fr.figs[it.fig].place;
+        if (bfo && bfo.w != null) for (const [k, v] of [["x", -28], ["y", -28], ["width", bfo.w + 56], ["height", bfo.h + 56]]) E.blurBox.setAttribute(k, v.toFixed(1));
         const op = (x) => (x * dim).toFixed(3);
         const off = s.off || [0, 0];
         if (it.kind === "box") {
@@ -441,6 +451,29 @@
           if (it.kind === "frame") { E.fill.style.opacity = ""; for (const tx of E.texts) tx.style.opacity = ""; }
           E.g.style.opacity = op(smooth(show));
           this.offset(E.g, off);
+        } else if (it.kind === "custom") {
+          const o = smooth(show);
+          E.g.style.opacity = op(o);
+          this.offset(E.g, off);
+          // 見えている間だけ描く。例外はその部品だけ描かずに知らせる（プレーヤーは止めない。同じ誤りは 1 回だけ出す）
+          while (E.inner.firstChild) E.inner.removeChild(E.inner.firstChild);
+          const fo = fr.figs[it.fig];
+          if (o > 0.002 && fo && fo.opacity > 0.002 && E.fn) {
+            E.geo.errors.length = 0;
+            // 描き場の大きさは、そのコマの区画の大きさ（engine が場面ごとに決め、区画が動く間は補間する）
+            const pw = fo.place && fo.place.w != null ? fo.place.w : it.w, ph = fo.place && fo.place.w != null ? fo.place.h : it.h;
+            try {
+              E.fn({ g: E.inner, v: fr.values || {}, t: fr.t, el, S: E.S, UZ, geo: E.geo, w: pw, h: ph });
+              if (E.geo.errors.length) {   // TeX の誤りは描いたまま（赤い文字）知らせる。同じ誤りは 1 回だけ
+                const msg = E.geo.errors.join(" / ");
+                if (E._err !== msg) { E._err = msg; console.error("custom の部品の数式に誤り", it.key, msg); }
+              }
+            } catch (e) {
+              while (E.inner.firstChild) E.inner.removeChild(E.inner.firstChild);
+              const msg = String(e && e.message || e);
+              if (E._err !== msg) { E._err = msg; console.error("custom の部品の描画に失敗", it.key, e); }
+            }
+          }
         } else if (it.kind === "mark") {
           const kind = s.mark || "check", col = kind === "cross" ? S.bad : kind === "question" ? S.warn : S.good;
           E.path.setAttribute("d", GLYPH[kind]); E.path.setAttribute("stroke", col); E.bgc.setAttribute("stroke", col);

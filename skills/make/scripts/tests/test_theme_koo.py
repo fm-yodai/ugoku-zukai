@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """既定のテーマ（koo）と、デザインにある色だけでテーマを作る約束の検査。python3 test_theme_koo.py で回す。
-(1) 同梱のテーマは koo の 1 つで、色はテーマの tokens に書いたもの（デザインシステムのトークンと、暗くした Blue）だけ
+(1) 同梱のテーマは koo（既定。色はテーマの tokens に書いたものだけ）と kuro（暗い地の数学動画調）の 2 つ
 (2) check_theme.py が、章扉（chapter）と箱の色（colors.boxes）の読みやすさを見る
 (3) extract_design.py は、デザインに緑・赤がなければ足さず、反転面の色があれば字幕の帯と章扉に当てる"""
 import copy
@@ -44,8 +44,8 @@ class KooTest(unittest.TestCase):
             json.dump(th, f, ensure_ascii=False)
         return run(sys.executable, CHECK_THEME, p)
 
-    def test_only_one_bundled_theme(self):
-        self.assertEqual(sorted(os.listdir(THEMES)), ["koo.json"])
+    def test_bundled_themes(self):
+        self.assertEqual(sorted(os.listdir(THEMES)), ["koo.json", "kuro.json"])
 
     def test_passes(self):
         r = run(sys.executable, CHECK_THEME, KOO)

@@ -7,7 +7,7 @@
     sequence: ["participants", "messages"], graph: ["nodes", "edges"], canvas: ["shapes"],
     swimlane: ["lanes", "steps"], beforeafter: ["before", "after"], roadmap: ["periods", "items"], tree: ["root"],
     chart: ["categories", "series"], kpi: ["items"], matrix: ["x", "y"], pyramid: ["levels"], cycle: ["steps"], venn: ["sets"],
-    text: ["blocks"], image: ["src"], frame: [],
+    text: ["blocks"], image: ["src"], frame: [], custom: ["draw"],
   };
   const ROLES = ["actor", "process", "store", "external", "muted", "added", "removed", "good", "bad", "warn", "accent"];
 
@@ -19,17 +19,35 @@
     if (sb.figures != null && typeof sb.figures !== "object") E("figures（図の宣言）はオブジェクトで書く");
     if (sb.figures == null && sb.slides == null) E("figures（図の宣言）がない");
     if (!Array.isArray(sb.scenes) || !sb.scenes.length) E("scenes（場面の列）がない");
+    const allActs = (Array.isArray(sb.scenes) ? sb.scenes : []).flatMap(sc => sc && Array.isArray(sc.lines) ? sc.lines.flatMap(ln => ln && Array.isArray(ln.do) ? ln.do.map(a => [ln.id, a]) : []) : []);
     // /4 の機能（part の morph・動作の zoom・pan・show の draw）は、/3 以前の format では使えない。種類ごとに 1 件ずつ出す
-    if (UZ.FORMATS.includes(sb.format) && sb.format !== "ugoku-zukai/4") {
+    if (["ugoku-zukai/2", "ugoku-zukai/3"].includes(sb.format)) {
       const need = (what, where) => E(`${where}で ${what} を使っている。使うには format を "ugoku-zukai/4" と書く（今は ${JSON.stringify(sb.format)}）`);
       const parts = Object.entries(sb.slides && typeof sb.slides === "object" ? sb.slides : {}).flatMap(([sid, sl]) => sl && Array.isArray(sl.parts) ? sl.parts.map(p => [sid, p]) : []);
       const hit = parts.find(([, p]) => p && p.morph != null);
       if (hit) need("morph", `スライド「${hit[0]}」`);
-      const acts = (Array.isArray(sb.scenes) ? sb.scenes : []).flatMap(sc => sc && Array.isArray(sc.lines) ? sc.lines.flatMap(ln => ln && Array.isArray(ln.do) ? ln.do.map(a => [ln.id, a]) : []) : []);
       for (const [what, test] of [["zoom", a => a.zoom != null], ["pan", a => a.pan != null], ["draw", a => a.draw != null]]) {
-        const h = acts.find(([, a]) => a && typeof a === "object" && test(a));
+        const h = allActs.find(([, a]) => a && typeof a === "object" && test(a));
         if (h) need(what, `行「${h[0]}」`);
       }
+    }
+    // /5 の機能（最上位の values・動作の set・custom の部品）は、/4 以前の format では使えない。種類ごとに 1 件ずつ出す
+    if (UZ.FORMATS.includes(sb.format) && sb.format !== "ugoku-zukai/5") {
+      const need = (what, where) => E(`${where}で ${what} を使っている。使うには format を "ugoku-zukai/5" と書く（今は ${JSON.stringify(sb.format)}）`);
+      if (sb.values != null) need("values", "台本の最上位");
+      const h = allActs.find(([, a]) => a && typeof a === "object" && Object.prototype.hasOwnProperty.call(a, "set"));
+      if (h) need("set", `行「${h[0]}」`);
+      const figs = [...Object.entries(sb.figures && typeof sb.figures === "object" ? sb.figures : {}).map(([fid, f]) => [`図「${fid}」`, f]),
+        ...Object.entries(sb.slides && typeof sb.slides === "object" ? sb.slides : {}).flatMap(([sid, sl]) => sl && Array.isArray(sl.parts) ? sl.parts.map(p => [`スライド「${sid}」`, p]) : [])];
+      const c = figs.find(([, f]) => f && typeof f === "object" && f.type === "custom");
+      if (c) need("custom の部品", c[0]);
+    }
+    // 名前付きの値: { 名前: 数 }
+    const values = sb.values == null ? {} : sb.values;
+    if (typeof values !== "object" || Array.isArray(values)) E("values（名前付きの値）は { 名前: 数 } のオブジェクトで書く");
+    else for (const [k, v] of Object.entries(values)) {
+      if (!ID_RE.test(k)) E(`values の「${k}」: 名前に使えない文字がある（/ : 空白は不可）`);
+      if (typeof v !== "number" || !Number.isFinite(v)) E(`values の「${k}」は数で書く（今は ${JSON.stringify(v)}）`);
     }
     if (errors.length) return { errors, warnings };
     UZ.validateSlides(sb, E, W, ID_RE);
@@ -232,6 +250,13 @@
         if (!f.source) W(`${where}: 画像の出どころ（source）がない（利用者から渡されたものなら、そう書く）`);
         addId("img", "画像");
       }
+      if (f.type === "custom") {
+        if (f.draw != null && (typeof f.draw !== "string" || !sb.custom || typeof sb.custom !== "object" || !Object.prototype.hasOwnProperty.call(sb.custom, f.draw)))
+          E(`${where}: draw「${f.draw}」が台本の custom にない（台本の最上位の custom に、関数を文字列で書く）`);
+        else if (f.draw != null && typeof sb.custom[f.draw] !== "string")
+          E(`${where}: custom「${f.draw}」の値が文字列でない（関数は "({ g, v, geo, w, h }) => { … }" のように文字列で書く）`);
+        addId("draw", "描き場");
+      }
       if (f.type === "canvas") {
         for (const s of f.shapes || []) {
           addId(s.id, "図形");
@@ -279,8 +304,22 @@
           if (a.zoom != null && typeof a.zoom !== "string" && !(Array.isArray(a.zoom) && a.zoom.length && a.zoom.every(z => typeof z === "string" && z !== "all"))) E(`${lw} の do[${ai}]: zoom の対象は文字列（図・部品・要素の id、全体に戻るなら "all"）か、id の配列で書く`);
           if (a.pan != null && typeof a.pan !== "string") E(`${lw} の do[${ai}]: pan の対象は文字列（要素の id）で書く`);
           if ((a.zoom != null || a.pan != null) && a.pad != null && !(typeof a.pad === "number" && Number.isFinite(a.pad) && a.pad >= 0)) E(`${lw} の do[${ai}]: pad は 0 以上の数で書く`);
+          if (a.region != null) {
+            // region: 対象の矩形の中の一部を、割合（0〜1）の { x: [始まり, 終わり], y: [始まり, 終わり] } で指す（片方は省ける = 0〜1）
+            const rg = a.region, span = v => Array.isArray(v) && v.length === 2 && v.every(n => typeof n === "number" && Number.isFinite(n) && n >= 0 && n <= 1) && v[0] < v[1];
+            if (verbs[0] !== "zoom" && verbs[0] !== "pan") E(`${lw} の do[${ai}]: region は zoom と pan にだけ付けられる`);
+            else if (a.zoom === "all") E(`${lw} の do[${ai}]: zoom: "all" には region を付けられない（全体に戻る）`);
+            else if (!rg || typeof rg !== "object" || Array.isArray(rg) || Object.keys(rg).some(k => k !== "x" && k !== "y") || (rg.x == null && rg.y == null) || (rg.x != null && !span(rg.x)) || (rg.y != null && !span(rg.y)))
+              E(`${lw} の do[${ai}]: region は { "x": [始まり, 終わり], "y": [始まり, 終わり] } で、対象の区画に対する割合（0〜1、始まり < 終わり）で書く`);
+          }
           if (a.draw != null && typeof a.draw !== "boolean") E(`${lw} の do[${ai}]: draw は true か false で書く`);
           if (a.draw != null && verbs[0] !== "show") E(`${lw} の do[${ai}]: draw は show にだけ付けられる`);
+          if (verbs[0] === "set") {
+            if (typeof a.set !== "string" || !Object.prototype.hasOwnProperty.call(values, a.set)) E(`${lw} の do[${ai}]: set の「${a.set}」が values にない`);
+            if (typeof a.to !== "number" || !Number.isFinite(a.to)) E(`${lw} の do[${ai}]: set の to は数で書く`);
+            if (a.ease != null && !["smooth", "linear"].includes(a.ease)) E(`${lw} の do[${ai}]: ease は smooth か linear で書く`);
+            if (a.dur != null && !(typeof a.dur === "number" && Number.isFinite(a.dur) && a.dur > 0)) E(`${lw} の do[${ai}]: dur は 0 より大きい数で書く`);
+          }
           if (a.at != null) { used.add(a.at); if (p.marks[a.at] == null) E(`${lw} の do[${ai}]: 印 {${a.at}} が text にない`); }
         });
         for (const k of Object.keys(p.marks)) if (!used.has(k)) W(`${lw}: 印 {${k}} を使う動作がない`);

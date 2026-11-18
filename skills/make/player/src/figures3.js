@@ -1,4 +1,4 @@
-// ugoku-zukai プレーヤー: スライドの部品のうち、図でないもの（テキスト・画像・フレーム）。
+// ugoku-zukai プレーヤー: スライドの部品のうち、図でないもの（テキスト・画像・フレーム・自由描画）。
 // どれも図と同じ約束で { w, h, items, order } を返す。区画の大きさに合わせて配置する（ctx.area）。
 (function (UZ) {
   "use strict";
@@ -107,6 +107,17 @@
         items.push({ id: "title", kind: "text", texts: [T], bbox: { ...T.bbox } });
       }
       return { w: W, h: H, items, order: items.map(i => i.id), maxScale: 1 };
+    },
+  };
+
+  // ======== 自由描画（custom）========
+  // 区画いっぱいの描き場。中身は台本の custom の関数（draw で名前を指す）が毎コマ描く（view_svg.js）。
+  // 項目は 1 つ（draw）。出し方・薄くする・カメラは、ほかの部品と同じくこの項目と図に掛かる
+  FIG.custom = {
+    async layout(f, S, ctx) {
+      const W = ctx.area.w, H = ctx.area.h;
+      const items = [{ id: "draw", kind: "custom", fn: f.draw, x: 0, y: 0, w: W, h: H, bbox: { x: 0, y: 0, w: W, h: H } }];
+      return { w: W, h: H, items, order: ["draw"], maxScale: 1 };
     },
   };
 

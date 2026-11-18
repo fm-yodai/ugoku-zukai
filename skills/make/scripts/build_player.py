@@ -20,7 +20,7 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 PLAYER = os.path.join(os.path.dirname(HERE), "player")
-CORE = ["util.js", "figures.js", "figures2.js", "figures3.js", "validate.js", "slides.js", "engine.js", "check.js", "view_svg.js"]
+CORE = ["util.js", "figures.js", "figures2.js", "figures3.js", "validate.js", "slides.js", "geo.js", "engine.js", "check.js", "view_svg.js"]
 
 
 def load_theme(name):
@@ -37,10 +37,15 @@ def elk_js():
     return open(os.path.join(PLAYER, "vendor", "elk.bundled.js"), encoding="utf-8").read()
 
 
+def math_js():
+    """数式の組版（MathJax の束。tools/build_mathjax.sh で作る）"""
+    return open(os.path.join(PLAYER, "vendor", "mathjax-uz.js"), encoding="utf-8").read()
+
+
 def engine_scripts():
-    """ELK とプレーヤーのコード（CORE の順）を、<script> の中にそのまま置ける形で返す。
+    """ELK・数式の組版・プレーヤーのコード（CORE の順）を、<script> の中にそのまま置ける形で返す。
     再生ページとスライドコンテ（build_sheet.py）の両方が使う"""
-    return tuple(js.replace("</script", "<\\/script") for js in (elk_js(), core_js()))
+    return tuple(js.replace("</script", "<\\/script") for js in (elk_js(), math_js(), core_js()))
 
 
 def safe_json(obj):
@@ -135,8 +140,9 @@ def build(storyboard, theme, timeline=None, audio_b64=None, artifact=False, asse
     esc = title.replace("&", "&amp;").replace("<", "&lt;").replace('"', "&quot;")
     html = tpl.replace("__TITLE__", esc).replace("__FONT_LINK__", font_link)
     # 置換文字列にバックスラッシュが含まれても壊れないよう、関数で置き換える
-    elk, core = engine_scripts()
+    elk, math, core = engine_scripts()
     html = html.replace("/*UZ:ELK*/", "\n" + elk + "\n")
+    html = html.replace("/*UZ:MATH*/", "\n" + math + "\n")
     html = html.replace("/*UZ:CORE*/", "\n" + core + "\n")
     html = html.replace("/*UZ:DATA*/null", safe_json(data))
     if artifact:

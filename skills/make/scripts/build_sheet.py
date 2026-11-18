@@ -20,7 +20,7 @@
 - コマは SVG を data: の画像として埋め込む。外部のファイルは読まない。PNG（resvg）は要らない
 - 章ごとの動きの再生: 章の段の頭に「この章を再生」のボタンを置く。再生領域はページに 1 つ（<svg> 1 つと UZ.View 1 つ）で、
   押した章の頭へ移り、その章の場面の時間（最初の場面の start から最後の場面の end まで）だけを流す。音声は鳴らさず、字幕は出す。
-  プレーヤーと同じエンジン（ELK と CORE。build_player.py の engine_scripts）と、台本・テーマ・時刻表・画像を埋め込む。
+  プレーヤーと同じエンジン（ELK・数式・CORE。build_player.py の engine_scripts）と、台本・テーマ・時刻表・画像を埋め込む。
   時刻は --voice の timeline.json があればそれ（台本が変わっていれば止まる）、なければ文字数からの見積もり。
   コマの時刻の出どころ（frames.json の timed）と食い違えば止まる（声の時刻のコマに時刻表がない、見積もりのコマに時刻表を渡した）。
   テーマは、コマを書いたテーマ（frames.json の theme）。--theme か構成メモの basics.look.theme がそれと違えば止まる。
@@ -384,9 +384,9 @@ def play_data(storyboard, sb_path, theme, timeline=None):
 
 
 def _play_scripts(data):
-    """再生領域を動かすスクリプト（ELK・CORE・データ・再生の順）"""
-    elk, core = build_player.engine_scripts()
-    return (f"<script>\n{elk}\n</script>\n<script>\n{core}\n</script>\n"
+    """再生領域を動かすスクリプト（ELK・数式・CORE・データ・再生の順）"""
+    elk, math, core = build_player.engine_scripts()
+    return (f"<script>\n{elk}\n</script>\n<script>\n{math}\n</script>\n<script>\n{core}\n</script>\n"
             f'<script type="application/json" id="us-data">{build_player.safe_json(data)}</script>\n'
             f"<script>{PLAY_JS}</script>")
 
