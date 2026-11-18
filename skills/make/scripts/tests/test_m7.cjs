@@ -266,8 +266,8 @@ const tests = {
     for (const [k, s] of Object.entries(fr.st)) assert.ok(!s.rect && !s.pts, `${k} に Morph の途中の形がある`);
   },
   // ---- カメラ（zoom・pan）----
-  async zoom_scales_body_only() {
-    const M = await build(camDeck([{ id: "l1", text: "{a}出して{b}寄ります。", do: [{ show: "g1", at: "a" }, { zoom: "api", at: "b" }] }]));
+  async zoom_scales_body_only() {   // pad 150 なら、api を中央に写しても隣の箱は丸ごと入る（端で切れないので、中央のまま）
+    const M = await build(camDeck([{ id: "l1", text: "{a}出して{b}寄ります。", do: [{ show: "g1", at: "a" }, { zoom: "api", pad: 150, at: "b" }] }]));
     assert.deepStrictEqual(M.errors, []);
     const z = M.acts.find(a => a.verb === "zoom");
     assert.ok(z && z.run === 0 && z.from.s === 1, `zoom の act: ${JSON.stringify(z && { run: z.run, from: z.from })}`);
@@ -296,19 +296,58 @@ const tests = {
     assert.deepStrictEqual({ s: f3.camera.s, tx: f3.camera.tx, ty: f3.camera.ty }, { s: 1, tx: 0, ty: 0 });
     assert.deepStrictEqual(f3.figs.g1.place, M.scenes[0].place.g1);
   },
-  async zoom_array_frames_union() {   // zoom は id の配列も書ける。外接矩形の中心が body の中心に来る
-    const M = await build(camDeck([{ id: "l1", text: "{a}出して{b}寄ります。", do: [{ show: "g1", at: "a" }, { zoom: ["api", "db"], at: "b" }] }]));
+  async zoom_array_frames_union() {   // zoom は id の配列も書ける。外接矩形の中心が body の中心に来る（間の api は外接矩形の中）
+    const M = await build(camDeck([{ id: "l1", text: "{a}出して{b}寄ります。", do: [{ show: "g1", at: "a" }, { zoom: ["app", "db"], at: "b" }] }]));
     assert.deepStrictEqual(M.errors, []);
     const z = M.acts.find(a => a.verb === "zoom"), fr = UZ.frame(M, z.end + 0.01);
     assert.ok(fr.camera.s > 1, `倍率が 1 のまま（${fr.camera.s}）`);
-    const B = M.scenes[0].body, pl = fr.figs.g1.place, a = scr(M.figs.g1.items.api.bbox, pl), d = scr(M.figs.g1.items.db.bbox, pl);
+    const B = M.scenes[0].body, pl = fr.figs.g1.place, a = scr(M.figs.g1.items.app.bbox, pl), d = scr(M.figs.g1.items.db.bbox, pl);
     const x0 = Math.min(a.x, d.x), x1 = Math.max(a.x + a.w, d.x + d.w), y0 = Math.min(a.y, d.y), y1 = Math.max(a.y + a.h, d.y + d.h);
-    assert.ok(x0 >= B.x - 1 && x1 <= B.x + B.w + 1 && y0 >= B.y - 1 && y1 <= B.y + B.h + 1, "api と db が body に収まらない");
-    assert.ok(Math.abs((x0 + x1) / 2 - (B.x + B.w / 2)) < 5, `api と db の中心が body の中心に来ない（${(x0 + x1) / 2}）`);
+    assert.ok(x0 >= B.x - 1 && x1 <= B.x + B.w + 1 && y0 >= B.y - 1 && y1 <= B.y + B.h + 1, "app と db が body に収まらない");
+    assert.ok(Math.abs((x0 + x1) / 2 - (B.x + B.w / 2)) < 5, `app と db の中心が body の中心に来ない（${(x0 + x1) / 2}）`);
     const bad = async v => build(camDeck([{ id: "l1", text: "{a}寄ります。", do: [{ show: "g1" }, { zoom: v, at: "a" }] }]));
     hasErr(await bad([]), /zoom の対象は文字列/);
     hasErr(await bad(["api", "all"]), /zoom の対象は文字列/);
     hasErr(await bad(["api", "nai"]), /nai/);
+  },
+  async zoom_leaves_no_half_cut_box() {   // 寄った後、見えている箱・枠・テキストは body に丸ごと入るか、丸ごと外れる（UX の評価の形）
+    const P1 = { type: "graph", direction: "right", nodes: [{ id: "teian", label: "提案", sub: "範囲と費用を決める", role: "process" }, { id: "yoken", label: "要件定義", role: "process" }, { id: "sekkei", label: "設計", sub: "画面を考える", role: "process" }, { id: "kaihatsu", label: "開発・テスト", role: "process" }, { id: "nohin", label: "納品", role: "process" }],
+      edges: [{ from: "teian", to: "yoken" }, { from: "yoken", to: "sekkei" }, { from: "sekkei", to: "kaihatsu" }, { from: "kaihatsu", to: "nohin" }] };
+    const P2 = { ...P1, nodes: [{ id: "mae", label: "提案の前", sub: "良くする体験を決める", role: "accent" }, ...P1.nodes], edges: [{ from: "mae", to: "teian", label: "狙いを渡す" }, ...P1.edges] };
+    const TX = { id: "decide", type: "text", area: { col: [2, 11], row: [4, 6] }, blocks: [{ id: "dh", kind: "heading", text: "提案の前に決めること" }, { id: "db", kind: "bullets", items: ["誰が使うのか", "どんな場面で使うのか"] }] };
+    const zoomLine = { id: "lz", text: "{a}この段階で、誰のどんな体験を良くするのかを決めます。", do: [{ at: "a", zoom: ["mae", "teian"] }] };
+    // 1) 1 枚で全部を出してから寄る。2) UX と同じく、前のスライドから Morph して寄る
+    const decks = [
+      deck4({ a: { title: "A", parts: [{ figure: "proc2", area: { col: [1, 12], row: [1, 3] } }, TX] } },
+        [SC("s1", "a", [{ id: "l1", text: "{a}流れを出します。", do: [{ show: "proc2", at: "a" }, { show: "dh" }] }, zoomLine])], { proc2: P2 }),
+      deck4({ a: { title: "A", parts: [{ figure: "proc1", area: { col: [1, 12], row: [1, 3] } }] }, b: { title: "B", parts: [{ figure: "proc2", morph: "proc1", area: { col: [1, 12], row: [1, 3] } }, TX] } },
+        [SC("s1", "a", [{ id: "l1", text: "{a}流れを出します。", do: [{ show: "proc1", at: "a" }] }]),
+         SC("s2", "b", [{ id: "l2", text: "そこで、{a}段階を置きます。", do: [{ at: "a", show: "mae", draw: true }] }, zoomLine])], { proc1: P1, proc2: P2 }),
+    ];
+    for (const sb of decks) {
+      const M = await build(sb);
+      assert.deepStrictEqual(M.errors, []);
+      const z = M.acts.find(a => a.verb === "zoom"), fr = UZ.frame(M, z.end + 0.01), B = M.scenes[M.scenes.length - 1].body;
+      assert.ok(fr.camera.s > 1.05, `寄っていない（倍率 ${fr.camera.s}）`);
+      const cut = [];
+      for (const [fid, F] of Object.entries(M.figs)) {
+        const ff = fr.figs[fid];
+        if (!ff || ff.opacity < 0.5 || !ff.place) continue;
+        for (const it of Object.values(F.items)) {
+          if (!["box", "frame", "text"].includes(it.kind) || !it.bbox) continue;
+          const s = fr.st[it.key];
+          if (!s || s.show < 0.5) continue;
+          const r = scr(it.bbox, ff.place);
+          const inside = r.x >= B.x - 1 && r.y >= B.y - 1 && r.x + r.w <= B.x + B.w + 1 && r.y + r.h <= B.y + B.h + 1;
+          const outside = r.x + r.w <= B.x + 1 || r.y + r.h <= B.y + 1 || r.x >= B.x + B.w - 1 || r.y >= B.y + B.h - 1;
+          if (!inside && !outside) cut.push(`${fid}/${it.id} [${Math.round(r.x)}, ${Math.round(r.x + r.w)}]`);
+        }
+      }
+      assert.deepStrictEqual(cut, [], `body（${B.x}〜${B.x + B.w}）の端で切れる: ${cut.join("、")}`);
+      // 寄せ先は丸ごと写る
+      const pl = fr.figs.proc2.place;
+      for (const id of ["mae", "teian"]) { const r = scr(M.figs.proc2.items[id].bbox, pl); assert.ok(r.x >= B.x - 1 && r.x + r.w <= B.x + B.w + 1, `${id} が写らない`); }
+    }
   },
   async camera_resets_on_slide_change_same_fig() {
     const LIST = { type: "list", items: [{ id: "x", text: "あ" }] };
@@ -385,8 +424,8 @@ const tests = {
     // 寄せて body の外に出た要素は、clip されるので「はみ出し」にしない
     M = await one([{ id: "l1", text: "{a}出して{b}寄ります。", do: [{ show: "g1", at: "a" }, { zoom: "api", at: "b" }] }]);
     const fr = UZ.frame(M, M.acts.find(a => a.verb === "zoom").end + 0.01);
-    const db = scr(M.figs.g1.items.db.bbox, fr.figs.g1.place);
-    assert.ok(db.x + db.w > fr.camera.clip.x + fr.camera.clip.w + 20, "検査の前提: db が body の外にはみ出していない");
+    const app = scr(M.figs.g1.items.app.bbox, fr.figs.g1.place);
+    assert.ok(app.x + app.w <= fr.camera.clip.x + 1 && app.x < fr.camera.clip.x - 20, "検査の前提: app が body の外に出ていない");
     const iss = UZ.checkLayout(M);
     assert.ok(!iss.some(i => i.kind === "はみ出し" || i.kind === "カメラ"), JSON.stringify(iss));
     assert.ok(!(M.warnings || []).some(w => /カメラ|倍率|zoom 先/.test(w)), JSON.stringify(M.warnings));

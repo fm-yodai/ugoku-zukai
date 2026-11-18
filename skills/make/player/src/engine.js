@@ -510,6 +510,65 @@
       return { s, ox, oy };
     };
     for (const sc of scenes) sc.place = Object.fromEntries(sc.figs.map((fid, i) => [fid, place(fid, sc.areas[i])]));
+    // 時刻 T の場面 sc で見えている箱・グループの枠・テキストの部品の、画面上の矩形（カメラの前）。
+    // show・hide をたどる。Morph の v2 の要素は、同じ id の v1 の要素が出ていれば出ているとみなす
+    const visibleRects = (sc, T) => {
+      const vis = new Set();
+      for (const a of acts.filter(x => (x.verb === "show" || x.verb === "hide") && x.start <= T).sort((x, y) => x.start - y.start)) {
+        for (const k of a.keys) { if (a.verb === "show") vis.add(k); else vis.delete(k); }
+      }
+      const si = scenes.indexOf(sc), out = [];
+      for (const fid of sc.figs) {
+        const F = figs[fid], pl = sc.place[fid], mo = morphs.find(m => m.si === si && m.to === fid);
+        for (const it of Object.values(F.items)) {
+          if (!["box", "frame", "text"].includes(it.kind) || !it.bbox) continue;
+          if (!vis.has(it.key) && !(mo && vis.has(`${mo.from}/${it.id}`))) continue;
+          const b = it.bbox;
+          out.push({ x: pl.ox + b.x * pl.s, y: pl.oy + b.y * pl.s, w: b.w * pl.s, h: b.h * pl.s });
+        }
+      }
+      return out;
+    };
+    // 寄せ先 R を写すカメラのうち、見えている部品が body の端で一部だけ切れないものを探す。
+    // 倍率は s0 から下げていき（pan は s0 のまま）、各倍率で、写す範囲の位置を中央（s0 での位置）に近い順に試す。
+    // R に重なる部品（寄せ先と、それを囲む枠）は数えない。見つからなければ null（今のまま）
+    function fitCamera(sc, R, s0, fixed, T, pad) {
+      const B = sc.body, tol = 1;
+      const rects = visibleRects(sc, T).filter(r => !(r.x < R.x + R.w - tol && R.x < r.x + r.w - tol && r.y < R.y + R.h - tol && R.y < r.y + r.h - tol));
+      if (!rects.length) return null;
+      // 写す範囲（カメラの前の画面座標）: W = { x: (B.x - tx) / s, y: (B.y - ty) / s, w: B.w / s, h: B.h / s }
+      const ideal = s => ({ x: clamp(R.x + R.w / 2 - B.w / s / 2, B.x, B.x + B.w - B.w / s), y: clamp(R.y + R.h / 2 - B.h / s / 2, B.y, B.y + B.h - B.h / s) });
+      const c0 = ideal(s0), cx0 = c0.x + B.w / s0 / 2, cy0 = c0.y + B.h / s0 / 2;
+      const cut = (wx, wy, ww, wh, e) => rects.some(r => {
+        const over = r.x < wx + ww - e && wx < r.x + r.w - e && r.y < wy + wh - e && wy < r.y + r.h - e;
+        const inside = r.x >= wx - e && r.y >= wy - e && r.x + r.w <= wx + ww + e && r.y + r.h <= wy + wh + e;
+        return over && !inside;
+      });
+      const axis = (lo, hi, id, size, list) => {
+        const c = new Set([clamp(id, lo, hi), lo, hi]);
+        for (const [a, b] of list) for (const v of [a, b - size, b, a - size]) if (v >= lo && v <= hi) c.add(v);
+        return [...c];
+      };
+      for (let s = s0; s >= 1; s = s > 1.0001 ? Math.max(1, s * 0.97) : 0) {
+        const ww = B.w / s, wh = B.h / s, p = Math.min(pad, 16) / s, e = tol / s;
+        // R を余白 p 付きで含む位置。R が body の端にあれば、その側の余白は body の端まで
+        const lox = Math.max(B.x, Math.min(B.x + B.w - ww, R.x + R.w + p - ww)), hix = Math.min(B.x + B.w - ww, Math.max(B.x, R.x - p));
+        const loy = Math.max(B.y, Math.min(B.y + B.h - wh, R.y + R.h + p - wh)), hiy = Math.min(B.y + B.h - wh, Math.max(B.y, R.y - p));
+        if (lox > hix + 1e-6 || loy > hiy + 1e-6) { if (fixed) return null; continue; }
+        const id = ideal(s);
+        const xs = axis(lox, Math.max(lox, hix), id.x, ww, rects.map(r => [r.x, r.x + r.w]));
+        const ys = axis(loy, Math.max(loy, hiy), id.y, wh, rects.map(r => [r.y, r.y + r.h]));
+        let best = null, bd = Infinity;
+        for (const wx of xs) for (const wy of ys) {
+          if (cut(wx, wy, ww, wh, e)) continue;
+          const d = (wx + ww / 2 - cx0) ** 2 + (wy + wh / 2 - cy0) ** 2;
+          if (d < bd) { bd = d; best = { s, tx: B.x - s * wx, ty: B.y - s * wy }; }
+        }
+        if (best) return best;
+        if (fixed) return null;
+      }
+      return null;
+    }
     // ---- カメラ: run ごとに状態を追い、zoom・pan の from・to を決める。場面の終わりのカメラは sc.camEnd ----
     {
       const CA = UZ.CAMERA;
@@ -546,6 +605,9 @@
           if (R && s > 1) {
             tx = clamp(B.x + B.w / 2 - s * (R.x + R.w / 2), (B.x + B.w) * (1 - s), B.x * (1 - s));
             ty = clamp(B.y + B.h / 2 - s * (R.y + R.h / 2), (B.y + B.h) * (1 - s), B.y * (1 - s));
+            // 隣の箱が body の端で半分だけ写らないように、写す範囲をずらすか、倍率を下げる
+            const fit = fitCamera(sc, R, s, a.verb === "pan", a.end, a.a.pad ?? CA.pad);
+            if (fit) ({ s, tx, ty } = fit);
           }
           a.to = { s, tx, ty };
           a.target = R;
