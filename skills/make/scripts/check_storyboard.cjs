@@ -32,6 +32,17 @@ if (args.includes("--outline")) {
   catch (e) { if (e.code !== "ASSET") throw e; console.log(`${file}\n  誤り: ${e.message}`); process.exit(1); }
   const M = await UZ.build(sb, th, tl, { assets });
   const issues = M.errors.length ? [] : UZ.checkLayout(M);
+  if (!M.errors.length) {   // custom の部品は、見えている時刻で描いて、例外・TeX の誤り・NaN・はみ出しを調べる
+    globalThis.document = require("./svg_dom.cjs").makeDocument();
+    const el = (tag, attrs, parent) => {
+      const e = document.createElementNS("http://www.w3.org/2000/svg", tag);
+      if (attrs) for (const k in attrs) if (attrs[k] != null) e.setAttribute(k, attrs[k]);
+      if (parent) parent.appendChild(e);
+      return e;
+    };
+    const cr = UZ.checkCustoms(M, el);
+    M.errors = M.errors.concat(cr.errors); M.warnings = M.warnings.concat(cr.warnings);
+  }
   const out = { file, theme: th.name, errors: M.errors, warnings: M.warnings, layout: issues, duration: M.duration ? +M.duration.toFixed(1) : null };
   if (outline && !M.errors.length) {   // 台本の形に誤りがあるときは突き合わせない（時刻を計算できていない）
     const r = checkAgainstOutline(sb, M, outline, { complete: args.includes("--complete") });

@@ -11,7 +11,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 MAKE = os.path.join(ROOT, "skills", "make")
 PROBE = os.path.join(ROOT, "tools", "probe", "uz-voice-check")
 FILES = ["scripts/setup_voice.py", "scripts/tts.py", "scripts/build_player.py", "scripts/check_storyboard.cjs", "scripts/uz_node.cjs",
-         "scripts/uz_assets.py", "scripts/assets.cjs", "scripts/outline_check.cjs",
+         "scripts/uz_assets.py", "scripts/assets.cjs", "scripts/outline_check.cjs", "scripts/svg_dom.cjs",
          "assets/voicevox_user_dict.json", "examples/proposal-analysis.json", "player/template.html"]
 DIRS = ["player/src", "player/themes", "player/vendor"]
 

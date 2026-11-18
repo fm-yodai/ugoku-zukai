@@ -355,6 +355,52 @@ const tests = {
     assert.ok(n >= 1, "console.error に出ていない");
     assert.strictEqual(circleCx(str).length, 0);
   },
+  // ---- custom の描画検査（Task 5） ----
+  async check_exception_is_error() {
+    const M = await build(customDeck(CPART, null, { custom: { dot: "({ g, el }) => { throw new Error('ぼん'); }" } }));
+    const r = UZ.checkCustoms(M, fakeEl);
+    assert.ok(r.errors.some(e => /^行 l1: 部品「c1」: .*ぼん/.test(e)), JSON.stringify(r));
+  },
+  async check_tex_error_is_error() {
+    const M = await build(customDeck(CPART, null, { custom: { dot: "({ g, geo }) => geo.tex(g, '\\\\frac{', { x: 10, y: 10 })" } }));
+    const r = UZ.checkCustoms(M, fakeEl);
+    assert.ok(r.errors.some(e => /^行 l1: 部品「c1」: TeX/.test(e)), JSON.stringify(r));
+  },
+  async check_nan_warns() {
+    const M = await build(customDeck(CPART, null, { custom: { dot: "({ g, v, el, h }) => el('circle', { cx: v.aa * 3, cy: h / 2, r: 6 }, g)" } }));
+    const r = UZ.checkCustoms(M, fakeEl);
+    assert.ok(r.warnings.some(w => /^行 l1: 部品「c1」/.test(w) && /NaN/.test(w) && /circle/.test(w) && /cx/.test(w)), JSON.stringify(r));
+  },
+  async check_overflow_warns() {
+    const mk = async dx => {
+      const M = await build(customDeck(CPART, null, { custom: { dot: `({ g, el, w, h }) => el('circle', { cx: w + ${dx}, cy: h / 2, r: 0.5 }, g)` } }));
+      return UZ.checkCustoms(M, fakeEl);
+    };
+    const far = await mk(50), near = await mk(4);
+    assert.ok(far.warnings.some(w => /はみ出す/.test(w)), JSON.stringify(far));
+    assert.deepStrictEqual(near, { errors: [], warnings: [] });
+  },
+  async check_clean_custom_passes() {
+    const src = "({ g, el, geo, w, h, v }) => { const ax = geo.axes(g, { x: [-3, 3], y: [-2, 2], box: { x: 40, y: 10, w: w - 60, h: h - 40 } }); geo.plot(g, ax, x => Math.sin(x) * v.a / 4); }";
+    const M = await build(customDeck(CPART, null, { custom: { dot: src } }));
+    assert.deepStrictEqual(M.errors, []);
+    const r = UZ.checkCustoms(M, fakeEl);
+    assert.deepStrictEqual(r, { errors: [], warnings: [] }, JSON.stringify(r));
+  },
+  async check_centered_tex_does_not_warn() {
+    const src = "({ g, geo, w, h }) => { const r = geo.tex(g, '\\\\int_0^1 x^2\\\\,dx = \\\\frac{1}{3}', { x: w / 2, y: h / 2, size: 32, anchor: 'middle' }); }";
+    const M = await build(customDeck(CPART, null, { custom: { dot: src } }));
+    const r = UZ.checkCustoms(M, fakeEl);
+    assert.deepStrictEqual(r, { errors: [], warnings: [] });
+  },
+  async check_cli_json_reports() {
+    const fs = require("fs"), os = require("os"), path = require("path"), cp = require("child_process");
+    const d = fs.mkdtempSync(path.join(os.tmpdir(), "m8chk-")), f = path.join(d, "sb.json");
+    fs.writeFileSync(f, JSON.stringify(customDeck(CPART, null, { custom: { dot: "({ g, el }) => { throw new Error('ぼん'); }" } })));
+    const r = cp.spawnSync("node", [path.join(__dirname, "../check_storyboard.cjs"), f, "--json"], { encoding: "utf8" });
+    assert.strictEqual(r.status, 1, r.stdout + r.stderr);
+    assert.ok(JSON.parse(r.stdout).errors.some(e => /ぼん/.test(e)));
+  },
 };
 
 (async () => {
