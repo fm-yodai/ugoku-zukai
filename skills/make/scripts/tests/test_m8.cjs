@@ -3,7 +3,7 @@
 // タスクが進むごとに、ここに検査を足す
 "use strict";
 const assert = require("assert");
-const { load, theme } = require("../uz_node.cjs");
+const { load, theme, guardedCall } = require("../uz_node.cjs");
 const UZ = load();
 const TH = theme("koo");
 
@@ -448,6 +448,59 @@ const tests = {
     const r = cp.spawnSync("node", [path.join(__dirname, "../check_storyboard.cjs"), f, "--json"], { encoding: "utf8" });
     assert.strictEqual(r.status, 1, r.stdout + r.stderr);
     assert.ok(JSON.parse(r.stdout).errors.some(e => /ぼん/.test(e)));
+  },
+  // ---- 止まらない関数と、分割の数の上限（最終レビューの直し） ----
+  async check_timeout_is_error() {   // 止まらない関数は、行と部品を挙げた誤りになり、その部品はもう呼ばない
+    const M = await build(customDeck(CPART, null, { custom: { dot: "({ g }) => { while (true) {} }" } }));
+    const t0 = Date.now(), r = UZ.checkCustoms(M, fakeEl, { call: guardedCall(50) });
+    const hit = r.errors.filter(e => /^行 l1: 部品「c1」: 関数が 0.05 秒で終わらない/.test(e));
+    assert.strictEqual(hit.length, 1, JSON.stringify(r));
+    assert.ok(Date.now() - t0 < 2000, "時間切れの部品を何度も呼んでいる");
+  },
+  async check_slow_warns() {   // 1 回の描画の平均が slowMs を超えると警告
+    const M = await build(customDeck(CPART, null, { custom: { dot: "({ g }) => { const e = Date.now() + 3; while (Date.now() < e) {} }" } }));
+    const r = UZ.checkCustoms(M, fakeEl, { call: guardedCall(500), slowMs: 1 });
+    assert.deepStrictEqual(r.errors, []);
+    assert.ok(r.warnings.some(w => /^部品「c1」: 1 回の描画に平均 \d+ms かかる/.test(w)), JSON.stringify(r));
+  },
+  async check_dedupes_repeats() {   // 同じ部品の同じ誤り・はみ出しは、行と時刻をまたいで 1 件にまとめる
+    const lines = [{ id: "l1", text: "{a}出して{b}動かします。", do: [{ show: "c1", at: "a" }, { set: "a", to: 8, at: "b", dur: 1 }] },
+      { id: "l2", text: "{a}もう一度{b}動かします。", do: [{ set: "a", to: 3, at: "b", dur: 1 }] }];
+    const thr = await build(customDeck(CPART, lines, { custom: { dot: "({ g }) => { throw new Error('ぼん'); }" } }));
+    const r1 = UZ.checkCustoms(thr, fakeEl);
+    assert.strictEqual(r1.errors.length, 1, JSON.stringify(r1));
+    assert.match(r1.errors[0], /^行 l1: 部品「c1」: .*ぼん.*（ほか 1 行でも）$/);
+    const spill = await build(customDeck(CPART, lines, { custom: { dot: "({ g, el, v, w, h }) => el('circle', { cx: w + 20 * v.a, cy: h / 2, r: 1 }, g)" } }));
+    const r2 = UZ.checkCustoms(spill, fakeEl);
+    assert.strictEqual(r2.warnings.filter(w => /はみ出す/.test(w)).length, 1, JSON.stringify(r2));
+  },
+  async geo_caps_sample_counts() {   // plot の samples と riemann の n は 2000 で頭打ち（大きな値でもすぐ終わる）
+    const { geo, g } = newGeo();
+    const Ax = geo.axes(g, { x: [0, 1], y: [0, 1], box: { x: 0, y: 0, w: 400, h: 300 } });
+    const t0 = Date.now();
+    const p = geo.plot(g, Ax, x => x * 0.5, { samples: 3e7 });
+    const rs = geo.riemann(g, Ax, x => x * 0.5, 0, 1, 1e7);
+    assert.ok(Date.now() - t0 < 2000, "上限が効いていない");
+    const pts = (ser(p).match(/[ML]/g) || []).length;
+    assert.ok(pts > 1000 && pts <= 2002, `plot の点の数: ${pts}`);
+    assert.strictEqual(rs.childNodes.length, 2000);
+  },
+  async custom_value_must_be_string() {   // custom の値がオブジェクトなら、読み込みの例外より先に分かる誤りを出す
+    const M = await build(customDeck(CPART, null, { custom: { dot: { body: "x" } } }));
+    hasErr(M, /custom「dot」の値が文字列でない/);
+  },
+  async tools_stop_on_endless_custom() {   // check_storyboard.cjs は誤りで、frames.cjs は誤りの文で止まる（固まらない）
+    const fs = require("fs"), os = require("os"), path = require("path"), cp = require("child_process");
+    const d = fs.mkdtempSync(path.join(os.tmpdir(), "m8hang-")), f = path.join(d, "sb.json");
+    fs.writeFileSync(f, JSON.stringify(customDeck(CPART, null, { custom: { dot: "({ g }) => { while (true) {} }" } })));
+    const env = { ...process.env, UZ_CUSTOM_TIMEOUT_MS: "100" }, o = { encoding: "utf8", env, timeout: 30000 };
+    const c = cp.spawnSync("node", [path.join(__dirname, "../check_storyboard.cjs"), f], o);
+    assert.strictEqual(c.status, 1, c.stdout + c.stderr);
+    assert.match(c.stdout, /誤り: 行 l1: 部品「c1」: 関数が 0.1 秒で終わらない/);
+    const fr = cp.spawnSync("node", [path.join(__dirname, "../frames.cjs"), f, "-o", path.join(d, "fr")], o);
+    assert.strictEqual(fr.status, 1, fr.stdout + fr.stderr);
+    assert.match(fr.stderr, /コマを描くのが 0.5 秒で終わらない/);
+    fs.rmSync(d, { recursive: true, force: true });
   },
 };
 

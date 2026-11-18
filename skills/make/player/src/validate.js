@@ -253,6 +253,8 @@
       if (f.type === "custom") {
         if (f.draw != null && (typeof f.draw !== "string" || !sb.custom || typeof sb.custom !== "object" || !Object.prototype.hasOwnProperty.call(sb.custom, f.draw)))
           E(`${where}: draw「${f.draw}」が台本の custom にない（台本の最上位の custom に、関数を文字列で書く）`);
+        else if (f.draw != null && typeof sb.custom[f.draw] !== "string")
+          E(`${where}: custom「${f.draw}」の値が文字列でない（関数は "({ g, v, geo, w, h }) => { … }" のように文字列で書く）`);
         addId("draw", "描き場");
       }
       if (f.type === "canvas") {

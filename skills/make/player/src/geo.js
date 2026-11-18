@@ -141,9 +141,11 @@
     };
 
     // ---- グラフ ----
+    // 分割の数の上限（plot の samples、riemann の n）。値に連動させた数が大きくなりすぎても、1 コマの描画を重くしない
+    const MAX_SAMPLES = 2000;
     // f を from〜to（の upto の割合まで）で描く。値が NaN・Infinity・枠外の区間は線を切り、枠をまたぐところは枠の上で止める
     geo.plot = function (g, Ax, f, o = {}) {
-      const a = o.from ?? Ax.x[0], b = o.to ?? Ax.x[1], N = Math.max(2, Math.round(o.samples || 200)), up = clamp(o.upto ?? 1);
+      const a = o.from ?? Ax.x[0], b = o.to ?? Ax.x[1], N = Math.min(MAX_SAMPLES, Math.max(2, Math.round(o.samples) || 200)), up = clamp(o.upto ?? 1);
       const out = el("g", { fill: "none", stroke: col(o.color, "accent"), "stroke-width": o.width || 3, "stroke-linejoin": "round", "stroke-linecap": "round" }, g);
       if (up <= 0) return out;
       const lo = Math.min(...Ax.y), hi = Math.max(...Ax.y), inside = y => Number.isFinite(y) && y >= lo && y <= hi;
@@ -244,7 +246,7 @@
       return el("path", { d: ptsD(pts) + "Z", fill: col(o.color, "accent"), "fill-opacity": o.opacity ?? 0.35, stroke: "none" }, g);
     };
     geo.riemann = function (g, Ax, f, a, b, n, o = {}) {
-      const N = Math.max(1, Math.round(n)), dx = (b - a) / N, base = clampY(Ax, 0), c = col(o.color, "accent");
+      const N = Math.min(MAX_SAMPLES, Math.max(1, Math.round(n))), dx = (b - a) / N, base = clampY(Ax, 0), c = col(o.color, "accent");
       const at = o.rule === "mid" ? 0.5 : o.rule === "right" ? 1 : 0;
       const out = el("g", { fill: c, "fill-opacity": o.opacity ?? 0.4, stroke: c, "stroke-width": N > 40 ? 0.8 : 1.5, "stroke-opacity": 0.9 }, g);
       for (let i = 0; i < N; i++) {

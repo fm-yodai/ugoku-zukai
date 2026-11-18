@@ -33,8 +33,11 @@
 - 関数は台本の最上位の `custom` に、名前を付けて**文字列**で書く。JSON の文字列なので、`\` は `\\`、`"` は `\"` と書く。TeX は `String.raw` で囲むと、JS の中で `\` を重ねずに済む（JSON に書くときは、それでも `\\` になる）
 - スライドの完成形のコマは、そのスライドを使う最後の場面の終わりの値で描かれる。値を動かし終えた姿が、資料としての 1 枚になる
 - 同じ部品を続くスライドで使い続けるなら、部品を台本の最上位の `figures` に宣言し、各スライドから `{ "figure": "<id>" }` で指す（スライドの中で宣言した部品の id は、ほかのスライドで繰り返せない）
+- 絵は引数だけから作る。`Math.random`・`Date`、`el` で作る以外の DOM の API（`getBBox`・`classList` など）、呼び出しをまたいで持つ状態を使うと、シークで絵が変わり、node の検査・コマとブラウザの再生で絵が食い違う
+- 部品の関数（引数 `{ g, v, t, el, S, UZ, geo, w, h }`）と、前からある `custom` の動作（`storyboard.md`。引数 `{ g, p, t, el, S, UZ, area }`）は引数が違う。同じ名前の関数を両方から指さない
+- 関数は 1 コマごとに呼ばれるので、軽く保つ。止まらない繰り返しは、ブラウザでは再生ページを固まらせる
 
-検査（`check_storyboard.cjs`）は、各行の終わりと各 `set` の途中・終わりのコマで関数を実際に描く。誤り: 関数が例外を投げる、TeX の誤り、`draw` の名前が `custom` にない、`set` の名前が `values` にない。警告: 属性に `NaN`・`Infinity` が入る、描いたものが区画からはみ出す。
+検査（`check_storyboard.cjs`）は、各行の終わりと各 `set` の途中・終わりのコマで関数を実際に描く。誤り: 関数が例外を投げる、1 回の描画が 1 秒で終わらない、TeX の誤り、`draw` の名前が `custom` にない、`set` の名前が `values` にない。警告: 属性に `NaN`・`Infinity` が入る、描いたものが区画からはみ出す、1 回の描画が平均 30ms を超える。同じ部品の同じ知らせは、最初の行に 1 件だけ出す。コマ（`frames.cjs`）も、1 コマが 5 秒で描けなければ誤りで止まる。
 
 ## 2. 道具の一覧
 
@@ -45,7 +48,7 @@
 | 道具 | 意味 |
 |---|---|
 | `geo.axes(g, { box, x, y, grid?, ticks?, labels?, show? })` | 座標軸。`box` は区画の中の `{x, y, w, h}`（px）、`x`・`y` は数の範囲 `[最小, 最大]`。`grid: true` で格子、`ticks: { x: 1, y: 0.5 }` で目盛りの間隔（省くと 8 つほどに割る）、`labels: { x: "$x$", y: "万円" }` で軸の名前、`show`（0〜1）で軸が伸びて現れる途中を描く。戻り値 `Ax` は `toPx([x, y])`（数 → px）、`toNum([px, py])`（px → 数）、`box`、`x`、`y`、`g` を持つ |
-| `geo.plot(g, Ax, f, { color?, width?, from?, to?, upto?, samples? })` | `y = f(x)` の曲線（`width` の既定 3、`samples` は分割の数で既定 200）。`from`〜`to`（省くと x の範囲全体）を描き、`upto`（0〜1）でその途中まで描く。範囲の外と `NaN` の所は線を切る |
+| `geo.plot(g, Ax, f, { color?, width?, from?, to?, upto?, samples? })` | `y = f(x)` の曲線（`width` の既定 3、`samples` は分割の数で既定 200、上限 2000）。`from`〜`to`（省くと x の範囲全体）を描き、`upto`（0〜1）でその途中まで描く。範囲の外と `NaN` の所は線を切る |
 
 ### 点と文字
 
@@ -63,7 +66,7 @@
 | `geo.tangent(g, Ax, f, x0, { df?, len?, color?, width?, dash? })` | `x0` での接線（`dash: true` で破線）。`df` で傾きを渡せる（省くと数値微分）。`len` は x の単位で測った線の長さ（傾きによらず画面の上で同じ長さ） |
 | `geo.secant(g, Ax, f, x0, x1, { extend?, color?, width?, dash? })` | 2 点を通る割線。両側へ 2 点の間の `extend`（既定 0.25）ずつ延ばす |
 | `geo.area(g, Ax, f, a, b, { color?, opacity? })` | `a`〜`b` で曲線と x 軸に挟まれた面を塗る（`opacity` の既定 0.35） |
-| `geo.riemann(g, Ax, f, a, b, n, { rule?, color?, opacity? })` | `n` 本の長方形（リーマン和。`n` は丸める）。`rule` は `left`（既定）・`mid`・`right`。`opacity` は塗りの濃さ（既定 0.4） |
+| `geo.riemann(g, Ax, f, a, b, n, { rule?, color?, opacity? })` | `n` 本の長方形（リーマン和。`n` は丸め、上限 2000）。`rule` は `left`（既定）・`mid`・`right`。`opacity` は塗りの濃さ（既定 0.4） |
 
 ### ベクトルと図形
 

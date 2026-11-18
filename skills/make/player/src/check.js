@@ -173,9 +173,19 @@
 
   // custom の部品を、見えている時刻で描いて検査する。時刻は、部品が見えている各行の終わり・各 set の終わり・set の 1/3 と 2/3。
   // el は svg 要素を作る関数（view_svg.js と同じ形）。返す errors は誤り、warnings は警告
-  UZ.checkCustoms = function (M, el) {
-    const errors = [], warnings = [], seen = new Set();
-    const note = (list, msg) => { if (seen.has(msg)) return; seen.add(msg); list.push(msg); };
+  // opts.call(fn, args) = 関数を呼ぶ口（node の道具は、ここで時間の上限を掛ける。打ち切ったら e.uzTimeout = 上限のミリ秒の例外を投げる）
+  // opts.slowMs = 1 回の描画の平均がこれを超えたら警告（毎コマ呼ばれるので、再生が引っかかる。既定 30）
+  // 同じ部品の同じ知らせは 1 件にまとめ、最初の行と、ほかに出た行の数を添える
+  UZ.checkCustoms = function (M, el, opts = {}) {
+    const errors = [], warnings = [], found = new Map();
+    const call = opts.call || ((fn, a) => fn(a)), slowMs = opts.slowMs ?? 30;
+    const now = () => (globalThis.performance || Date).now();
+    // kind が同じ知らせは 1 件にまとめる（はみ出しは座標が時刻ごとに違うので、kind で束ねる）
+    const note = (list, lineId, partId, body, kind = body) => {
+      const key = (list === errors ? "e" : "w") + "\0" + partId + "\0" + kind, f = found.get(key);
+      if (f) { f.lines.add(lineId); f.n++; return; }
+      found.set(key, { list, partId, body, line: lineId, lines: new Set([lineId]), n: 1 });
+    };
     const parts = [];
     for (const F of Object.values(M.figs)) for (const it of Object.values(F.items)) if (it.kind === "custom") parts.push({ F, it });
     if (!parts.length) return { errors, warnings };
@@ -189,27 +199,40 @@
     for (const { F, it } of parts) {
       if (it.fn in fns) continue;
       try { fns[it.fn] = new Function("return (" + M.sb.custom[it.fn] + ")")(); }
-      catch (e) { fns[it.fn] = null; note(errors, `部品「${F.id}」: custom「${it.fn}」を読み込めない（${String(e && e.message || e)}）`); }
+      catch (e) { fns[it.fn] = null; note(errors, null, F.id, `custom「${it.fn}」を読み込めない（${String(e && e.message || e)}）`); }
     }
+    const stopped = new Set(), cost = {};   // stopped = 時間切れになった部品（もう呼ばない）。cost = 部品ごとの [合計ミリ秒, 回数]
     for (const [t, lineId] of times) {
       if (t >= M.endCard) continue;
       const fr = UZ.frame(M, t);
       for (const { F, it } of parts) {
         const fo = fr.figs[F.id], s = fr.st[it.key], fn = fns[it.fn];
-        if (!fn || !fo || fo.opacity <= 0.002 || !s || s.show <= 0.002) continue;
-        const pre = `行 ${lineId}: 部品「${F.id}」`;
+        if (!fn || stopped.has(it.key) || !fo || fo.opacity <= 0.002 || !s || s.show <= 0.002) continue;
+        const add = (list, body, kind) => note(list, lineId, F.id, body, kind);
         const root = el("g"), S = F.dark ? UZ.darkStyleOf(M.S) : M.S, geo = UZ.makeGeo(el, S);
-        try { fn({ g: root, v: fr.values || {}, t: fr.t, el, S, UZ, geo, w: it.w, h: it.h }); }
-        catch (e) { note(errors, `${pre}: 関数が例外を投げた（${String(e && e.message || e)}）`); continue; }
-        for (const m of geo.errors) note(errors, `${pre}: ${m}`);
+        const t0 = now();
+        try { call(fn, { g: root, v: fr.values || {}, t: fr.t, el, S, UZ, geo, w: it.w, h: it.h }); }
+        catch (e) {
+          if (e && e.uzTimeout) { stopped.add(it.key); add(errors, `関数が ${e.uzTimeout / 1000} 秒で終わらない（止まらない繰り返しか、繰り返しの数が多すぎる。再生ページが固まる）`, "timeout"); }
+          else add(errors, `関数が例外を投げた（${String(e && e.message || e)}）`);
+          continue;
+        }
+        const c = cost[it.key] || (cost[it.key] = [0, 0, F.id]); c[0] += now() - t0; c[1]++;
+        for (const m of geo.errors) add(errors, m);
         const pts = [];
-        walkPoints(root, [1, 0, 0, 1, 0, 0], pts, (e, k, v) => note(warnings, `${pre}: 要素 <${e.tagName}> の属性 ${k} が ${v}`));
+        walkPoints(root, [1, 0, 0, 1, 0, 0], pts, (e, k, v) => add(warnings, `要素 <${e.tagName}> の属性 ${k} が ${v}`));
         const ok = pts.filter(p => Number.isFinite(p[0]) && Number.isFinite(p[1]));
         if (!ok.length) continue;
         const x0 = Math.min(...ok.map(p => p[0])), x1 = Math.max(...ok.map(p => p[0])), y0 = Math.min(...ok.map(p => p[1])), y1 = Math.max(...ok.map(p => p[1]));
         if (x0 < -SPILL || y0 < -SPILL || x1 > it.w + SPILL || y1 > it.h + SPILL)
-          note(warnings, `${pre}: 描いたものが部品の区画（0〜${Math.round(it.w)} × 0〜${Math.round(it.h)}）からはみ出す（x ${x0.toFixed(0)}〜${x1.toFixed(0)}、y ${y0.toFixed(0)}〜${y1.toFixed(0)}）`);
+          add(warnings, `描いたものが部品の区画（0〜${Math.round(it.w)} × 0〜${Math.round(it.h)}）からはみ出す（x ${x0.toFixed(0)}〜${x1.toFixed(0)}、y ${y0.toFixed(0)}〜${y1.toFixed(0)}）`, "spill");
       }
+    }
+    for (const [sum, n, figId] of Object.values(cost)) if (n && sum / n > slowMs)
+      note(warnings, null, figId, `1 回の描画に平均 ${Math.round(sum / n)}ms かかる（毎コマ呼ばれるので、再生が引っかかる。${slowMs}ms 以下を目安に、分割の数や繰り返しを減らす）`, "slow");
+    for (const f of found.values()) {
+      const more = f.lines.size > 1 ? `（ほか ${f.lines.size - 1} 行でも）` : f.n > 1 ? `（ほかの時刻でも）` : "";
+      f.list.push(`${f.line ? `行 ${f.line}: ` : ""}部品「${f.partId}」: ${f.body}${more}`);
     }
     return { errors, warnings };
   };
