@@ -503,7 +503,7 @@
             if (Object.values(states).some(x => x.show > 0.002)) {
               const pw = fo.place && fo.place.w != null ? fo.place.w : it.w, ph = fo.place && fo.place.w != null ? fo.place.h : it.h;
               try {
-                const r = UZ.spaceRender(el, E.inner, E.F.spec, fr.values || {}, pw, ph, states, E.S);
+                const r = UZ.spaceRender(el, E.inner, E.F.spec, fr.values || {}, pw, ph, states, E.S, E.F.v0);
                 if (r.errors.length) { const msg = r.errors.join(" / "); if (E._err !== msg) { E._err = msg; console.error("space の部品の数式に誤り", it.key, msg); } }
               } catch (e) {   // 式の誤りなどは、その部品だけ描かずに知らせる（プレーヤーは止めない。同じ誤りは 1 回だけ出す）
                 while (E.inner.firstChild) E.inner.removeChild(E.inner.firstChild);

@@ -252,6 +252,122 @@
     return out;
   };
 
+  // ---- 部品のカメラ ----
+  // 宣言の camera（数か式）を今の値で読み、区画 w × h のカメラを作る。外接箱は axes か bounds があればそれ（今の値で読む）。
+  // どちらもなければ、初めの値 v0 で要素を評価した外接箱を 1 度だけ求めて使う（set で要素が動いても、全体が寄ったり縮んだりしない）。
+  // v0 を省くと今の値で求める
+  const B0 = new WeakMap();   // decl → { v0, b }
+  UZ.spaceView = function (decl, v, w, h, v0) {
+    v = v || {};
+    const names = Object.keys(v), ev = x => UZ.spaceExpr(x, names)(v), c = decl.camera || {};
+    const camO = { yaw: c.yaw != null ? ev(c.yaw) : 0, pitch: c.pitch != null ? ev(c.pitch) : 0 };
+    if (c.scale != null) camO.scale = ev(c.scale);
+    if (c.target != null) camO.target = c.target.map(ev);
+    const fixed = (decl.axes && (decl.axes.x || decl.axes.y || decl.axes.z)) || decl.bounds;
+    let b;
+    if (fixed || !v0) b = UZ.spaceBounds(decl, v);
+    else {
+      const hit = B0.get(decl);
+      if (hit && hit.v0 === v0) b = hit.b;
+      else { b = UZ.spaceBounds(decl, v0); B0.set(decl, { v0, b }); }
+    }
+    return UZ.spaceCamera(camO, w, h, b);
+  };
+
+  // プリミティブの画面上の矩形（spaceRender と同じ大きさ・ずらし。文字の幅は見積もり。TeX は元の文字列で見積もる）
+  UZ.spacePrimBox = function (p) {
+    const xs = p.pts.map(q => q[0]), ys = p.pts.map(q => q[1]);
+    let x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
+    if (p.kind === "seg") { const r = (p.width || 2.5) / 2; x0 -= r; x1 += r; y0 -= r; y1 += r; }
+    else if (p.kind === "dot") { const r = (p.r || 6) + 0.75; x0 -= r; x1 += r; y0 -= r; y1 += r; }
+    else if (p.kind === "text") {
+      const tick = /:tick:/.test(p.key), lab = /:label$/.test(p.key), size = tick ? 13 : 18;
+      const tw = UZ.textW(p.tex ? p.text.replace(/\\[A-Za-z]+|[{}^_]/g, "") || p.text : p.text, size);
+      const x = x0 + (lab ? 10 : 0), y = y0 + (lab ? -14 : 0);
+      x0 = lab ? x : x - tw / 2; x1 = x0 + tw; y0 = y - size / 2; y1 = y + size / 2;
+    }
+    return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
+  };
+  const unionBox = bs => {
+    if (!bs.length) return null;
+    const x0 = Math.min(...bs.map(b => b.x)), y0 = Math.min(...bs.map(b => b.y)), x1 = Math.max(...bs.map(b => b.x + b.w)), y1 = Math.max(...bs.map(b => b.y + b.h));
+    return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
+  };
+  UZ.spaceUnionBox = unionBox;
+  // 色を使わないときの仮のテーマ（外接矩形だけを求めるとき）
+  const NOS = new Proxy({}, { get: (o, k) => (k === "role" ? () => "#000000" : k === "series" ? null : "#000000") });
+
+  // 要素 id の、値 v で投影した外接矩形（部品のローカル座標 = 区画の左上が原点）。F = engine の図（F.spec = 宣言、F.v0 = 初めの値）。
+  // 描くものがなければ null（値が数にならないなど）。S は省ける（色は使わない）
+  UZ.spaceBBox = function (F, id, v, w, h, S) {
+    const decl = F.spec, cam = UZ.spaceView(decl, v, w, h, F.v0);
+    return unionBox(UZ.spacePrims(decl, v, cam, S || NOS).filter(p => p.id === id).map(UZ.spacePrimBox));
+  };
+
+  // ---- 交差する面 ----
+  // surface 以外の面（polygon と box の面）のうち、3D で交差する要素の組 [[idA, idB], …]（宣言の順）。
+  // 縁や角で触れるだけ・同じ平面に重なるだけは数えない（触れるだけなら奥から塗る順で破綻しない）。plate は Task 10 で足す
+  const dot3 = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+  UZ.spaceIntersections = function (decl, v) {
+    const K = mk(v); K.v = v || {};
+    const els = [];
+    for (const o of decl.items || []) {
+      if (!o || !o.id) continue;
+      let faces = [];
+      if (o.kind === "polygon") faces = [o.points.map(K.pt)];
+      else if (o.kind === "box") {
+        const lo = K.pt(o.min), hi = K.pt(o.max), V = (i, j, k) => [i ? hi[0] : lo[0], j ? hi[1] : lo[1], k ? hi[2] : lo[2]];
+        faces = [[[0, 0, 0], [1, 0, 0], [1, 1, 0], [0, 1, 0]], [[0, 0, 1], [1, 0, 1], [1, 1, 1], [0, 1, 1]], [[0, 0, 0], [1, 0, 0], [1, 0, 1], [0, 0, 1]],
+          [[0, 1, 0], [1, 1, 0], [1, 1, 1], [0, 1, 1]], [[0, 0, 0], [0, 1, 0], [0, 1, 1], [0, 0, 1]], [[1, 0, 0], [1, 1, 0], [1, 1, 1], [1, 0, 1]]].map(f => f.map(q => V(...q)));
+      } else continue;
+      faces = faces.filter(ps => ps.length >= 3 && ps.every(p => p.every(finite)));
+      if (faces.length) els.push({ id: o.id, faces });
+    }
+    if (els.length < 2) return [];
+    const all = [].concat(...els.map(e => [].concat(...e.faces)));
+    const L = Math.hypot(...[0, 1, 2].map(i => Math.max(...all.map(p => p[i])) - Math.min(...all.map(p => p[i])))) || 1;
+    const ePlane = 1e-7 * L, eIn = 1e-5 * L;
+    // 面の下ごしらえ: 単位法線・平面の距離・2D に落とす軸・外接箱
+    const prep = ps => {
+      let n = [0, 0, 0];
+      for (let i = 0; i < ps.length; i++) { const a = ps[i], b = ps[(i + 1) % ps.length];
+        n = [n[0] + (a[1] - b[1]) * (a[2] + b[2]), n[1] + (a[2] - b[2]) * (a[0] + b[0]), n[2] + (a[0] - b[0]) * (a[1] + b[1])]; }
+      const nl = Math.hypot(...n);
+      if (!(nl > 1e-12 * L * L)) return null;
+      n = n.map(x => x / nl);
+      const ax = [0, 1, 2].reduce((m, i) => Math.abs(n[i]) > Math.abs(n[m]) ? i : m, 0), u = (ax + 1) % 3, w = (ax + 2) % 3;
+      return { ps, n, d: dot3(n, ps[0]), p2: ps.map(p => [p[u], p[w]]), u, w,
+        min: [0, 1, 2].map(i => Math.min(...ps.map(p => p[i]))), max: [0, 1, 2].map(i => Math.max(...ps.map(p => p[i]))) };
+    };
+    // 点が多角形の内側にあり、どの辺からも eIn より離れている
+    const inside = (q, P) => {
+      const x = q[P.u], y = q[P.w], r = P.p2;
+      let c = false;
+      for (let i = 0, j = r.length - 1; i < r.length; j = i++) {
+        const [xi, yi] = r[i], [xj, yj] = r[j];
+        if ((yi > y) !== (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi) c = !c;
+        const dx = xj - xi, dy = yj - yi, l2 = dx * dx + dy * dy, t = l2 > 0 ? clamp(((x - xi) * dx + (y - yi) * dy) / l2) : 0;
+        if (Math.hypot(x - xi - t * dx, y - yi - t * dy) <= eIn) return false;   // 2D に落とすと距離は縮むだけ（縁の近くは数えない）
+      }
+      return c;
+    };
+    // 線分 a-b が面 P の内側を横切る（両端が平面の反対側にある）
+    const crosses = (a, b, P) => {
+      const da = dot3(P.n, a) - P.d, db = dot3(P.n, b) - P.d;
+      if (!((da > ePlane && db < -ePlane) || (da < -ePlane && db > ePlane))) return false;
+      const t = da / (da - db);
+      return inside([a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t], P);
+    };
+    const edgesHit = (A, B) => A.ps.some((a, i) => crosses(a, A.ps[(i + 1) % A.ps.length], B));
+    const boxOver = (A, B) => [0, 1, 2].every(i => A.min[i] <= B.max[i] + ePlane && B.min[i] <= A.max[i] + ePlane);
+    const P = els.map(e => e.faces.map(prep).filter(Boolean)), out = [];
+    for (let i = 0; i < els.length; i++) for (let j = i + 1; j < els.length; j++) {
+      const hit = P[i].some(A => P[j].some(B => boxOver(A, B) && (edgesHit(A, B) || edgesHit(B, A))));
+      if (hit) out.push([els[i].id, els[j].id]);
+    }
+    return out;
+  };
+
   // ---- 宣言の部品 space の描画 ----
   // 要素の既定の色（spacePrims と同じ。tint で混ぜる元の色を決めるのに使う）
   UZ.spaceDefaultColor = kind => (kind === "line" || kind === "text" ? "ink" : "accent");
@@ -276,13 +392,10 @@
 
   // 部品を、描き場 g（部品のローカル座標。w × h は区画の px）に描く。el は要素を作る関数（ブラウザは view_svg の el、node は svg_dom）。
   // decl = 部品の宣言、v = 今の値、states = UZ.spaceStates の結果（なければ全部出ている）。式の誤りは例外。TeX の誤りは { errors } で返す
-  UZ.spaceRender = function (el, g, decl, v, w, h, states, S) {
+  // v0 = 台本の初めの値（engine の図の F.v0）。axes も bounds もないとき、自動の大きさと中心はこの値で決める
+  UZ.spaceRender = function (el, g, decl, v, w, h, states, S, v0) {
     v = v || {};
-    const names = Object.keys(v), ev = x => UZ.spaceExpr(x, names)(v), c = decl.camera || {};
-    const camO = { yaw: c.yaw != null ? ev(c.yaw) : 0, pitch: c.pitch != null ? ev(c.pitch) : 0 };
-    if (c.scale != null) camO.scale = ev(c.scale);
-    if (c.target != null) camO.target = c.target.map(ev);
-    const cam = UZ.spaceCamera(camO, w, h, UZ.spaceBounds(decl, v));
+    const cam = UZ.spaceView(decl, v, w, h, v0);
     const ALL = { opacity: 1, line: 1, draw: 1, dim: 1, pulse: 0, tint: null, tintP: 0 };
     const stOf = id => (states && states[id]) || (states ? null : ALL);
     // tint: 宣言の色を、混ぜた色に置き換えてから投影する（面の明るさは混ぜた色に掛かる）

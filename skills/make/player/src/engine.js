@@ -271,6 +271,8 @@
     // ---- 動作の列 ----
     const acts = [], extras = { marks: {}, notes: {}, dots: {}, replies: [], customs: [] };
     const values0 = { ...(sb.values || {}) };   // 名前付きの値の初め（set で動かす）
+    // space の部品は、axes も bounds もないとき、自動の大きさと中心をこの値で 1 度だけ決める（UZ.spaceView の v0）
+    for (const F of Object.values(figs)) if (F.type === "space") F.v0 = values0;
     const itemByKey = {};
     for (const F of Object.values(figs)) for (const it of Object.values(F.items)) itemByKey[it.key] = it;
     const dotState = {};   // 点の今の位置（台本を読みながら追う）
@@ -352,6 +354,10 @@
             act.key = key;
           } else if (verb === "trace") {
             const path = asList(val);
+            // space の要素の上を進む trace はまだない（何もしない動作にせず、知らせる）
+            const s3 = path.find(p => { const [f, i] = String(p).includes("/") ? String(p).split("/") : [null, String(p)];
+              return (f ? [f] : sc.figs).some(g => figs[g] && figs[g].items[i] && figs[g].items[i].kind === "s3"); });
+            if (s3 != null) { warn(`行 ${ln.id}（trace）: space の要素「${s3}」には trace がまだ効かない`); return; }
             const fid = (a.fig) || sc.figs.find(f => path.every(p => figs[f].items[p] && figs[f].items[p].dotAt));
             if (!fid) { err(`${where}: 経路 ${path.join("→")} のノードが 1 つの図にそろっていない（点が通れるのは箱と矢印・スイムレーン・ツリー・サイクルなどの箱）`); return; }
             const F = figs[fid], did = a.dot || "dot", key = `${fid}/dot:${did}`;
@@ -593,6 +599,28 @@
       }
       return null;
     }
+    // ---- 値: 名前ごとに set を始まりの順に並べ、各 set の始まりの値（from）を、その時点の値から決めておく ----
+    // （前の set の途中で始まる set は、その時点の値から動く。これで valuesAt は t だけで決まる）
+    // カメラ（space の要素に寄る先を、寄り始めの値で投影する）より前に決める
+    const setActs = acts.filter(a => a.verb === "set").sort((a, b) => a.start - b.start);
+    {
+      const lastSet = {};
+      for (const a of setActs) {
+        const p = lastSet[a.name];
+        a.from = p ? valueOfSet(p, a.start) : values0[a.name];
+        lastSet[a.name] = a;
+      }
+    }
+    const valuesAtT = t => {   // UZ.valuesAt と同じ（M ができる前に使う）
+      const v = { ...values0 };
+      for (const a of setActs) { if (t < a.start) break; v[a.name] = valueOfSet(a, t); }
+      return v;
+    };
+    // space の要素の、時刻 T の値で投影した外接矩形（部品のローカル座標）。描くものがない・式が読めないときは区画全体
+    const spaceBoxAt = (F, id, T, pl) => {
+      try { return UZ.spaceBBox(F, id, valuesAtT(T), pl.w, pl.h, S) || figBox(F, pl); }
+      catch (e) { return figBox(F, pl); }
+    };
     // ---- カメラ: run ごとに状態を追い、zoom・pan の from・to を決める。場面の終わりのカメラは sc.camEnd ----
     {
       const CA = UZ.CAMERA;
@@ -611,7 +639,9 @@
             let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
             for (const t of a.target) {
               const F = figs[t.fig], pl = sc.place[t.fig];
-              const b = t.whole || F.type === "custom" || F.type === "space" ? figBox(F, pl) : F.items[t.id].bbox;
+              // space の要素は、寄り始めの値で投影した外接矩形（寄っている間に yaw などが動いても追わない）
+              const b = t.whole || F.type === "custom" ? figBox(F, pl)
+                : F.type === "space" ? (F.items[t.id].kind === "s3" ? spaceBoxAt(F, t.id, a.start, pl) : figBox(F, pl)) : F.items[t.id].bbox;
               x0 = Math.min(x0, pl.ox + b.x * pl.s); y0 = Math.min(y0, pl.oy + b.y * pl.s);
               x1 = Math.max(x1, pl.ox + (b.x + b.w) * pl.s); y1 = Math.max(y1, pl.oy + (b.y + b.h) * pl.s);
             }
@@ -690,14 +720,6 @@
       acts.push({ verb: "morph", scene: sc.id, line: sc.lines[0].id, start: sc.start, dur: 0.8, end: sc.start + 0.8, from: mo.from, to: mo.to, series, pairs });
     }
     acts.sort((a, b) => a.start - b.start);
-    // ---- 値: 名前ごとに set を始まりの順に並べ、各 set の始まりの値（from）を、その時点の値から決めておく ----
-    // （前の set の途中で始まる set は、その時点の値から動く。これで valuesAt は t だけで決まる）
-    const lastSet = {};
-    for (const a of acts) if (a.verb === "set") {
-      const p = lastSet[a.name];
-      a.from = p ? valueOfSet(p, a.start) : values0[a.name];
-      lastSet[a.name] = a;
-    }
     const lastLine = timeline.lines[timeline.lines.length - 1];
     const speechEnd = lastLine.start + lastLine.dur;
     const actsEnd = Math.max(...acts.map(a => a.end), speechEnd);

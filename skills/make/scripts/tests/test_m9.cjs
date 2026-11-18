@@ -83,6 +83,23 @@ const renderSeq = (M, ts) => {
   return serialize(svg);
 };
 
+// check_storyboard.cjs と同じ検査（build・配置・部品を描いて見る）。errors・warnings・layout を返す
+const checkSpace = async sb => {
+  const { guardedCall } = require("../uz_node.cjs");
+  const M = await build(sb);
+  if ((M.errors || []).length) return { errors: M.errors, warnings: M.warnings || [], layout: [] };
+  const layout = UZ.checkLayout(M);
+  const DOC = require("../svg_dom.cjs").makeDocument();
+  const el = (tag, attrs, parent) => {
+    const e = DOC.createElementNS("http://www.w3.org/2000/svg", tag);
+    if (attrs) for (const k in attrs) if (attrs[k] != null) e.setAttribute(k, attrs[k]);
+    if (parent) parent.appendChild(e);
+    return e;
+  };
+  const cr = UZ.checkCustoms(M, el, { call: guardedCall() });
+  return { errors: cr.errors, warnings: (M.warnings || []).concat(cr.warnings), layout };
+};
+
 const tests = {
   async space_validate() {
     const one = (part, extra = {}) => build(deck6({ a: { title: "A", parts: [part] } }, [SC("s1", "a")], {}, { values: { th: 0 }, ...extra }));
@@ -165,6 +182,97 @@ const tests = {
     const cam = UZ.spaceCamera({ yaw: 90, pitch: 20 }, pl.w, pl.h, UZ.spaceBounds(M.figs.sp.spec, { th: 90 }));
     const cx = +attrOf(s3Tags(svg, "P", "circle")[0], "cx");
     assert.ok(Math.abs(cx - cam.project([1, 0, 1])[0]) < 0.5, `完成形の cx=${cx}`);
+  },
+  // ---- Task 8: space の検査と、3D の要素への zoom ----
+  async space_check_overflow() {
+    const part = { ...SPACE_PART(), camera: { yaw: 30, pitch: 20, scale: 400 } };
+    const r = await checkSpace(spaceDeck([{ id: "l1", text: "{a}出します。", do: [{ show: "sp", at: "a" }] }], part));
+    assert.deepStrictEqual(r.errors, []);
+    assert.ok(r.warnings.some(w => /部品「sp」.*はみ出す/.test(w)), JSON.stringify(r.warnings));
+    const ok = await checkSpace(spaceDeck([{ id: "l1", text: "{a}出します。", do: [{ show: "sp", at: "a" }] }]));
+    assert.ok(!ok.warnings.some(w => /はみ出す/.test(w)), `収まる台本で警告: ${JSON.stringify(ok.warnings)}`);
+  },
+  async space_check_nan() {
+    const part = { id: "sp", type: "space", camera: { yaw: 30, pitch: 20 }, axes: { x: [-2, 2], y: [-2, 2], z: [0, 2] },
+      items: [{ id: "S", kind: "surface", f: "sqrt(-1 - x*x)", x: [-1, 1], y: [-1, 1], grid: 6 }, { id: "P", kind: "point", at: [0, 0, 1] }] };
+    const r = await checkSpace(spaceDeck([{ id: "l1", text: "{a}出します。", do: [{ show: "sp", at: "a" }] }], part));
+    assert.ok(r.errors.some(e => /部品「sp」.*要素「S」.*数にならない/.test(e)), JSON.stringify(r.errors));
+    assert.ok(!r.errors.some(e => /要素「P」/.test(e)), JSON.stringify(r.errors));
+    // 一部の網目だけ NaN（定義域の外）は、誤りにしない
+    part.items[0].f = "sqrt(1 - x*x - y*y)";
+    const r2 = await checkSpace(spaceDeck([{ id: "l1", text: "{a}出します。", do: [{ show: "sp", at: "a" }] }], part));
+    assert.deepStrictEqual(r2.errors, []);
+  },
+  async space_check_intersect() {
+    const A = { id: "A", kind: "polygon", points: [[-1, -1, 0], [1, -1, 0], [1, 1, 0], [-1, 1, 0]] };
+    const B = { id: "B", kind: "polygon", points: [[-0.5, 0, -1], [0.5, 0, -1], [0.5, 0, 1], [-0.5, 0, 1]] };
+    const W = { id: "W", kind: "polygon", points: [[-1, 1, 0], [1, 1, 0], [1, 1, 1], [-1, 1, 1]] };   // A の縁に立つ壁（触れるだけ）
+    const K = { id: "K", kind: "box", min: [0.2, -0.8, 0], max: [0.6, -0.4, 0.4] };   // A の上に載る箱（触れるだけ）
+    assert.deepStrictEqual(UZ.spaceIntersections({ items: [A, B] }, {}), [["A", "B"]]);
+    assert.deepStrictEqual(UZ.spaceIntersections({ items: [A, W, K] }, {}), []);
+    assert.deepStrictEqual(UZ.spaceIntersections({ items: [A, { ...K, id: "K2", min: [0.2, -0.8, -0.2] }] }, {}), [["A", "K2"]]);
+    // 値で動く: 板 B を上へ上げきれば交差しない
+    const Bv = { ...B, points: B.points.map(p => [p[0], p[1], `${p[2]} + h`]) };
+    assert.deepStrictEqual(UZ.spaceIntersections({ items: [A, Bv] }, { h: 0 }), [["A", "B"]]);
+    assert.deepStrictEqual(UZ.spaceIntersections({ items: [A, Bv] }, { h: 1 }), []);
+    const part = { id: "sp", type: "space", camera: { yaw: 30, pitch: 20 }, axes: { x: [-2, 2], y: [-2, 2], z: [-1, 1] }, items: [A, B] };
+    const r = await checkSpace(spaceDeck([{ id: "l1", text: "{a}出します。", do: [{ show: "sp", at: "a" }] }], part));
+    assert.ok(r.warnings.some(w => /部品「sp」.*「A」と「B」.*前後が決まらない/.test(w)), JSON.stringify(r.warnings));
+  },
+  async space_zoom_element() {
+    // 値 a で点を動かした後、寄りながら yaw を回す。寄せ先は寄り始めの値で投影した点
+    const part = { id: "sp", type: "space", camera: { yaw: "th", pitch: 20 }, axes: { x: [-2, 2], y: [-2, 2], z: [0, 2] },
+      items: [{ id: "P", kind: "point", at: ["a", 0, 1] }, { id: "Q", kind: "point", at: [-1, -1, 0] }] };
+    const mk = rot => build(deck6({ a: { title: "A", parts: [part] } }, [SC("s1", "a", [
+      { id: "l1", text: "{a}出して{b}動かします。", do: [{ show: "sp", at: "a" }, { set: "a", to: 1.5, at: "b", dur: 0.5 }] },
+      { id: "l2", text: "{a}点に寄って回します。", do: [{ zoom: "P", at: "a" }, ...(rot ? [{ set: "th", to: 90, at: "a", dur: 1 }] : [])] }])], {}, { values: { th: 0, a: -1 } }));
+    const M = await mk(true);
+    assert.deepStrictEqual(M.errors || [], []);
+    const z = M.acts.find(a => a.verb === "zoom"), pl = M.scenes[0].place.sp;
+    const v = UZ.valuesAt(M, z.start);
+    assert.ok(Math.abs(v.a - 1.5) < 1e-9 && Math.abs(v.th) < 1e-9, JSON.stringify(v));
+    const cam = UZ.spaceCamera({ yaw: 0, pitch: 20 }, pl.w, pl.h, UZ.spaceBounds(part, v)), p = cam.project([1.5, 0, 1]);
+    const R = z.target, cx = R.x + R.w / 2, cy = R.y + R.h / 2;
+    assert.ok(Math.abs(cx - (pl.ox + p[0])) <= 1 && Math.abs(cy - (pl.oy + p[1])) <= 1, `寄せ先の中心 ${cx},${cy} 期待 ${pl.ox + p[0]},${pl.oy + p[1]}`);
+    assert.ok(R.w < pl.w / 4 && R.h < pl.h / 4, `寄せ先が区画全体のまま: ${JSON.stringify(R)}`);
+    const M0 = await mk(false), z0 = M0.acts.find(a => a.verb === "zoom");
+    assert.deepStrictEqual(z.to, z0.to, "yaw を回しても to は変わらない");
+    // UZ.spaceBBox: 部品のローカル座標の矩形
+    const b = UZ.spaceBBox(M.figs.sp, "P", v, pl.w, pl.h, M.S);
+    assert.ok(Math.abs(b.x + b.w / 2 - p[0]) <= 1 && Math.abs(b.y + b.h / 2 - p[1]) <= 1, JSON.stringify(b));
+  },
+  async space_auto_bounds_fixed() {
+    // axes も bounds もないとき、自動の大きさと中心は初めの値で 1 回だけ決まる（set で点が動いても全体が寄ったり縮んだりしない）
+    const part = { id: "sp", type: "space", camera: { yaw: 30, pitch: 20 },
+      items: [{ id: "P", kind: "point", at: ["a", 0, 0] }, { id: "Q", kind: "point", at: [0, 1, 1] }] };
+    const sb = deck6({ a: { title: "A", parts: [part] } }, [SC("s1", "a", [
+      { id: "l1", text: "{a}出します。", do: [{ show: "sp", at: "a" }] }, { id: "l2", text: "{a}動かします。", do: [{ set: "a", to: 3, at: "a", dur: 1 }] }])], {}, { values: { a: 0 } });
+    const M = await build(sb);
+    assert.deepStrictEqual(M.errors || [], []);
+    const s = M.acts.find(a => a.verb === "set"), pl = M.scenes[0].place.sp;
+    const c0 = UZ.spaceView(part, { a: 0 }, pl.w, pl.h, M.figs.sp.v0), c1 = UZ.spaceView(part, { a: 3 }, pl.w, pl.h, M.figs.sp.v0);
+    assert.strictEqual(c0.s, c1.s);
+    assert.deepStrictEqual(c0.project([0, 1, 1]), c1.project([0, 1, 1]));
+    const qAt = t => { const c = s3Tags(renderSvg(M, t), "Q", "circle"); assert.strictEqual(c.length, 1); return [attrOf(c[0], "cx"), attrOf(c[0], "cy")]; };
+    assert.deepStrictEqual(qAt(s.start - 0.01), qAt(s.end + 0.05), "動かない点 Q の位置が set で変わった");
+  },
+  async space_trace_warn() {
+    const M = await build(spaceDeck([{ id: "l1", text: "{a}出して{b}たどります。", do: [{ show: "sp", at: "a" }, { trace: ["L"], at: "b" }] }]));
+    assert.deepStrictEqual(M.errors || [], []);
+    hasWarn(M, /行 l1（trace）: space の要素「L」には trace がまだ効かない/);
+  },
+  async space_check_time() {
+    const items = [{ id: "S", kind: "surface", f: "sin(x + th/30) * cos(y)", x: [-3, 3], y: [-3, 3], grid: 24, opacity: 0.8 },
+      ...Array.from({ length: 9 }, (_, i) => i % 3 === 0 ? { id: `p${i}`, kind: "point", at: [i / 3 - 1.5, 0, 1.2], label: `P${i}` }
+        : i % 3 === 1 ? { id: `v${i}`, kind: "arrow", from: [0, 0, 0], to: [1, i / 9, 1] } : { id: `f${i}`, kind: "polygon", points: [[-3, -3, -1.5 - i / 10], [3, -3, -1.5 - i / 10], [3, 3, -1.5 - i / 10]], opacity: 0.4 })];
+    const part = { id: "sp", type: "space", camera: { yaw: "th", pitch: 25 }, axes: { x: [-3, 3], y: [-3, 3], z: [-2, 2] }, items };
+    const sb = spaceDeck([{ id: "l1", text: "{a}出して{b}回します。", do: [{ show: "sp", at: "a" }, { set: "th", to: 90, at: "b", dur: 2 }] },
+      { id: "l2", text: "{a}もう少し回します。", do: [{ set: "th", to: 180, at: "a", dur: 2 }] },
+      { id: "l3", text: "{a}戻します。", do: [{ set: "th", to: 0, at: "a", dur: 2 }] }], part);
+    const t0 = Date.now(), r = await checkSpace(sb), ms = Date.now() - t0;
+    console.log(`     （検査の時間 ${ms}ms）`);
+    assert.deepStrictEqual(r.errors, []);
+    assert.ok(ms < 1000, `検査に ${ms}ms かかる`);
   },
   async format6_accepted() {
     assert.strictEqual(UZ.FORMAT, "ugoku-zukai/6");

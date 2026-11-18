@@ -171,6 +171,45 @@
   }
   const SPILL = 8;
 
+  // space の部品を、custom と同じ時刻で投影して検査する: 描けない（式の誤り・プリミティブの上限）、見えている要素の値が数にならない、
+  // 区画からはみ出す、面が交差して前後が決まらない（警告）、TeX の誤り（文字は値で変わらないので 1 度だけ描いて見る）
+  function checkSpaces(M, el, spaces, times, note, errors, warnings) {
+    const texDone = new Set();
+    for (const [t, lineId] of times) {
+      if (t >= M.endCard) continue;
+      const fr = UZ.frame(M, t);
+      for (const F of spaces) {
+        const fo = fr.figs[F.id];
+        if (!fo || fo.opacity <= 0.002) continue;
+        const states = UZ.spaceStates(F, fr.st), vis = new Set(Object.keys(states).filter(k => states[k].show > 0.002));
+        if (!vis.size) continue;
+        const add = (list, body, kind) => note(list, lineId, F.id, body, kind);
+        const S = F.dark ? UZ.darkStyleOf(M.S) : M.S, v = fr.values || {}, decl = F.spec;
+        const W = fo.place && fo.place.w != null ? fo.place.w : F.w, H = fo.place && fo.place.w != null ? fo.place.h : F.h;
+        let prims;
+        try { prims = UZ.spacePrims(decl, v, UZ.spaceView(decl, v, W, H, F.v0), S); }
+        catch (e) { add(errors, `描けない（${String(e && e.message || e)}）`); continue; }
+        const per = {};
+        for (const p of prims) per[p.id] = (per[p.id] || 0) + 1;
+        // 要素が 1 つも描けない = 値が数にならない（一部の網目だけ NaN なのは、定義域の外を描かない書き方なので数えない）
+        for (const o of decl.items || []) if (o && o.id && o.kind !== "plate" && vis.has(o.id) && !per[o.id])
+          add(errors, `要素「${o.id}」の値が数にならない（NaN か Infinity。式と値の範囲を見直す）`, "nan:" + o.id);
+        const box = UZ.spaceUnionBox(prims.filter(p => vis.has(p.id)).map(UZ.spacePrimBox));
+        if (box && (box.x < -SPILL || box.y < -SPILL || box.x + box.w > W + SPILL || box.y + box.h > H + SPILL)) {
+          const out = [...new Set(prims.filter(p => vis.has(p.id) && (b => b.x < -SPILL || b.y < -SPILL || b.x + b.w > W + SPILL || b.y + b.h > H + SPILL)(UZ.spacePrimBox(p))).map(p => p.id))];
+          add(warnings, `描いたものが部品の区画（0〜${Math.round(W)} × 0〜${Math.round(H)}）からはみ出す（要素 ${out.join("、")}。scale を小さくするか、axes・bounds を広げる）`, "spill");
+        }
+        for (const [a, b] of UZ.spaceIntersections(decl, v)) if (vis.has(a) && vis.has(b))
+          add(warnings, `要素「${a}」と「${b}」の面が交差していて、前後が決まらない（奥から塗るので、奥の面が手前に見える所が出る。面を分けるか、交差しないように置く）`, `x:${a}:${b}`);
+        if (!texDone.has(F.id) && (decl.items || []).some(o => o && o.kind === "text" && o.tex)) {
+          texDone.add(F.id);
+          try { for (const m of UZ.spaceRender(el, el("g"), decl, v, W, H, null, S, F.v0).errors) add(errors, m); }
+          catch (e) { add(errors, `描けない（${String(e && e.message || e)}）`); }
+        }
+      }
+    }
+  }
+
   // custom の部品を、見えている時刻で描いて検査する。時刻は、部品が見えている各行の終わり・各 set の終わり・set の 1/3 と 2/3。
   // el は svg 要素を作る関数（view_svg.js と同じ形）。返す errors は誤り、warnings は警告
   // opts.call(fn, args) = 関数を呼ぶ口（node の道具は、ここで時間の上限を掛ける。打ち切ったら e.uzTimeout = 上限のミリ秒の例外を投げる）
@@ -186,9 +225,12 @@
       if (f) { f.lines.add(lineId); f.n++; return; }
       found.set(key, { list, partId, body, line: lineId, lines: new Set([lineId]), n: 1 });
     };
-    const parts = [];
-    for (const F of Object.values(M.figs)) for (const it of Object.values(F.items)) if (it.kind === "custom") parts.push({ F, it });
-    if (!parts.length) return { errors, warnings };
+    const parts = [], spaces = [];
+    for (const F of Object.values(M.figs)) {
+      if (F.type === "space") spaces.push(F);
+      for (const it of Object.values(F.items)) if (it.kind === "custom") parts.push({ F, it });
+    }
+    if (!parts.length && !spaces.length) return { errors, warnings };
     const times = [];   // [t, 行の id]
     for (const l of M.timeline.lines) times.push([l.start + l.dur, l.id]);
     for (const a of M.acts) if (a.verb === "set") {
@@ -230,6 +272,7 @@
           add(warnings, `描いたものが部品の区画（0〜${Math.round(W)} × 0〜${Math.round(H)}）からはみ出す（x ${x0.toFixed(0)}〜${x1.toFixed(0)}、y ${y0.toFixed(0)}〜${y1.toFixed(0)}）`, "spill");
       }
     }
+    if (spaces.length) checkSpaces(M, el, spaces, times, note, errors, warnings);
     for (const [sum, n, figId] of Object.values(cost)) if (n && sum / n > slowMs)
       note(warnings, null, figId, `1 回の描画に平均 ${Math.round(sum / n)}ms かかる（毎コマ呼ばれるので、再生が引っかかる。${slowMs}ms 以下を目安に、分割の数や繰り返しを減らす）`, "slow");
     for (const f of found.values()) {
