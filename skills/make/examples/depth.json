@@ -112,25 +112,13 @@
         {
           "id": "stack",
           "type": "space",
-          "camera": { "yaw": "turn", "pitch": "look", "scale": "zoom", "target": [0.2, "-0.425*sin(rise*PI/180)", "2 - 0.425*cos(rise*PI/180)"] },
+          "camera": { "yaw": "turn", "pitch": "look", "scale": "zoom", "target": [0.3, -0.2, 1.8] },
           "items": [
-            { "id": "slab1", "kind": "polygon", "color": "muted", "opacity": 0.25, "points": [
-              [-5.8, "0.1*sin(rise*PI/180)", "2 + gap + 0.1*cos(rise*PI/180)"], [6.2, "0.1*sin(rise*PI/180)", "2 + gap + 0.1*cos(rise*PI/180)"],
-              [6.2, "-0.95*sin(rise*PI/180)", "2 + gap - 0.95*cos(rise*PI/180)"], [-5.8, "-0.95*sin(rise*PI/180)", "2 + gap - 0.95*cos(rise*PI/180)"] ] },
-            { "id": "screen-layer", "kind": "plate", "figure": "screens", "origin": [-4.4, 0, "2 + gap"], "size": [10.4, 0.85], "tilt": "rise" },
-            { "id": "name1", "kind": "text", "text": "画面", "at": [-5.15, "-0.425*sin(rise*PI/180)", "2 + gap - 0.425*cos(rise*PI/180)"] },
-            { "id": "slab2", "kind": "polygon", "color": "muted", "opacity": 0.25, "points": [
-              [-5.8, "0.1*sin(rise*PI/180)", "2 + 0.1*cos(rise*PI/180)"], [6.2, "0.1*sin(rise*PI/180)", "2 + 0.1*cos(rise*PI/180)"],
-              [6.2, "-0.95*sin(rise*PI/180)", "2 - 0.95*cos(rise*PI/180)"], [-5.8, "-0.95*sin(rise*PI/180)", "2 - 0.95*cos(rise*PI/180)"] ] },
-            { "id": "service-layer", "kind": "plate", "figure": "services", "origin": [-4.4, 0, 2], "size": [10.4, 0.85], "tilt": "rise" },
-            { "id": "name2", "kind": "text", "text": "処理", "at": [-5.15, "-0.425*sin(rise*PI/180)", "2 - 0.425*cos(rise*PI/180)"] },
-            { "id": "slab3", "kind": "polygon", "color": "muted", "opacity": 0.25, "points": [
-              [-5.8, "0.1*sin(rise*PI/180)", "2 - gap + 0.1*cos(rise*PI/180)"], [6.2, "0.1*sin(rise*PI/180)", "2 - gap + 0.1*cos(rise*PI/180)"],
-              [6.2, "-0.95*sin(rise*PI/180)", "2 - gap - 0.95*cos(rise*PI/180)"], [-5.8, "-0.95*sin(rise*PI/180)", "2 - gap - 0.95*cos(rise*PI/180)"] ] },
-            { "id": "data-layer", "kind": "plate", "figure": "stores", "origin": [-4.4, 0, "2 - gap"], "size": [10.4, 0.85], "tilt": "rise" },
-            { "id": "name3", "kind": "text", "text": "データ", "at": [-5.15, "-0.425*sin(rise*PI/180)", "2 - gap - 0.425*cos(rise*PI/180)"] },
-            { "id": "call1", "kind": "arrow", "from": [-5.15, -0.425, "2 + gap - 0.35"], "to": [-5.15, -0.425, 2.35], "color": "s2" },
-            { "id": "call2", "kind": "arrow", "from": [-5.15, -0.425, 1.65], "to": [-5.15, -0.425, "2.35 - gap"], "color": "s2" }
+            { "id": "screen-layer", "kind": "plate", "figure": "screens", "label": "画面", "labelWidth": 1.4, "fill": "muted", "opacity": 0.25, "origin": [-5.6, 0, "2 + gap"], "size": [11.8, 1.0], "tilt": "rise" },
+            { "id": "service-layer", "kind": "plate", "figure": "services", "label": "処理", "labelWidth": 1.4, "fill": "muted", "opacity": 0.25, "origin": [-5.6, 0, 2], "size": [11.8, 1.0], "tilt": "rise" },
+            { "id": "data-layer", "kind": "plate", "figure": "stores", "label": "データ", "labelWidth": 1.4, "fill": "muted", "opacity": 0.25, "origin": [-5.6, 0, "2 - gap"], "size": [11.8, 1.0], "tilt": "rise" },
+            { "id": "call1", "kind": "arrow", "from": [-4.5, -1.15, "2 + gap - 0.15"], "to": [-4.5, -1.15, 2.15], "color": "s2" },
+            { "id": "call2", "kind": "arrow", "from": [-4.5, -1.15, 1.85], "to": [-4.5, -1.15, "2.15 - gap"], "color": "s2" }
           ]
         }
       ]
@@ -222,12 +210,12 @@
           "id": "l8",
           "text": "{a}通販サイトの仕組みを、画面・処理・データの 3 段に分けて書きました。",
           "do": [
-            { "at": "a", "show": ["slab1", "screen-layer", "name1", "slab2", "service-layer", "name2", "slab3", "data-layer", "name3"] }
+            { "at": "a", "show": ["screen-layer", "service-layer", "data-layer"] }
           ]
         },
         {
           "id": "l9",
-          "text": "{a}この 3 段を倒して斜め上から見ると、上下に重なった層だと分かります。",
+          "text": "{a}この 3 段を起こして斜め上から見ると、上下に重なった層だと分かります。",
           "do": [
             { "at": "a", "set": "rise", "to": 90, "dur": 2.6 },
             { "at": "a", "set": "look", "to": 60, "dur": 2.6 },
@@ -246,10 +234,14 @@
         },
         {
           "id": "l11",
-          "text": "{a}処理の層だけを作り直しても、上下とやり取りする形が同じなら、残りの層は変えずに済みます。",
+          "text": "{a}ここで、処理の層だけを作り直すとします。",
           "do": [
             { "at": "a", "focus": "service-layer" }
           ]
+        },
+        {
+          "id": "l12",
+          "text": "上下の層とやり取りする形が同じなら、ほかの層は変えずに済みます。"
         }
       ]
     },
@@ -259,50 +251,54 @@
       "slide": "inside-server",
       "lines": [
         {
-          "id": "l12",
+          "id": "l13",
           "text": "{a}利用者の注文は、サーバーを通って、決済サービスに届きます。",
           "do": [
             { "at": "a", "show": "system" }
           ]
         },
         {
-          "id": "l13",
+          "id": "l14",
           "text": "{a}サーバーに寄ると、箱の中の部品が見えてきます。",
           "do": [
             { "at": "a", "zoom": "server" }
           ]
         },
         {
-          "id": "l14",
+          "id": "l15",
           "text": "{a}Web で受けた注文を、アプリが処理して、DB に書き込みます。",
           "read": "{a}ウェブで受けた注文を、アプリが処理して、デービーに書き込みます。",
           "do": [
-            { "at": "a", "trace": ["web", "app", "db"], "label": "注文" }
-          ]
-        },
-        {
-          "id": "l15",
-          "text": "{a}さらに DB に寄ると、索引とテーブルに分かれています。",
-          "read": "{a}さらにデービーに寄ると、索引とテーブルに分かれています。",
-          "do": [
-            { "hide": "dot:dot" },
-            { "at": "a", "zoom": "db" }
+            { "at": "a", "trace": ["web", "app", "db"], "label": "注文", "dot": "request" }
           ]
         },
         {
           "id": "l16",
-          "text": "{a}索引で行の場所を調べてから、テーブルの行を読みます。",
+          "text": "{a}さらに DB に寄ると、索引とテーブルに分かれています。",
+          "read": "{a}さらにデービーに寄ると、索引とテーブルに分かれています。",
           "do": [
-            { "at": "a", "trace": ["index", "table"], "label": "検索" }
+            { "hide": "dot:request" },
+            { "at": "a", "zoom": "db" }
           ]
         },
         {
           "id": "l17",
+          "text": "{a}索引で行の場所を調べてから、テーブルの行を読みます。",
+          "do": [
+            { "at": "a", "trace": ["index", "table"], "label": "検索", "dot": "lookup" }
+          ]
+        },
+        {
+          "id": "l18",
           "text": "{a}全体に戻ると、ここまで見た部品は、サーバーの箱 1 つに収まっています。",
           "do": [
-            { "hide": "db-inside/dot:dot" },
+            { "hide": "dot:lookup" },
             { "at": "a", "zoom": "all" }
           ]
+        },
+        {
+          "id": "l19",
+          "text": "回り込む、起こす、中へ入る。この 3 つの動きで、平らな図では見えなかった形や重なり、箱の中身が見えてきます。"
         }
       ]
     }
