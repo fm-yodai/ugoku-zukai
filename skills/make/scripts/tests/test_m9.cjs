@@ -129,7 +129,33 @@ const LN = (id, text, act) => ({ id, text, do: act ? [{ ...act, at: "a" }] : [] 
 const lineEnd = (M, id) => { const l = M.timeline.lines.find(x => x.id === id); return l.start + l.dur; };
 const zoomAct = (M, line) => M.acts.find(a => a.verb === "zoom" && a.line === line);
 
+// geometry.md のリファレンス（### R<n> の節）ごとに、値と動作の例（```json）と関数（```js）を取り出す（test_m8.cjs と同じ）
+function geometryRefs() {
+  const fs = require("fs"), path = require("path");
+  const md = fs.readFileSync(path.join(__dirname, "../../references/geometry.md"), "utf8");
+  return md.split(/^### /m).slice(1).filter(s => /^R\d /.test(s)).map(s => {
+    const block = lang => { const m = s.match(new RegExp("```" + lang + "\\n([\\s\\S]*?)\\n```")); assert.ok(m, `${s.slice(0, 10)} に ${lang} の塊がない`); return m[1]; };
+    return { id: s.split(" ")[0], ex: JSON.parse(block("json")), js: block("js") };
+  });
+}
+
 const tests = {
+  async geometry_md_r7_runs() {   // geometry.md のリファレンス R7（geo.space）は、写せばそのまま誤りも警告もなく描け、立体の面が描かれる
+    const refs = geometryRefs();
+    assert.deepStrictEqual(refs.map(r => r.id), ["R1", "R2", "R3", "R4", "R5", "R6", "R7"]);
+    const r = refs.find(x => x.id === "R7");
+    assert.ok(/geo\.space\(/.test(r.js), "R7 が geo.space を使っていない");
+    const sb = deck6({ a: { title: "A", parts: [{ id: "p", type: "custom", draw: "r" }] } },
+      [SC("s1", "a", [{ id: "l1", text: "{a}出して、{b}値を動かしながら、ゆっくりと説明していきます。",
+        do: [{ show: "p", at: "a" }, { ...r.ex.do[0], at: "b" }, ...r.ex.do.slice(1)] }])], {},
+      { values: r.ex.values, custom: { r: r.js } });
+    const M = await build(sb);
+    assert.deepStrictEqual(M.errors || [], [], JSON.stringify(M.errors));
+    assert.deepStrictEqual(UZ.checkCustoms(M, fakeEl), { errors: [], warnings: [] });
+    const lastSet = M.acts.filter(a => a.verb === "set").pop();
+    const svg = renderSvg(M, lastSet.end + 0.05), n = (svg.match(/<path\b[^>]*data-s3="g1"/g) || []).length;
+    assert.ok(n >= 100, `曲面の面が描かれていない（${n} 枚）`);
+  },
   async geo_space() {
     const { geo, g } = newGeo();
     const box = { x: 40, y: 30, w: 300, h: 200 };

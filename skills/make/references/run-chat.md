@@ -86,7 +86,7 @@ python3 <skill>/scripts/check_theme.py <workdir>/theme.json --design <workdir>/d
 
 ## 台本と機械検査
 
-作り手として `<workdir>/storyboard.json` を書く。作り方の考え方は SKILL.md の「作る順番」、形式は `storyboard.md`（スライドは 8 章。見本は `<skill>/examples/slide-forms.json`、Morph とカメラの見本は `camera-morph.json`）、見せ方の考え方は `visual-grammar.md`（Morph・カメラ・線の描画は「キャンバスとカメラ」、値に連動して動く図と数式の変形は「値と数式」VG-13・VG-14）。座標・グラフ・数式を描く `custom` の部品の道具とリファレンスは `geometry.md`（見本は `math-geometry.json`）。物差しは構成メモの意図である。
+作り手として `<workdir>/storyboard.json` を書く。作り方の考え方は SKILL.md の「作る順番」、形式は `storyboard.md`（スライドは 8 章。見本は `<skill>/examples/slide-forms.json`、Morph とカメラの見本は `camera-morph.json`）、見せ方の考え方は `visual-grammar.md`（Morph・カメラ・線の描画は「キャンバスとカメラ」、値に連動して動く図と数式の変形は「値と数式」VG-13・VG-14）。座標・グラフ・数式を描く `custom` の部品の道具とリファレンスは `geometry.md`（見本は `math-geometry.json`）。立体を回して見る・層を起こす・箱の中に入る見せ方は `visual-grammar.md` の「奥行き」（VG-15・VG-16・VG-17）、書き方は `storyboard.md` の `space` の部品と `graph` の `inside`（見本は `depth.json`）。物差しは構成メモの意図である。
 
 - スライドの意図は、台本のスライドと同じ id で、構成メモの章の `slides` に `proposed` で書く
 - すべての場面に `chapter`（章の id）を書く。口調は `basics.tone`、言葉は `basics.knows` の聴衆に合わせ、声は `basics.voice` を台本の `voice` に写す

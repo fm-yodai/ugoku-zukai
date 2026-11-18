@@ -22,5 +22,25 @@ n=$(grep -o '<path data-s3="dome"' "$fd/svg/slide-tangent-plane.svg" 2>/dev/null
 [ "$n" -ge 100 ] || ng "$ex の完成形のコマ slide-tangent-plane に曲面の面が 100 枚未満（$n 枚）"
 rm -rf "$fd"
 grep -q '"depth"' ../../tools/build_gallery.py || ng "見本帳（build_gallery.py）に depth がない"
+# 文書: 奥行き（立体・板・中に入る）は visual-grammar.md の「奥行き」に宣言し、書き方は storyboard.md、geo.space とリファレンス R7 は geometry.md。ほかはそこを指す
+A=../../agents
+c=references/criteria
+vg=references/visual-grammar.md
+geo=references/geometry.md
+grep -q '^## 奥行き' $vg || ng "visual-grammar.md に「奥行き」の節がない"
+for id in VG-15 VG-16 VG-17; do grep -q "^### $id " $vg || ng "visual-grammar.md に $id がない"; done
+# VG-15〜17 は概念の宣言で、規則の言い回しを使わない
+sed -n '/^## 奥行き/,$p' $vg | grep -qE 'しなければならない|必ず' && ng "visual-grammar.md の「奥行き」に「しなければならない」「必ず」がある"
+grep -q 'depth.json' $vg || ng "visual-grammar.md の「奥行き」が見本 depth.json を指していない"
+grep -q '^# 台本の形式（ugoku-zukai/6）' references/storyboard.md || ng "storyboard.md の題が ugoku-zukai/6 でない"
+for w in '"format": "ugoku-zukai/6"' '"type": "space"' '"plate"' '"inside"' '"tilt"' '"labelWidth"' '"bounds"'; do grep -qF -- "$w" references/storyboard.md || ng "storyboard.md に $w がない"; done
+grep -q 'geo\.space' $geo || ng "geometry.md に geo.space がない"
+grep -q '^### R7 ' $geo || ng "geometry.md にリファレンス R7 がない"
+for f in $A/writer.md SKILL.md references/run-chat.md references/run-code.md; do
+  for w in VG-15 VG-16 VG-17 depth.json; do grep -q "$w" $f || ng "$f が $w を指していない"; done
+done
+grep -q 'VG-1〜VG-17' $A/director.md || ng "director.md の読む文書に VG-1〜VG-17 がない"
+grep -q "^| G-D22 " $c/structure.md && grep -q "G-D22" $A/director.md && grep -q "G-D22" $c/README.md || ng "G-D22 が、structure.md・director.md・criteria/README にそろっていない"
+grep -q 'M9' $c/structure.md && ng "structure.md に内部の語「M9」が残っている"
 bash scripts/tests/run_m8.sh || fail=1
 exit $fail
