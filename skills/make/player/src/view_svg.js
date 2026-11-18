@@ -323,12 +323,15 @@
               for (const b of [it.label && it.label.bbox, ...(it.texts || []).map(T => T.bbox)]) if (b) { x0 = Math.min(x0, b.x); y0 = Math.min(y0, b.y); x1 = Math.max(x1, b.x + b.w); y1 = Math.max(y1, b.y + b.h); }
               const f = el("filter", { id: `uz-bl-${this.viewN}-${++this.blurN}`, filterUnits: "userSpaceOnUse", x: x0 - 28, y: y0 - 28, width: x1 - x0 + 56, height: y1 - y0 + 56 }, this.defs);
               E.blurF = el("feGaussianBlur", { stdDeviation: bl }, f);
-              E.blurId = f.getAttribute("id");
+              E.blurId = f.getAttribute("id"); E.blurBox = f;
             }
             E.blurF.setAttribute("stdDeviation", bl);
             for (const g of blurEls) g.setAttribute("filter", `url(#${E.blurId})`);
           } else for (const g of blurEls) g.removeAttribute("filter");
         }
+        // custom の部品は、描き場の大きさが場面ごとに変わるので、ぼかす範囲もそのコマの区画にする
+        const bfo = bl && it.kind === "custom" && E.blurBox && fr.figs[it.fig] && fr.figs[it.fig].place;
+        if (bfo && bfo.w != null) for (const [k, v] of [["x", -28], ["y", -28], ["width", bfo.w + 56], ["height", bfo.h + 56]]) E.blurBox.setAttribute(k, v.toFixed(1));
         const op = (x) => (x * dim).toFixed(3);
         const off = s.off || [0, 0];
         if (it.kind === "box") {
@@ -457,8 +460,10 @@
           const fo = fr.figs[it.fig];
           if (o > 0.002 && fo && fo.opacity > 0.002 && E.fn) {
             E.geo.errors.length = 0;
+            // 描き場の大きさは、そのコマの区画の大きさ（engine が場面ごとに決め、区画が動く間は補間する）
+            const pw = fo.place && fo.place.w != null ? fo.place.w : it.w, ph = fo.place && fo.place.w != null ? fo.place.h : it.h;
             try {
-              E.fn({ g: E.inner, v: fr.values || {}, t: fr.t, el, S: E.S, UZ, geo: E.geo, w: it.w, h: it.h });
+              E.fn({ g: E.inner, v: fr.values || {}, t: fr.t, el, S: E.S, UZ, geo: E.geo, w: pw, h: ph });
               if (E.geo.errors.length) {   // TeX の誤りは描いたまま（赤い文字）知らせる。同じ誤りは 1 回だけ
                 const msg = E.geo.errors.join(" / ");
                 if (E._err !== msg) { E._err = msg; console.error("custom の部品の数式に誤り", it.key, msg); }

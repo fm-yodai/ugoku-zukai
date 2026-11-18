@@ -1,6 +1,6 @@
 # 幾何の道具（geo）とリファレンス
 
-`custom` の部品（`storyboard.md` の 6 章）の関数が使う道具 `geo` の一覧と、道具を組み合わせた見本（リファレンス）。座標・グラフ・接線・面積・ベクトル・数式を、名前付きの値（`values`）に連動して描く。writer は、題材に近いリファレンスを写して組み替える。
+`custom` の部品（`storyboard.md` の 8 章「custom（値に連動して描く部品）」。下の層の `custom` の動作とは別物）の関数が使う道具 `geo` の一覧と、道具を組み合わせた見本（リファレンス）。座標・グラフ・接線・面積・ベクトル・数式を、名前付きの値（`values`）に連動して描く。writer は、題材に近いリファレンスを写して組み替える。
 
 値に連動して動く図と数式の変形が、聴衆に何を起こし、何を代償にするかは `visual-grammar.md` の VG-13・VG-14 にある。ここに書くのは道具の使い方だけで、どこで使うかは書かない。台本の形（`values`・`set`・`custom` の部品）の正は `storyboard.md`。見本の台本は `examples/math-geometry.json`（対になる構成メモは `examples/outlines/math-geometry.json`。テーマは `kuro`）。
 
@@ -21,18 +21,20 @@
 | `v` | 名前付きの値（`{ a: -1.2, n: 16 }`）。`set` で動いている途中は、その時点の値 |
 | `t` | 動画の頭からの秒 |
 | `el(tag, attrs, parent)` | SVG の要素を作る。`attrs` の値が `null` の属性は書かない |
-| `S` | テーマの色と字体（`S.accent` `S.ink` `S.muted` `S.good` `S.bad` `S.warn` `S.line` `S.bg` `S.surface` `S.font`） |
+| `S` | テーマの色と字体（`S.accent` `S.ink` `S.muted` `S.good` `S.bad` `S.warn` `S.line` `S.bg` `S.surface` `S.font`、線の色の並び `S.series`） |
 | `geo` | この文書の道具 |
-| `w`・`h` | 部品の区画の幅と高さ（px） |
+| `w`・`h` | 部品の区画の幅と高さ（画面の px）。そのコマの区画の大きさで、区画が変わるスライドでは新しい値で呼ばれる |
 | `UZ` | プレーヤーの関数（`UZ.clamp` `UZ.smooth` など） |
 
 - 座標は部品のローカル座標で、左上が (0, 0)、右下が (`w`, `h`)、y は下向き。数の座標で描くときは `geo.axes` の戻り値（以下 `Ax`）を通す
 - 描いたものは区画（0〜`w` × 0〜`h`）に収める。はみ出すと検査が警告する
 - 動きは `v` から計算する。`set` は字幕の文中の印に結べるので、ナレーションの語と値の動きがそろう。`t` を直接使うと、声と関係なく動き続ける
-- 色は、テーマのキー（`accent` など）か役割の名前（`process` など）で書く。テーマを替えても読める色になる。`#rrggbb` で直接書くと、テーマから外れる（`themes.md`）
+- 色は名前で書くと、テーマを替えても読める色になる（`#rrggbb` で直接書くと、テーマから外れる。`themes.md`）。名前には 2 種類ある
+  - 意味のキー（`accent`・`good`・`bad`・`warn`、本文の `ink`・`muted` など）と役割の名前（`process` など）: 色が意味を持つ。テーマによっては別のキーが同じ色になる（`koo` は `warn` と `accent` が同じ青、`bad` と `muted` が同じグレー。緑と赤を持たないデザインのため）。曲線と接線を `accent` と `warn` で分けると、`koo` では同じ色の 2 本になる
+  - 線の並び（`s1`・`s2`・`s3`・`s4`）: どのテーマでも互いに別の色になる（テーマの `colors.series`。`kuro` は青・黄・緑・赤、`koo` は青・金・紺・グレー）。並びの数を超えると先頭へ回る。曲線・接線・導関数のように、見分けることが目的の線と、それと同じものを指す式の項はこちらで書く。リファレンス R1〜R6 もこちらで書いてある
 - 関数は台本の最上位の `custom` に、名前を付けて**文字列**で書く。JSON の文字列なので、`\` は `\\`、`"` は `\"` と書く。TeX は `String.raw` で囲むと、JS の中で `\` を重ねずに済む（JSON に書くときは、それでも `\\` になる）
 - スライドの完成形のコマは、そのスライドを使う最後の場面の終わりの値で描かれる。値を動かし終えた姿が、資料としての 1 枚になる
-- 同じ部品を続くスライドで使い続けるなら、部品を台本の最上位の `figures` に宣言し、各スライドから `{ "figure": "<id>" }` で指す（スライドの中で宣言した部品の id は、ほかのスライドで繰り返せない）
+- 同じ部品を続くスライドで使い続けるなら、部品を台本の最上位の `figures` に宣言し、各スライドから `{ "figure": "<id>" }` で指す（スライドの中で宣言した部品の id は、ほかのスライドで繰り返せない）。区画を変えて置くと、関数は新しい区画の `w`・`h` で呼ばれる（絵を縮めるのではなく描き直す。文字の大きさと縦横比が保たれる）。区画が動く 0.8 秒の間は、`w`・`h` が途中の大きさで毎コマ呼ばれる
 - 絵は引数だけから作る。`Math.random`・`Date`、`el` で作る以外の DOM の API（`getBBox`・`classList` など）、呼び出しをまたいで持つ状態を使うと、シークで絵が変わり、node の検査・コマとブラウザの再生で絵が食い違う
 - 部品の関数（引数 `{ g, v, t, el, S, UZ, geo, w, h }`）と、前からある `custom` の動作（`storyboard.md`。引数 `{ g, p, t, el, S, UZ, area }`）は引数が違う。同じ名前の関数を両方から指さない
 - 関数は 1 コマごとに呼ばれるので、軽く保つ。止まらない繰り返しは、ブラウザでは再生ページを固まらせる
@@ -64,7 +66,7 @@
 |---|---|
 | `geo.deriv(f, x)` | `f` の `x` での傾き（数値微分） |
 | `geo.tangent(g, Ax, f, x0, { df?, len?, color?, width?, dash? })` | `x0` での接線（`dash: true` で破線）。`df` で傾きを渡せる（省くと数値微分）。`len` は x の単位で測った線の長さ（傾きによらず画面の上で同じ長さ） |
-| `geo.secant(g, Ax, f, x0, x1, { extend?, color?, width?, dash? })` | 2 点を通る割線。両側へ 2 点の間の `extend`（既定 0.25）ずつ延ばす |
+| `geo.secant(g, Ax, f, x0, x1, { len?, extend?, color?, width?, dash? })` | 2 点を通る割線。両側へ 2 点の間の `extend`（既定 0.25）ずつ延ばす。`len`（x の単位。`geo.tangent` の `len` と同じ）を書くと、2 点の中点を通る長さ `len` の線になり、2 点を近づけても縮まない（2 点が重なると、傾きは数値微分で代わり、接線になる） |
 | `geo.area(g, Ax, f, a, b, { color?, opacity? })` | `a`〜`b` で曲線と x 軸に挟まれた面を塗る（`opacity` の既定 0.35） |
 | `geo.riemann(g, Ax, f, a, b, n, { rule?, color?, opacity? })` | `n` 本の長方形（リーマン和。`n` は丸め、上限 2000）。`rule` は `left`（既定）・`mid`・`right`。`opacity` は塗りの濃さ（既定 0.4） |
 
@@ -84,10 +86,11 @@
 |---|---|
 | `geo.tex(g, tex, { x, y, size?, anchor?, color?, display? })` | TeX の数式。`y` は数式の**上端**、`x` は `anchor` で決まる横の位置（`anchor` の既定は `start` = `x` が左端。`geo.label` の既定 `middle` と違う）。`size` は 1em の px（既定 32）。`display: true` で別行立ての組み方（`\sum` の添字が上下に付くなど）。戻り値は `{ w, h, el }`（幅と高さの px）。3 章 |
 | `geo.texMorph(g, from, to, p, o)` | 数式 `from` から `to` への変形の途中（`p` は 0〜1）。`o` は `geo.tex` と同じ。3 章 |
-| `geo.col(c)` | 色の名前を色の値にする |
+| `geo.col(c)` | 色の名前（意味のキー・線の並び `s1`〜・役割の名前）を色の値にする |
+| `geo.series` | 線の並びの色の配列（`geo.series[0]` が `s1`）。並べる線の数が決まっていないとき、`geo.series[i % geo.series.length]` で引く |
 | `geo.lerp(a, b, p)` | 数か配列の補間 |
 | `geo.smooth(p)` | 0〜1 の、両端で緩やかになる補間 |
-| `geo.mix(c1, c2, p)` | 2 つの色を混ぜる |
+| `geo.mix(c1, c2, p)` | 2 つの色を混ぜる（色の名前でも色の値でもよい） |
 | `geo.errors` | TeX の誤りなどの知らせ（検査が誤りにする） |
 
 透明度で出し入れするときは、`el("g", { opacity: v.x }, g)` を作ってそこに描く。
@@ -98,7 +101,7 @@
 
 - **値を埋める**: テンプレート文字列で書く（`` `f'(${a.toFixed(2)})=${m.toFixed(2)}` ``）。`(-0.001).toFixed(2)` は `-0.00` になるので、0 を挟んで動く値は直してから埋める（R1）
 - **置き方**: `geo.tex` の `y` は上端。2 つの式を縦に並べるときは、戻り値の `h` を足して次の `y` にする。横に続けるときは `w` を足す
-- **色**: 式全体の色は `color` で決まる。項ごとに色を付けるには `\textcolor{色}{…}` で囲む（`x^2+\textcolor{warn}{2x}+1`）。色はテーマのキー（`accent`・`warn`・`good` など。テーマの色に置き換わる）か `#rrggbb` で書く。図の同じものと同じ色にすると、式の項と図の部分が目で結びつく（R1 の傾きの数と接線、見本の展開の項と正方形の部分）。`\color{色}` は後ろ全体の色を切り替える命令なので、囲んだ所だけに効かせたいときは `\textcolor` を使う
+- **色**: 式全体の色は `color` で決まる。項ごとに色を付けるには `\textcolor{色}{…}` で囲む（`x^2+\textcolor{s2}{2x}+1`）。色は 1 章の色の名前（意味のキー、線の並び `s1`〜。テーマの色に置き換わる）か `#rrggbb` で書く。図の同じものと同じ色にすると、式の項と図の部分が目で結びつく（R1 の傾きの数と接線、見本の展開の項と正方形の部分）。`\color{色}` は後ろ全体の色を切り替える命令なので、囲んだ所だけに効かせたいときは `\textcolor` を使う
 - **文字の中の数式**: `geo.label` と `geo.point`・`geo.vector`・`geo.axes` の `label` は、`$…$` で囲むと TeX で組む
 - **日本語**: MathJax には日本語の字形がない。`\text{速さ}` はテーマの字体の文字で代わりに出るが、式の中で幅が合わないことがある。日本語の説明は式の外に `geo.label` で置く
 - **誤り**: 組めない TeX（閉じていない `{` など）は、その場所に TeX の文字列を赤で出し、検査が誤りにする
@@ -108,7 +111,7 @@
 ```js
 geo.texMorph(g,
   String.raw`(\cssId{x}{x}\cssId{p}{+}\cssId{one}{1})^{\cssId{two}{2}}`,
-  String.raw`\textcolor{accent}{\cssId{x}{x}^{\cssId{two}{2}}}\cssId{p}{+}\textcolor{warn}{2x}+\textcolor{good}{\cssId{one}{1}}`,
+  String.raw`\textcolor{s1}{\cssId{x}{x}^{\cssId{two}{2}}}\cssId{p}{+}\textcolor{s2}{2x}+\textcolor{s3}{\cssId{one}{1}}`,
   v.e, { x: 400, y: 120, size: 64 })
 ```
 
@@ -116,7 +119,7 @@ geo.texMorph(g,
 
 ## 4. リファレンス（R1〜R6）
 
-どれも、`custom` の関数の全文と、値と動作の例（1 行の `do` に書く `set`）を載せる。部品の宣言は `{ "id": "…", "type": "custom", "draw": "<関数の名前>" }`。関数の中の `w`・`h` に合わせて配置するので、区画を変えても崩れにくい。
+どれも、`custom` の関数の全文と、値と動作の例（1 行の `do` に書く `set`）を載せる。部品の宣言は `{ "id": "…", "type": "custom", "draw": "<関数の名前>" }`。関数の中の `w`・`h` に合わせて配置するので、区画を変えても崩れない（区画が変わると、新しい `w`・`h` で描き直される）。見分ける線の色は線の並び（`s1`〜）で書いてあるので、`koo` でも `kuro` でも別の色になる。
 
 ### R1 微分の接線
 
@@ -134,20 +137,22 @@ geo.texMorph(g,
   const f = x => x * x * x / 4 - x, df = x => 3 * x * x / 4 - 1;
   const num = x => { const s = x.toFixed(2); return s === "-0.00" ? "0.00" : s; };
   const Ax = geo.axes(g, { box: { x: 30, y: 10, w: w * 0.58, h: h - 30 }, x: [-3, 3], y: [-2.5, 2.5], grid: true, labels: { x: "$x$", y: "$y$" } });
-  geo.plot(g, Ax, f, { color: "accent" });
+  geo.plot(g, Ax, f, { color: "s1" });
   const a = v.a, m = df(a);
-  if (v.tr > 0 && a > -2.4) geo.plot(el("g", { opacity: v.tr }, g), Ax, df, { from: -2.4, to: a, color: "good" });
-  geo.tangent(el("g", { opacity: v.tl }, g), Ax, f, a, { df: m, color: "warn" });
+  if (v.tr > 0 && a > -2.4) geo.plot(el("g", { opacity: v.tr }, g), Ax, df, { from: -2.4, to: a, color: "s3" });
+  geo.tangent(el("g", { opacity: v.tl }, g), Ax, f, a, { df: m, color: "s2" });
   const [px, py] = Ax.toPx([a, f(a)]), py0 = Ax.toPx([a, 0])[1];
   el("path", { d: `M${px},${py0}V${py}`, stroke: S.muted, "stroke-width": 2, "stroke-dasharray": "6 6" }, g);
-  geo.point(g, Ax, [a, f(a)], { color: "warn" });
+  geo.point(g, Ax, [a, f(a)], { color: "s2" });
   const X = w * 0.64;
-  geo.tex(g, String.raw`f(x)=\tfrac{1}{4}x^3-x`, { x: X, y: 20, size: 34, color: "accent" });
-  geo.tex(el("g", { opacity: v.tr }, g), String.raw`f'(x)=\tfrac{3}{4}x^2-1`, { x: X, y: 90, size: 34, color: "good" });
+  geo.tex(g, String.raw`f(x)=\tfrac{1}{4}x^3-x`, { x: X, y: 20, size: 34, color: "s1" });
+  geo.tex(el("g", { opacity: v.tr }, g), String.raw`f'(x)=\tfrac{3}{4}x^2-1`, { x: X, y: 90, size: 34, color: "s3" });
   // 傾きの数は、接線と同じ色にする
-  geo.tex(el("g", { opacity: v.tl }, g), String.raw`f'(${num(a)})=\textcolor{warn}{${num(m)}}`, { x: X, y: 190, size: 44 });
+  geo.tex(el("g", { opacity: v.tl }, g), String.raw`f'(${num(a)})=\textcolor{s2}{${num(m)}}`, { x: X, y: 190, size: 44 });
 }
 ```
+
+割線が接線に近づく見せ方: 2 点の間を値 `hh` にして、`geo.secant(g, Ax, f, a, a + v.hh, { len: 3, color: "s2" })` と描き、`set` で `hh` を 0 へ動かす。`len` を書くと、線は 2 点の中点を通る長さ 3（x の単位）のままで、2 点が近づいても縮まず、最後は接線に重なる。傾きの数は `(f(a + v.hh) - f(a)) / v.hh` で出せるが、`hh` が 0 になる所では `geo.deriv(f, a)` に代える。`len` を書かないと、線は 2 点の間を少し延ばした長さなので、2 点と一緒に縮んで消える。
 
 ### R2 リーマン和
 
@@ -163,14 +168,14 @@ geo.texMorph(g,
   // f を 0〜2 で n 本の長方形に分け、左端の高さで足す。n が増えると、和が面積 4/3 に近づく
   const f = x => x * x / 2, n = Math.round(v.n);
   const Ax = geo.axes(g, { box: { x: 50, y: 10, w: w * 0.5, h: h - 50 }, x: [0, 2.2], y: [0, 2.2], ticks: { x: 0.5, y: 0.5 }, labels: { x: "$x$", y: "$y$" } });
-  geo.riemann(g, Ax, f, 0, 2, n, { color: "accent" });
-  geo.plot(g, Ax, f, { color: "warn", to: 2 });
+  geo.riemann(g, Ax, f, 0, 2, n, { color: "s1" });
+  geo.plot(g, Ax, f, { color: "s2", to: 2 });
   let sum = 0;
   for (let i = 0; i < n; i++) sum += f(2 * i / n) * (2 / n);
   const X = w * 0.58;
-  geo.tex(g, `n=${n}`, { x: X, y: 20, size: 40, color: "accent" });
-  geo.tex(g, String.raw`\textstyle\sum f(x_i)\,\Delta x \approx ${sum.toFixed(3)}`, { x: X, y: 100, size: 34, color: "accent" });
-  geo.tex(g, String.raw`\int_0^2 \tfrac{1}{2}x^2\,dx=\tfrac{4}{3}\approx 1.333`, { x: X, y: 200, size: 34, color: "warn" });
+  geo.tex(g, `n=${n}`, { x: X, y: 20, size: 40, color: "s1" });
+  geo.tex(g, String.raw`\textstyle\sum f(x_i)\,\Delta x \approx ${sum.toFixed(3)}`, { x: X, y: 100, size: 34, color: "s1" });
+  geo.tex(g, String.raw`\int_0^2 \tfrac{1}{2}x^2\,dx=\tfrac{4}{3}\approx 1.333`, { x: X, y: 200, size: 34, color: "s2" });
 }
 ```
 
@@ -190,18 +195,18 @@ geo.texMorph(g,
   const C = geo.axes(g, { box: { x: 20, y: 20, w: H, h: H }, x: [-1.3, 1.3], y: [-1.3, 1.3], ticks: { x: 1, y: 1 } });
   const O = C.toPx([0, 0]), r = C.toPx([1, 0])[0] - O[0], P = C.toPx([c, s]), F = C.toPx([c, 0]);
   geo.circle(g, O, r, { color: "muted", width: 2 });
-  geo.arc(g, O, 34, 0, th, { color: "good", fill: true, width: 2 });
+  geo.arc(g, O, 34, 0, th, { color: "s3", fill: true, width: 2 });
   geo.polygon(g, [O, P], { closed: false, color: "ink", width: 2 });
-  geo.polygon(g, [O, F], { closed: false, color: "accent", width: 5 });
-  geo.polygon(g, [F, P], { closed: false, color: "warn", width: 5 });
+  geo.polygon(g, [O, F], { closed: false, color: "s1", width: 5 });
+  geo.polygon(g, [F, P], { closed: false, color: "s2", width: 5 });
   const G = geo.axes(g, { box: { x: H + 70, y: 20, w: w - H - 90, h: H }, x: [0, 6.5], y: [-1.3, 1.3], ticks: { x: 1, y: 1 }, labels: { x: String.raw`$\theta$` } });
-  geo.plot(g, G, Math.sin, { color: "warn", from: 0, to: Math.max(th, 1e-3) });
+  geo.plot(g, G, Math.sin, { color: "s2", from: 0, to: Math.max(th, 1e-3) });
   const Q = G.toPx([th, s]);
   el("path", { d: `M${P[0]},${P[1]}H${Q[0]}`, stroke: S.muted, "stroke-width": 1.5, "stroke-dasharray": "6 6" }, g);
-  geo.point(g, C, [c, s], { color: "warn" });
-  geo.point(g, G, [th, s], { color: "warn" });
-  geo.tex(g, String.raw`\sin\theta=${s.toFixed(2)}`, { x: w - 20, y: 24, size: 32, color: "warn", anchor: "end" });
-  geo.tex(g, String.raw`\cos\theta=${c.toFixed(2)}`, { x: w - 20, y: 74, size: 32, color: "accent", anchor: "end" });
+  geo.point(g, C, [c, s], { color: "s2" });
+  geo.point(g, G, [th, s], { color: "s2" });
+  geo.tex(g, String.raw`\sin\theta=${s.toFixed(2)}`, { x: w - 20, y: 24, size: 32, color: "s2", anchor: "end" });
+  geo.tex(g, String.raw`\cos\theta=${c.toFixed(2)}`, { x: w - 20, y: 74, size: 32, color: "s1", anchor: "end" });
 }
 ```
 
@@ -219,15 +224,15 @@ geo.texMorph(g,
   // b の根元を、原点から a の先へ運ぶ（t: 0→1）。t が 0.7 を過ぎると a+b が現れる
   const a = [3, 1], b = [1, 2], t = v.t, from = geo.lerp([0, 0], a, t), H = h - 30;
   const Ax = geo.axes(g, { box: { x: 30, y: 10, w: H * 7 / 5, h: H }, x: [-1, 6], y: [-1, 4], grid: true, ticks: { x: 1, y: 1 } });
-  if (t > 0) geo.vector(el("g", { opacity: 0.3 }, g), Ax, [0, 0], b, { color: "warn" });
-  geo.vector(g, Ax, [0, 0], a, { color: "accent", label: String.raw`$\vec{a}$` });
-  geo.vector(g, Ax, from, [from[0] + b[0], from[1] + b[1]], { color: "warn", label: String.raw`$\vec{b}$` });
+  if (t > 0) geo.vector(el("g", { opacity: 0.3 }, g), Ax, [0, 0], b, { color: "s2" });
+  geo.vector(g, Ax, [0, 0], a, { color: "s1", label: String.raw`$\vec{a}$` });
+  geo.vector(g, Ax, from, [from[0] + b[0], from[1] + b[1]], { color: "s2", label: String.raw`$\vec{b}$` });
   const k = UZ.clamp((t - 0.7) / 0.3);
   if (k > 0) {
     const kg = el("g", { opacity: k }, g);   // a+b の先は b の先と重なるので、名前は矢の中ほどの左上に置く
-    geo.vector(kg, Ax, [0, 0], [a[0] + b[0], a[1] + b[1]], { color: "good" });
-    geo.label(kg, Ax.toPx([2.1, 2.4]), String.raw`$\vec{a}+\vec{b}$`, { color: "good" });
-    geo.tex(kg, String.raw`(3,1)+(1,2)=(4,3)`, { x: H * 7 / 5 + 70, y: 40, size: 36, color: "good" });
+    geo.vector(kg, Ax, [0, 0], [a[0] + b[0], a[1] + b[1]], { color: "s3" });
+    geo.label(kg, Ax.toPx([2.1, 2.4]), String.raw`$\vec{a}+\vec{b}$`, { color: "s3" });
+    geo.tex(kg, String.raw`(3,1)+(1,2)=(4,3)`, { x: H * 7 / 5 + 70, y: 40, size: 36, color: "s3" });
   }
 }
 ```
@@ -249,17 +254,17 @@ geo.texMorph(g,
   for (let i = 0; i < 10; i++) ws.push(ws[i] - eta * dL(ws[i]));
   const K = Math.min(Math.floor(v.k), 9), cur = geo.lerp(ws[K], ws[K + 1], v.k - K);
   const A = geo.axes(g, { box: { x: 30, y: 10, w: w * 0.45, h: h - 50 }, x: [-1, 6], y: [0, 7.5], ticks: { x: 1, y: 1 }, labels: { x: "$w$", y: "$L$" } });
-  geo.plot(g, A, L, { color: "accent" });
+  geo.plot(g, A, L, { color: "s1" });
   for (let i = 0; i <= K; i++) geo.point(g, A, [ws[i], L(ws[i])], { color: "muted", r: 4 });
-  geo.tangent(g, A, L, cur, { color: "warn", len: 2 });
-  geo.point(g, A, [cur, L(cur)], { color: "warn" });
+  geo.tangent(g, A, L, cur, { color: "s2", len: 2 });
+  geo.point(g, A, [cur, L(cur)], { color: "s2" });
   geo.tex(g, String.raw`w \leftarrow w-\eta\,L'(w)`, { x: A.toPx([5.9, 0])[0], y: 16, size: 28, color: "ink", anchor: "end" });
   const B = geo.axes(g, { box: { x: w * 0.55, y: 10, w: w * 0.42, h: h - 50 }, x: [0, 8.5], y: [0, 7.5], ticks: { x: 1, y: 1 }, labels: { x: "歩数", y: "$L$" } });
   const pts = [];
   for (let i = 0; i <= K; i++) pts.push(B.toPx([i, L(ws[i])]));
   pts.push(B.toPx([v.k, L(cur)]));
-  geo.polygon(g, pts, { closed: false, color: "warn" });
-  geo.point(g, B, [v.k, L(cur)], { color: "warn" });
+  geo.polygon(g, pts, { closed: false, color: "s2" });
+  geo.point(g, B, [v.k, L(cur)], { color: "s2" });
 }
 ```
 
@@ -278,7 +283,7 @@ geo.texMorph(g,
   const r = v.g, sales = (rate, m) => 100 * Math.pow(1 + rate, m - 1);
   const Ax = geo.axes(g, { box: { x: 70, y: 20, w: w * 0.58, h: h - 50 }, x: [0.3, 12.7], y: [0, 200], ticks: { x: 1, y: 50 }, labels: { y: "万円" } });
   for (let m = 1; m <= 12; m++) {
-    geo.bar(g, Ax, m, sales(r, m), { color: m === 12 ? "warn" : "accent", opacity: 0.85 });
+    geo.bar(g, Ax, m, sales(r, m), { color: m === 12 ? "s2" : "s1", opacity: 0.85 });
     if (r > 0.0201) {
       const [x0, y] = Ax.toPx([m - 0.3, sales(0.02, m)]), x1 = Ax.toPx([m + 0.3, 0])[0];
       el("path", { d: `M${x0},${y}H${x1}`, stroke: S.ink, "stroke-width": 3, "stroke-dasharray": "5 4" }, g);
@@ -286,8 +291,8 @@ geo.texMorph(g,
   }
   const X = w * 0.66, last = sales(r, 12);
   geo.label(g, [X, 30], "月の伸び率", { anchor: "start", color: "muted", size: 24 });
-  geo.number(g, [X, 80], r * 100, { decimals: 1, unit: "%", anchor: "start", color: "accent", size: 48 });
+  geo.number(g, [X, 80], r * 100, { decimals: 1, unit: "%", anchor: "start", color: "s1", size: 48 });
   geo.label(g, [X, 160], "12 月の売上（万円）", { anchor: "start", color: "muted", size: 24 });
-  geo.tex(g, String.raw`100\times${(1 + r).toFixed(3)}^{11}\approx\textcolor{warn}{${Math.round(last)}}`, { x: X, y: 190, size: 36 });
+  geo.tex(g, String.raw`100\times${(1 + r).toFixed(3)}^{11}\approx\textcolor{s2}{${Math.round(last)}}`, { x: X, y: 190, size: 36 });
 }
 ```

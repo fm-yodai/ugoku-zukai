@@ -57,7 +57,7 @@
         const name = `${v.it.fig}/${v.it.id}`;
         // 大きさを変えた箱（resize）は、変えた後の形と、付いていった文字の位置で調べる
         const rz = v.s.rect || null, tOff = (rz && v.s.textOff) || [0, 0];
-        const bbox = rz || v.it.bbox;
+        const bbox = rz || (v.it.kind === "custom" && v.pl.w != null ? { x: 0, y: 0, w: v.pl.w, h: v.pl.h } : v.it.bbox);
         if (bbox && outside(tf(bbox, pl))) continue;
         if (bbox && v.it.kind !== "band" && !clip) {
           const b = tf(bbox, pl);
@@ -211,7 +211,9 @@
         const add = (list, body, kind) => note(list, lineId, F.id, body, kind);
         const root = el("g"), S = F.dark ? UZ.darkStyleOf(M.S) : M.S, geo = UZ.makeGeo(el, S);
         const t0 = now();
-        try { call(fn, { g: root, v: fr.values || {}, t: fr.t, el, S, UZ, geo, w: it.w, h: it.h }); }
+        // 描き場の大きさは、そのコマの区画（場面ごとに変わる。再生ページと同じ値）
+        const W = fo.place && fo.place.w != null ? fo.place.w : it.w, H = fo.place && fo.place.w != null ? fo.place.h : it.h;
+        try { call(fn, { g: root, v: fr.values || {}, t: fr.t, el, S, UZ, geo, w: W, h: H }); }
         catch (e) {
           if (e && e.uzTimeout) { stopped.add(it.key); add(errors, `関数が ${e.uzTimeout / 1000} 秒で終わらない（止まらない繰り返しか、繰り返しの数が多すぎる。再生ページが固まる）`, "timeout"); }
           else add(errors, `関数が例外を投げた（${String(e && e.message || e)}）`);
@@ -224,8 +226,8 @@
         const ok = pts.filter(p => Number.isFinite(p[0]) && Number.isFinite(p[1]));
         if (!ok.length) continue;
         const x0 = Math.min(...ok.map(p => p[0])), x1 = Math.max(...ok.map(p => p[0])), y0 = Math.min(...ok.map(p => p[1])), y1 = Math.max(...ok.map(p => p[1]));
-        if (x0 < -SPILL || y0 < -SPILL || x1 > it.w + SPILL || y1 > it.h + SPILL)
-          add(warnings, `描いたものが部品の区画（0〜${Math.round(it.w)} × 0〜${Math.round(it.h)}）からはみ出す（x ${x0.toFixed(0)}〜${x1.toFixed(0)}、y ${y0.toFixed(0)}〜${y1.toFixed(0)}）`, "spill");
+        if (x0 < -SPILL || y0 < -SPILL || x1 > W + SPILL || y1 > H + SPILL)
+          add(warnings, `描いたものが部品の区画（0〜${Math.round(W)} × 0〜${Math.round(H)}）からはみ出す（x ${x0.toFixed(0)}〜${x1.toFixed(0)}、y ${y0.toFixed(0)}〜${y1.toFixed(0)}）`, "spill");
       }
     }
     for (const [sum, n, figId] of Object.values(cost)) if (n && sum / n > slowMs)

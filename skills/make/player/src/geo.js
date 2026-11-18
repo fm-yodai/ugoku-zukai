@@ -52,16 +52,22 @@
   UZ.makeGeo = function (el, S) {
     const geo = { errors: [], S };
 
-    // 色: テーマのキー（accent・ink・muted・good・bad・warn・line・bg・surface）、役割の名前、#rrggbb などの色
+    // 色: テーマのキー（accent・ink・muted・good・bad・warn・line・bg・surface）、線の並び（s1〜。数が並びを超えると回る）、
+    // 役割の名前、#rrggbb などの色
+    const series = S.series && S.series.length ? S.series : [S.accent, S.good, S.ink];
+    const seriesCol = c => { const m = /^s([1-9]\d*)$/.exec(c); return m ? series[(+m[1] - 1) % series.length] : null; };
     const col = (c, dflt) => {
       if (c == null || c === "") return dflt == null ? S.ink : col(dflt);
       if (KEYS.includes(c)) return S[c];
+      const sc = seriesCol(c);
+      if (sc) return sc;
       if (/^(#|rgb|hsl)/i.test(c) || c === "none") return c;
       return S.role(c);
     };
     // 面の色: fill が true なら線の色、色の名前ならその色、なければ塗らない
     const fillOf = (o, stroke) => o.fill === true ? stroke : o.fill ? col(o.fill) : "none";
     geo.col = c => col(c);
+    geo.series = series.slice();   // 線の並びの色（geo.series[0] = s1）
     geo.lerp = (a, b, p) => Array.isArray(a) ? a.map((v, i) => v + (b[i] - v) * p) : a + (b - a) * p;
     geo.smooth = UZ.smooth;
     geo.mix = (c1, c2, p) => C.mix(col(c1), col(c2), clamp(p));
@@ -227,8 +233,17 @@
       if (!Number.isFinite(y0)) return el("path", { d: "M0,0", fill: "none" }, g);   // 接点がない
       return slopeLine(g, Ax, [x0, y0], Number.isFinite(m) ? m : 0, len * pxPerX(Ax), o, "good");
     };
-    // 割線。2 点を通り、両側へ 2 点の間の 1/4 ずつ延ばす（extend で変える）
+    // 割線。2 点を通り、両側へ 2 点の間の 1/4 ずつ延ばす（extend で変える）。
+    // len（x の数の単位。tangent の len と同じ）を書くと、2 点の中点を通る長さ len の線にする。2 点を近づけても線は縮まず、
+    // 近すぎる（x の差がごく小さい）ときは、傾きを数値微分で代える（割線が接線に近づく見せ方）
     geo.secant = function (g, Ax, f, x0, x1, o = {}) {
+      if (o.len != null) {
+        const tiny = Math.abs(Ax.x[1] - Ax.x[0]) * 1e-6, near = !(Math.abs(x1 - x0) > tiny);
+        const xm = near ? x0 : (x0 + x1) / 2, ym = near ? Number(f(x0)) : (Number(f(x0)) + Number(f(x1))) / 2;
+        const m = near ? geo.deriv(f, x0) : (f(x1) - f(x0)) / (x1 - x0);
+        if (!Number.isFinite(ym)) return el("path", { d: "M0,0", fill: "none" }, g);
+        return slopeLine(g, Ax, [xm, ym], Number.isFinite(m) ? m : 0, o.len * pxPerX(Ax), o, "good");
+      }
       const p = [x0, f(x0)], q = [x1, f(x1)], P = Ax.toPx(p), Q = Ax.toPx(q), k = o.extend ?? 0.25;
       const dx = Q[0] - P[0], dy = Q[1] - P[1];
       const seg = clipSeg([P[0] - dx * k, P[1] - dy * k], [Q[0] + dx * k, Q[1] + dy * k], Ax.box);
@@ -306,8 +321,8 @@
     const placeStr = P => `translate(${n2(P.tx)},${n2(P.ty)}) scale(${n4(P.k)})`;
     // 木の子を el で写す。currentColor は色に置き換える（resvg と同じ絵にするため）。
     // 数式の中の日本語（\text{…}）は、MathJax の serif をやめてテーマの文字で出す（幅は MathJax が 1 文字 1em で見積もっている）
-    // \color{warn}{…} のようにテーマのキーで書いた色は、テーマの色にする（\color{#58c4dd} などはそのまま）
-    const texColor = (v, color) => v === "currentColor" ? color : KEYS.includes(v) ? S[v] : v;
+    // \color{warn}{…} のようにテーマのキーか線の並び（s1〜）で書いた色は、テーマの色にする（\color{#58c4dd} などはそのまま）
+    const texColor = (v, color) => v === "currentColor" ? color : KEYS.includes(v) ? S[v] : seriesCol(v) || v;
     function copyAttrs(attrs, color) {
       const a = {};
       for (const k in attrs) if (!skipAttr(k) && k !== "transform") a[k] = (k === "fill" || k === "stroke") ? texColor(attrs[k], color) : attrs[k];

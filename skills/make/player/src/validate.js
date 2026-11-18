@@ -304,6 +304,14 @@
           if (a.zoom != null && typeof a.zoom !== "string" && !(Array.isArray(a.zoom) && a.zoom.length && a.zoom.every(z => typeof z === "string" && z !== "all"))) E(`${lw} の do[${ai}]: zoom の対象は文字列（図・部品・要素の id、全体に戻るなら "all"）か、id の配列で書く`);
           if (a.pan != null && typeof a.pan !== "string") E(`${lw} の do[${ai}]: pan の対象は文字列（要素の id）で書く`);
           if ((a.zoom != null || a.pan != null) && a.pad != null && !(typeof a.pad === "number" && Number.isFinite(a.pad) && a.pad >= 0)) E(`${lw} の do[${ai}]: pad は 0 以上の数で書く`);
+          if (a.region != null) {
+            // region: 対象の矩形の中の一部を、割合（0〜1）の { x: [始まり, 終わり], y: [始まり, 終わり] } で指す（片方は省ける = 0〜1）
+            const rg = a.region, span = v => Array.isArray(v) && v.length === 2 && v.every(n => typeof n === "number" && Number.isFinite(n) && n >= 0 && n <= 1) && v[0] < v[1];
+            if (verbs[0] !== "zoom" && verbs[0] !== "pan") E(`${lw} の do[${ai}]: region は zoom と pan にだけ付けられる`);
+            else if (a.zoom === "all") E(`${lw} の do[${ai}]: zoom: "all" には region を付けられない（全体に戻る）`);
+            else if (!rg || typeof rg !== "object" || Array.isArray(rg) || Object.keys(rg).some(k => k !== "x" && k !== "y") || (rg.x == null && rg.y == null) || (rg.x != null && !span(rg.x)) || (rg.y != null && !span(rg.y)))
+              E(`${lw} の do[${ai}]: region は { "x": [始まり, 終わり], "y": [始まり, 終わり] } で、対象の区画に対する割合（0〜1、始まり < 終わり）で書く`);
+          }
           if (a.draw != null && typeof a.draw !== "boolean") E(`${lw} の do[${ai}]: draw は true か false で書く`);
           if (a.draw != null && verbs[0] !== "show") E(`${lw} の do[${ai}]: draw は show にだけ付けられる`);
           if (verbs[0] === "set") {

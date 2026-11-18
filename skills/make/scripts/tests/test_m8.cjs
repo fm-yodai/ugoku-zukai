@@ -502,6 +502,131 @@ const tests = {
     assert.match(fr.stderr, /コマを描くのが 0.5 秒で終わらない/);
     fs.rmSync(d, { recursive: true, force: true });
   },
+  // ---- writer の評価で詰まった点の直し（Task 8 fix） ----
+  async shared_custom_redraws_at_new_area() {   // figures で共有した custom の部品は、場面ごとの区画の大きさ（px）で描き直す。伸び縮みしない
+    const RECT = "({ g, el, w, h }) => el('rect', { x: 0, y: 0, width: w, height: h, fill: 'none' }, g)";
+    const sb = deck5({
+      a: { title: "A", parts: [{ figure: "c1" }] },
+      b: { title: "B", parts: [{ figure: "c1", area: { col: [1, 12], row: [1, 3] } }, { id: "t", type: "text", area: { col: [1, 12], row: [4, 6] }, blocks: [{ id: "p", kind: "para", text: "下の段" }] }] },
+    }, [SC("s1", "a", [{ id: "l1", text: "{a}出します。", do: [{ show: "c1", at: "a" }] }]),
+        SC("s2", "b", [{ id: "l2", text: "{a}下に文を足します。", do: [{ show: "t", at: "a" }] }])],
+    { c1: { type: "custom", draw: "r" } }, { values: { a: 0 }, custom: { r: RECT } });
+    const M = await build(sb);
+    assert.deepStrictEqual(M.errors, []);
+    const [s1, s2] = M.scenes, A1 = s1.areas[0], A2 = s2.areas[0];
+    assert.ok(A2.h < A1.h * 0.7, "区画が変わっていない");
+    for (const [sc, A] of [[s1, A1], [s2, A2]]) {
+      const pl = sc.place.c1;
+      assert.strictEqual(pl.s, 1, "custom の部品に伸び縮みが掛かっている");
+      assert.deepStrictEqual([pl.ox, pl.oy, pl.w, pl.h], [A.x, A.y, A.w, A.h]);
+    }
+    // コマ: 続く場面の終わりは新しい区画の大きさ。移る途中は補間
+    const end2 = M.timeline.lines[1].start + M.timeline.lines[1].dur;
+    const f2 = UZ.frame(M, end2).figs.c1.place;
+    assert.deepStrictEqual([f2.s, Math.round(f2.w), Math.round(f2.h)], [1, Math.round(A2.w), Math.round(A2.h)]);
+    const fm = UZ.frame(M, s2.start + 0.3).figs.c1.place;
+    assert.ok(fm.h < A1.h - 1 && fm.h > A2.h + 1, `移る途中の高さ ${fm.h}`);
+    // 再生ページの描画: 関数に渡る w・h が新しい区画の大きさ
+    const str = renderSvg(M, end2);
+    assert.ok(new RegExp(`<rect [^>]*width="${+A2.w.toFixed(4)}"[^>]*height="${+A2.h.toFixed(4)}"`).test(str) || str.includes(`height="${A2.h}"`), "描画の w・h が新しい区画でない");
+    // 検査: 場面ごとの w・h で呼ぶ。区画いっぱいの矩形ははみ出さない
+    const seen = [];
+    const r = UZ.checkCustoms(M, fakeEl, { call: (fn, a) => { seen.push([Math.round(a.w), Math.round(a.h)]); return fn(a); } });
+    assert.deepStrictEqual(r, { errors: [], warnings: [] }, JSON.stringify(r));
+    assert.ok(seen.some(([w, h]) => w === Math.round(A1.w) && h === Math.round(A1.h)), JSON.stringify(seen));
+    assert.ok(seen.some(([w, h]) => w === Math.round(A2.w) && h === Math.round(A2.h)), JSON.stringify(seen));
+    // 完成形のコマも、そのスライドの区画
+    assert.strictEqual(Math.round(UZ.finalFrame(M, "b").figs.c1.place.h), Math.round(A2.h));
+  },
+  async series_colors_distinct_in_both_themes() {   // 線の色の並び s1〜: koo でも kuro でも別の色になる。色の名前と \textcolor の両方で使える
+    for (const name of ["koo", "kuro"]) {
+      const S = UZ.styleOf(theme(name)), geo = UZ.makeGeo(fakeEl, S);
+      assert.ok(Array.isArray(S.series) && S.series.length >= 3, `${name}: series ${JSON.stringify(S.series)}`);
+      const c = ["s1", "s2", "s3"].map(k => geo.col(k));
+      assert.strictEqual(new Set(c).size, 3, `${name}: ${c}`);
+      assert.deepStrictEqual(geo.series.slice(0, 3), c);
+      assert.ok(c.every(x => /^#[0-9a-f]{6}$/i.test(x)), `${name}: ${c}`);
+      const g = fakeEl("g");
+      geo.tex(g, "\\textcolor{s2}{x}+\\textcolor{s3}{y}", { x: 10, y: 10 });
+      assert.deepStrictEqual(geo.errors, []);
+      const out = ser(g);
+      assert.ok(out.includes(`fill="${c[1]}"`) && out.includes(`fill="${c[2]}"`), `${name}: \\textcolor{s2} が色にならない`);
+    }
+    // koo は意味のキーが重なる（warn = accent）が、並びは重ならない
+    const K = UZ.styleOf(theme("koo"));
+    assert.strictEqual(K.warn, K.accent);
+    assert.deepStrictEqual(K.series.slice(0, 3), ["#286cb9", "#8c5e0a", "#0c1b32"]);
+    // 並びのないテーマ（取り込んだテーマなど）: 意味の色と本文の色から、重なりを除いて作る
+    const th = JSON.parse(JSON.stringify(theme("koo"))); delete th.colors.series;
+    const D = UZ.styleOf(th).series;
+    assert.ok(D.length >= 3 && new Set(D).size === D.length, JSON.stringify(D));
+    assert.strictEqual(D[0], th.colors.accent);
+    // s5 は並びを回る
+    assert.strictEqual(UZ.makeGeo(fakeEl, K).col("s" + (K.series.length + 1)), K.series[0]);
+  },
+  async check_theme_series_distinct() {   // check_theme.py は、並びに同じ色・近すぎる色があると不合格にする
+    const fs = require("fs"), os = require("os"), path = require("path"), cp = require("child_process");
+    const d = fs.mkdtempSync(path.join(os.tmpdir(), "m8th-")), f = path.join(d, "t.json");
+    const run = th => { fs.writeFileSync(f, JSON.stringify(th)); return cp.spawnSync("python3", [path.join(__dirname, "../check_theme.py"), f], { encoding: "utf8" }); };
+    for (const n of ["koo", "kuro"]) assert.strictEqual(run(theme(n)).status, 0, n);
+    const bad = JSON.parse(JSON.stringify(theme("koo"))); bad.colors.series = ["#286cb9", "#286cb9", "#8c5e0a"];
+    const r = run(bad);
+    assert.strictEqual(r.status, 1, r.stdout);
+    assert.match(r.stdout, /series/);
+    fs.rmSync(d, { recursive: true, force: true });
+  },
+  async zoom_region_inside_part() {   // zoom の region: 部品の区画に対する割合の矩形に寄る（区画いっぱいの部品でも倍率 1 未満にならない）
+    const lines = [{ id: "l1", text: "{a}出して{b}右上に寄ります。", do: [{ show: "c1", at: "a" }, { zoom: "c1", region: { x: [0.5, 1], y: [0, 0.5] }, at: "b" }] }];
+    const M = await build(customDeck(CPART, lines));
+    assert.deepStrictEqual(M.errors, []);
+    assert.ok(!M.warnings.some(w => /倍率が 1 未満/.test(w)), JSON.stringify(M.warnings));
+    const z = M.acts.find(a => a.verb === "zoom"), A = M.scenes[0].areas[0];
+    assert.ok(Math.abs(z.target.x - (A.x + A.w / 2)) < 0.01 && Math.abs(z.target.w - A.w / 2) < 0.01 && Math.abs(z.target.h - A.h / 2) < 0.01, JSON.stringify(z.target));
+    assert.ok(z.to.s > 1.5, `倍率 ${z.to.s}`);
+    // 形の誤り
+    for (const region of [{ x: [0.6, 0.2] }, { x: [0, 1.5] }, "right", { x: [0, 1], z: [0, 1] }]) {
+      const bad = customDeck(CPART, [{ id: "l1", text: "{a}出して{b}寄ります。", do: [{ show: "c1", at: "a" }, { zoom: "c1", region, at: "b" }] }]);
+      hasErr(await build(bad), /region/);
+    }
+    const all = customDeck(CPART, [{ id: "l1", text: "{a}出して{b}戻ります。", do: [{ show: "c1", at: "a" }, { zoom: "all", region: { x: [0, 0.5] }, at: "b" }] }]);
+    hasErr(await build(all), /region/);
+  },
+  async focus_whole_part_dims_other_parts() {   // 部品全体を focus すると、同じ場面のほかの部品が薄くなる。unfocus で戻る
+    const sb = deck5({ a: { title: "A", start: "complete", parts: [
+      { id: "c1", type: "custom", draw: "dot", area: { col: [1, 6], row: [1, 6] } },
+      { id: "c2", type: "list", items: [{ id: "i1", text: "項目" }], area: { col: [7, 12], row: [1, 6] } }] } },
+    [SC("s1", "a", [{ id: "l1", text: "{a}左だけを見ます。", do: [{ focus: "c1", at: "a" }] }, { id: "l2", text: "{a}戻します。", do: [{ unfocus: true, at: "a" }] }])],
+    {}, { values: { a: 2 }, custom: { dot: DOT } });
+    const M = await build(sb);
+    assert.deepStrictEqual(M.errors, []);
+    const L = M.timeline.lines, t1 = L[0].start + L[0].dur, t2 = L[1].start + L[1].dur;
+    const f1 = UZ.frame(M, t1).st;
+    assert.ok(f1["c2/i1"].dim < 0.3, `ほかの部品の dim ${f1["c2/i1"].dim}`);
+    assert.ok(f1["c1/draw"].dim > 0.99);
+    assert.ok(UZ.frame(M, t2).st["c2/i1"].dim > 0.99);
+    // 部品の中の要素を指す focus は、今までどおり同じ図の中だけ
+    const sb2 = JSON.parse(JSON.stringify(sb));
+    sb2.scenes[0].lines[0].do = [{ focus: "i1", at: "a" }];
+    const M2 = await build(sb2);
+    const g = UZ.frame(M2, t1).st;
+    assert.ok(!g["c1/draw"] || g["c1/draw"].dim > 0.99, "要素の focus が隣の部品を薄くした");
+  },
+  async secant_keeps_length_as_points_meet() {   // secant の len: 2 点が近づいても線の長さが len のまま（h = 0 でも NaN にならない）
+    const { geo, g } = newGeo();
+    const Ax = geo.axes(g, { x: [-3, 3], y: [-2, 10], box: { x: 0, y: 0, w: 600, h: 480 } });
+    const f = x => x * x, pxPerX = 600 / 6;
+    for (const h of [1, 0.1, 1e-3, 1e-9, 0]) {
+      const p = geo.secant(g, Ax, f, 1, 1 + h, { len: 2 });
+      const n = (p.getAttribute("d").match(/-?[0-9.]+/g) || []).map(Number);
+      assert.strictEqual(n.length, 4, `h=${h}: ${p.getAttribute("d")}`);
+      assert.ok(n.every(Number.isFinite), `h=${h}`);
+      const L = Math.hypot(n[2] - n[0], n[3] - n[1]);
+      assert.ok(Math.abs(L - 2 * pxPerX) < 1, `h=${h}: 長さ ${L}`);
+    }
+    // len を書かなければ今までどおり（2 点の間を延ばす）
+    const p0 = geo.secant(g, Ax, f, 0, 1);
+    assert.ok(/^M/.test(p0.getAttribute("d")) && p0.getAttribute("d") !== "M0,0");
+  },
 };
 
 (async () => {

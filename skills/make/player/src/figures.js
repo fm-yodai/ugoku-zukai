@@ -24,19 +24,40 @@
     return {
       role, fill, border, label, theme, chapter: theme.chapter || null,
       ink: col.ink, muted: col.muted, line: col.line, bg: col.bg, surface: col.surface || C.mix(col.bg, col.ink, 0.06),
-      accent: col.accent, good: col.good, bad: col.bad, warn: col.warn,
+      accent: col.accent, good: col.good, bad: col.bad, warn: col.warn, series: UZ.seriesOf(col),
       font: theme.font.family, weight: theme.font.weight || 400, bold: theme.font.bold || 700,
       radius: sh.radius ?? 10, stroke: sh.stroke ?? 2.4, edgeW: sh.edgeWidth ?? 2.2,
     };
   };
 
+  // 区別して並べる線の色の並び（geo の色の名前 s1〜）。テーマの colors.series があればそれ、なければ
+  // 意味の色と本文の色（accent・good・warn・bad・ink・muted）から同じ色を除いて 4 つまで。
+  // 意味のキーはテーマによって同じ色になる（koo は warn = accent）ので、区別が目的の線はこの並びを使う
+  UZ.seriesOf = function (col) {
+    const src = Array.isArray(col.series) && col.series.length ? col.series : [col.accent, col.good, col.warn, col.bad, col.ink, col.muted];
+    const out = [];
+    for (const c of src) if (c && !out.some(x => String(x).toLowerCase() === String(c).toLowerCase())) out.push(c);
+    return Array.isArray(col.series) && col.series.length ? out : out.slice(0, 4);
+  };
+
   // 暗い地（章扉の色）のスライドで部品を組むときの色。文字は章扉の文字、補足は sub、線は line、強調は chapter.accent。
   // 箱の面・枠・中の文字（役割の色）は、明るい面の上に乗るのでそのまま
+  // 暗い地の線の並び: chapter.series があればそれ。なければ先頭を暗い地の強調にし、暗い地で見えない色（コントラスト 2 未満）を除く
+  function darkSeries(S, ch) {
+    if (Array.isArray(ch.series) && ch.series.length) return ch.series.slice();
+    const out = [];
+    for (const c of [ch.accent || S.accent, ...(S.series || []).slice(1)]) {
+      if (!c || out.some(x => x.toLowerCase() === c.toLowerCase()) || C.contrast(C.mix(ch.bg, c, C.parse(c)[3] ?? 1), ch.bg) < 2) continue;
+      out.push(c);
+    }
+    if (out.length < 2) out.push(ch.ink);
+    return out;
+  }
   UZ.darkStyleOf = function (S) {
     const ch = S.chapter;
     if (!ch) return S;
     return { ...S, dark: true, ink: ch.ink, muted: ch.sub || ch.ink, line: ch.line || ch.sub || ch.ink, bg: ch.bg,
-      surface: C.rgba("#ffffff", 0.08), accent: ch.accent || S.accent };
+      surface: C.rgba("#ffffff", 0.08), accent: ch.accent || S.accent, series: darkSeries(S, ch) };
   };
 
   // 文字の塊。y は塊の縦の中心。

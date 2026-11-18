@@ -69,7 +69,16 @@
   UZ.CAMERA = { maxZoom: 2.0, pad: 40 };
   const CAM0 = { s: 1, tx: 0, ty: 0 };
   // カメラ cam（画面座標 p → p * s + t）を、図の写し方 pl に重ねる
-  const camOn = (cam, pl) => ({ s: cam.s * pl.s, ox: cam.s * pl.ox + cam.tx, oy: cam.s * pl.oy + cam.ty });
+  // 写し方 pl にカメラを合成する。custom の部品の描き場の大きさ（w・h。カメラの前の画面の px）は、そのまま持っていく
+  const camOn = (cam, pl) => ({ ...pl, s: cam.s * pl.s, ox: cam.s * pl.ox + cam.tx, oy: cam.s * pl.oy + cam.ty });
+  // 写し方の補間（場面が変わって区画が動く間）。custom の部品は、描き場の大きさも補間する
+  const mixPlace = (a, b, q) => {
+    const o = { s: mix(a.s, b.s, q), ox: mix(a.ox, b.ox, q), oy: mix(a.oy, b.oy, q) };
+    if (a.w != null && b.w != null) { o.w = mix(a.w, b.w, q); o.h = mix(a.h, b.h, q); }
+    return o;
+  };
+  // 図の、写し方 pl での外枠（図のローカル座標）。custom の部品は描き場の大きさ（場面ごとに変わる）
+  const figBox = (F, pl) => (pl && pl.w != null ? { x: 0, y: 0, w: pl.w, h: pl.h } : { x: F.x0, y: F.y0, w: F.x1 - F.x0, h: F.y1 - F.y0 });
   // 補間は、見えている範囲（画面の点 p に写る図の点 (p - t) / s）が直線的に動くように、1/s と t/s を混ぜる（範囲は body の中に収まったまま）
   const camMix = (a, b, q) => {
     const u = mix(1 / a.s, 1 / b.s, q), vx = mix(a.tx / a.s, b.tx / b.s, q), vy = mix(a.ty / a.s, b.ty / b.s, q);
@@ -293,6 +302,7 @@
           const val = a[verb];
           if (verb === "show" || verb === "hide" || verb === "pulse" || verb === "focus" || verb === "blur") {
             const keys = [];
+            let wholeRef = false;   // 図（部品）の全体を指したか
             for (const ref of asList(val)) {
               const x = extraKey(sc, ref, where);   // 点（dot:<名前>）と注記（note:<id>）
               if (x !== undefined) {
@@ -300,7 +310,7 @@
                 else if (x) { keys.push(x); delete dotState[x]; }   // 消した点は、次の trace で 1 つ目のノードにもう一度現れる
                 continue;
               }
-              const r = resolve(sc, ref, where); if (r) keys.push(...expand(r));
+              const r = resolve(sc, ref, where); if (r) { keys.push(...expand(r)); if (r.whole) wholeRef = true; }
             }
             act.keys = keys;
             if (verb === "show" || verb === "hide") {
@@ -313,7 +323,8 @@
               }
               dur = act.each + act.stagger * Math.max(0, keys.length - 1);
             }
-            if (verb === "focus") act.figsOf = [...new Set(keys.map(k => k.split("/")[0]))];
+            // focus は同じ図の中を薄くする。部品の全体を指したときは、同じ場面のほかの部品を薄くする（指した部品は薄くしない）
+            if (verb === "focus") act.figsOf = wholeRef ? sc.figs.slice() : [...new Set(keys.map(k => k.split("/")[0]))];
             if (verb === "blur") act.figsOf = sc.figs;   // ぼかしは、対象のない図も含めて場面の全部の図に及ぶ
           } else if (verb === "unblur") {
             act.figsOf = val === true || val == null ? sc.figs : asList(val);
@@ -505,6 +516,8 @@
     }
     const place = (fid, area) => {
       const F = figs[fid], w = F.x1 - F.x0, h = F.y1 - F.y0;
+      // custom の部品は伸び縮みさせず、場面ごとの区画の大きさで描き直す（関数に渡す w・h = 区画の px。文字の大きさが保たれる）
+      if (F.type === "custom") return { s: 1, ox: area.x, oy: area.y, w: area.w, h: area.h };
       // 拡大の上限: 図が決めていればそれ（テキストは 1 = 文字の大きさを保つ）
       const s = Math.min(area.w / w, area.h / h, F.extra.maxScale ?? (F.fixed ? 10 : (F.type === "title" ? 1 : 1.3)));
       // 区画の中の揃え: 部品の valign・halign。なければ図の既定（テキストは上）、それもなければ中央
@@ -592,11 +605,17 @@
             let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
             for (const t of a.target) {
               const F = figs[t.fig], pl = sc.place[t.fig];
-              const b = t.whole ? { x: F.x0, y: F.y0, w: F.x1 - F.x0, h: F.y1 - F.y0 } : F.items[t.id].bbox;
+              const b = t.whole || F.type === "custom" ? figBox(F, pl) : F.items[t.id].bbox;
               x0 = Math.min(x0, pl.ox + b.x * pl.s); y0 = Math.min(y0, pl.oy + b.y * pl.s);
               x1 = Math.max(x1, pl.ox + (b.x + b.w) * pl.s); y1 = Math.max(y1, pl.oy + (b.y + b.h) * pl.s);
             }
             R = { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
+            // region: 対象の矩形の中の一部（割合 0〜1）。custom の部品の中のように、id のない所に寄るとき
+            const rg = a.a.region;
+            if (rg) {
+              const [ax0, ax1] = rg.x || [0, 1], [ay0, ay1] = rg.y || [0, 1];
+              R = { x: R.x + R.w * ax0, y: R.y + R.h * ay0, w: R.w * (ax1 - ax0), h: R.h * (ay1 - ay0) };
+            }
           }
           let s = 1;   // all は恒等（スライドの写し方）に戻す
           if (R && a.verb === "pan") s = a.from.s;
@@ -936,7 +955,7 @@
     for (const fid of sc.figs) {
       let pl = sc.place[fid];
       const mo = morphTo[fid], from = prev && (prev.place[fid] ? prevPl(fid) : mo && mo.series ? prevPl(mo.from) : null);
-      if (from) { const a = from, b = pl, q = ease((t - sc.start) / 0.8); pl = { s: mix(a.s, b.s, q), ox: mix(a.ox, b.ox, q), oy: mix(a.oy, b.oy, q) }; }
+      if (from) pl = mixPlace(from, pl, ease((t - sc.start) / 0.8));
       figsF[fid] = { opacity: prev && (prev.figs.includes(fid) || (mo && mo.pairs.length)) ? 1 : k, place: camOn(cam, pl) };
     }
     if (prev) for (const fid of prev.figs) if (!sc.figs.includes(fid)) {

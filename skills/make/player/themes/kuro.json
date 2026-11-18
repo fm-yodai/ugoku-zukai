@@ -12,6 +12,7 @@
     "good": "#83c167",
     "bad": "#fc6255",
     "warn": "#f4d345",
+    "series": ["#58c4dd", "#f4d345", "#83c167", "#fc6255"],
     "roles": {
       "process": "#58c4dd",
       "actor": "#f4d345",

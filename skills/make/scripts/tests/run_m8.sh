@@ -50,5 +50,12 @@ grep -q '^# 台本の形式（ugoku-zukai/5）' references/storyboard.md || ng "
 grep -q 'math-geometry.json' $A/writer.md || ng "writer.md に見本 math-geometry.json がない"
 grep -q '^## 数学動画調のテーマ（kuro）' references/themes.md || ng "themes.md に kuro の節がない"
 grep -q '"math-geometry"' ../../tools/build_gallery.py || ng "見本帳（build_gallery.py）に math-geometry がない"
+# writer の評価の直し: custom の部品は下の層でない（部品の節は 8 章）。線の並び s1〜・region・secant の len が文書にある
+grep -q '^### custom（値に連動して描く部品' references/storyboard.md || ng "storyboard.md の 8 章に custom の部品の節がない"
+sed -n '/^## 6\. 下の層/,/^## 7\./p' references/storyboard.md | grep -q '^\*\*custom の部品\*\*' && ng "storyboard.md の下の層（6 章）に custom の部品が残っている"
+grep -q '"type": "custom"' $A/writer.md && grep -q '下の層ではなく' $A/writer.md || ng "writer.md が、下の層と custom の部品を読み分けられるように書いていない"
+grep -q '"region"' references/storyboard.md || ng "storyboard.md に zoom の region がない"
+grep -q '`s1`' $geo && grep -q 'colors.series' references/themes.md || ng "geometry.md・themes.md に線の並び（s1〜・colors.series）がない"
+grep -q 'len?, extend?' $geo || ng "geometry.md の secant に len がない"
 bash scripts/tests/run_m7.sh || fail=1
 exit $fail
