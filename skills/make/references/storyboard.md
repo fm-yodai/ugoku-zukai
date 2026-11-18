@@ -112,7 +112,7 @@ python3 scripts/build_player.py storyboard.json -o preview.html     # 音声な�
   "items": [ { "id": "i1", "text": "紙の領収書を毎月まとめて提出している", "sub": "月末に経理の作業が集中する" } ] }
 ```
 
-8 個までにする（多いと読み切れない）。
+8 個を超えると、検査が「画面で読み切れない」と警告する。
 
 ### compare
 
@@ -159,7 +159,7 @@ python3 scripts/build_player.py storyboard.json -o preview.html     # 音声な�
 - `direction`: `right`（既定）か `down`。省くと両方を試し、大きく描ける方を選ぶ
 - 辺の `label` は具体的な動詞句（「公開鍵を取得」）。同じ向きの辺を 2 本引くときだけ `id` を書く
 - 点は宣言した辺の上だけを通れる（`trace`）
-- 多対多の関係（3 つ → 3 つなど）を `graph` で描くと、辺が増えて文字が小さくなる。`table` か `list` にする
+- 多対多の関係（3 つ → 3 つなど）を `graph` で描くと、辺が増えて文字が小さくなる（`table` か `list` なら、辺なしで同じ関係を書ける）
 
 ### 提案資料の図（M1b）
 
@@ -183,7 +183,7 @@ python3 scripts/build_player.py storyboard.json -o preview.html     # 音声な�
   "after":  { "label": "これから", "steps": [ { "id": "a1", "text": "荷主が Web で依頼" } ] } }
 ```
 
-手順は上から下へ矢印でつながる（`"flow": false` なら箇条）。各側 6 個まで。板の色は既定で `before` = `muted`、`after` = `added`（`role` で変える）。構成図どうしを比べるなら、`graph` を 2 つ並べた場面にする。
+手順は上から下へ矢印でつながる（`"flow": false` なら箇条）。各側 6 個を超えると検査が警告する。板の色は既定で `before` = `muted`、`after` = `added`（`role` で変える）。構成図どうしを比べるなら、`graph` を 2 つ並べた場面にする。
 
 #### roadmap
 
@@ -225,7 +225,7 @@ python3 scripts/build_player.py storyboard.json -o preview.html     # 音声な�
   "delta": "-11 分", "better": "down", "prefix": "（任意: ¥ など）" } ] }
 ```
 
-4 枚まで。`delta` の符号で ▲▼、`better`（`up` / `down`）と合わせて良し悪しの色になる。
+4 枚を超えると検査が警告する。`delta` の符号で ▲▼、`better`（`up` / `down`）と合わせて良し悪しの色になる。
 
 #### matrix
 
@@ -237,7 +237,7 @@ python3 scripts/build_player.py storyboard.json -o preview.html     # 音声な�
 
 点の `x` `y` は 0〜1（右・上ほど高い）。`size`（0〜1）で円の大きさ。点を動かすには `{"move": "p1", "to": {"x": 0.6, "y": 0.75}}`。
 
-象限は塗り分ける。当てはまる象限には `role`（役割の色を薄く敷く）、該当しない象限には `"off": true`（グレーで沈める）を書く。4 象限を使うときは、当てはまる象限だけでなく、該当しない象限がどれかも原稿で言う。話の途中で塗るなら、宣言には書かずに `{"tint": "sugu", "as": "accent"}`、該当しないほうは `{"tint": "ato", "as": "off"}`。
+象限は塗り分けられる。当てはまる象限には `role`（役割の色を薄く敷く）、該当しない象限には `"off": true`（グレーで沈める）を書く。塗り分けると、どの象限が当てはまり、どれが当てはまらないかが色で読める。話の途中で塗るなら、宣言には書かずに `{"tint": "sugu", "as": "accent"}`、該当しないほうは `{"tint": "ato", "as": "off"}`。
 
 #### pyramid
 
@@ -254,7 +254,7 @@ python3 scripts/build_player.py storyboard.json -o preview.html     # 音声な�
 { "type": "cycle", "center": "毎月 1 回", "steps": [ { "id": "atsume", "label": "数字を集める", "sub": "（任意）", "edge": "（任意: 次への弧の言葉）" } ] }
 ```
 
-3〜8 個を時計回りに並べ、最後から最初へも弧を引く（`"closed": false` で引かない）。
+3〜8 個（範囲の外は検査の誤り）を時計回りに並べ、最後から最初へも弧を引く（`"closed": false` で引かない）。
 
 #### venn
 

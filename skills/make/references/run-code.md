@@ -82,23 +82,20 @@ python3 ${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/check_outline.py <workdir> --r
 python3 ${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/check_outline.py <workdir> --json
 ```
 
-- 会話で決めるのは、基本（`basics`）、章の順番の意図（`flow`）、章の意図（`intent`）と章のつながり（`link`）まで。意図は聴衆の側から書く（「ここで聴衆は〜が分かる」）。利用者が必ず入れたいと言った内容は、意図の文に書く
-- `--ready` は、スライドを作る前に付ける（`basics` に `audience`・`knows`・`takeaway` があり、章の順番の意図と、どの章にも意図がある）。利用者が言っていない項目は、案を `by: claude`・`state: proposed` で書く
-- スライドの意図（章の `slides`）は、台本のスライドと一緒に書く。`proposed` のままスライドコンテに出してよい。章の `seconds` は、章の意図と全体の長さから割り振る
-- `--json` の `proposed` が、自分で決めて、利用者がまだ見ていない項目の一覧。スライドコンテを見せるときに、会話で伝える
-- 利用者が、進行役の決めたことと意図を全部見て通したら、`check_outline.py <workdir> --agree-all` で `proposed` をまとめて `agreed` にする。一部だけ通したときは、その項目を手で書き換える
-- 聞くときは AskUserQuestion を使ってよい。決まった質問を並べるのではなく、その話題で聞きたいことだけを聞く
+- `--ready` は、台本に進める状態か（`basics` に `audience`・`knows`・`takeaway` があり、章の順番の意図と、どの章にも意図がある）を見る
+- `--json` の `proposed` は、進行役か writer が決めて、利用者がまだ見ていない項目の一覧
+- `--agree-all` は、`proposed` をまとめて `agreed` にする（利用者が全部を見て通したとき）。一部だけ通したときは、その項目を手で書き換える
+- Claude Code では、聞くときに AskUserQuestion を使える
 
-手持ちのデザインに合わせるなら、受け取った資料からテーマを作って検査する（直し方は `themes.md`）。
+手持ちのデザインに合わせるなら、受け取った資料からテーマを作って検査する（どの色をデザインから決めるかは `themes.md`）。
 
 ```sh
 python3 ${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/extract_design.py <資料…> --report <workdir>/design-report.json --theme <workdir>/theme.json --name <名前>
 python3 ${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/check_theme.py <workdir>/theme.json --design <workdir>/design-report.json
 ```
 
-- `theme.json` は下書きを直して作る。同梱のテーマや文書の例から値を写さない。`--design` が、テーマがデザインから外れていないか（背景・本文・強調・字体・影）を見る
-- 意味の色（良い・悪い）、字幕の帯、章扉の地も、デザインにある色から決める（`themes.md` の手順 2）。緑や赤がデザインになければ足さない。字幕の帯と章扉の色は、デザインの反転面の色（表紙や章扉に使う暗い色）があればそれを当て、決めた色と理由を、図の色の見本と一緒に利用者に伝える
-- 見た目が決まったら、構成メモの `basics.look.theme` に書く（`koo`・`theme.json`）。検査・コマ・組み立ては、`--theme` を省くとこのテーマを使い、違うテーマを渡すと止まる。下のコマンドの `--theme <テーマ>` は省いてよい
+- `extract_design.py` が書くのは下書きの `theme.json`。`--design` は、テーマがデザインから外れていないか（背景・本文・強調・字体・影）を見る。意味の色・字幕の帯・章扉の地の決め方は `themes.md` の手順 2
+- 構成メモの `basics.look.theme`（`koo`・`theme.json`）にテーマを書くと、検査・コマ・組み立ては `--theme` を省いたときにそのテーマを使い、違うテーマを渡すと止まる。下のコマンドの `--theme <テーマ>` は省ける
 
 ## 調べる
 
@@ -108,15 +105,9 @@ python3 ${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/check_theme.py <workdir>/theme
 
 ## 台本と機械検査
 
-台本（`<workdir>/storyboard.json`）は、スライドを先に書き、原稿を後に書く（形式は `storyboard.md`。スライドは 8 章、見本は `${CLAUDE_PLUGIN_ROOT}/skills/make/examples/slide-forms.json`）。
+台本（`<workdir>/storyboard.json`）の作り方の考え方は SKILL.md の「作る順番」と `agents/writer.md`、形式は `storyboard.md`（スライドは 8 章。見本は `${CLAUDE_PLUGIN_ROOT}/skills/make/examples/slide-forms.json`、Morph とカメラの見本は `camera-morph.json`）。スライドの意図は、台本のスライドと同じ id で、構成メモの章の `slides` に `proposed` で書く。画像やイラストは `<workdir>/assets/` に置き、出どころ（`source`）と利用条件（`license`）を書く。
 
-- **スライド**: 章の意図から、その章に要るスライドを切り出す。1 枚ごとに、見出し（字幕の言い回しに合わせず、資料の見出しとして書く）、言いたいこと（この 1 枚で伝えたいことの 1 文）、部品（図・テキスト・画像・フレーム）を置いて、完成形を作る。声と字幕がなくても、資料として読める 1 枚にする。Morph（後のスライドの部品の `morph`）はスライドの並びで成り立つので、つなぐかはここで考える（見本は `${CLAUDE_PLUGIN_ROOT}/skills/make/examples/camera-morph.json`）
-- **スライドの意図**: 台本のスライドと同じ id で、構成メモの章の `slides` に書く（`by: claude`・`state: proposed`）
-- **動かし方**: 最初から完成形を見せて `focus` や `blur` で順に説明するか（`start: "complete"`）、行の動作で部品を出して組み上げるかを、スライドごとに選ぶ。カメラ（`zoom`・`pan`）と線の描画（`show` の `"draw": true`）も使える。Morph と合わせて、`references/visual-grammar.md` の「キャンバスとカメラ」で、聴衆に起こることと代償を考える
-- **原稿**（字幕と読み）: スライドを説明する文にする。スライドの文字を読み上げるだけにしない。事実を言う行には `source` を付ける。スライドのテキストに書いた事実にも `source` を付ける
-- 画像やイラストは `<workdir>/assets/` に置き、出どころ（`source`）と利用条件（`license`）を書く
-
-台本の初稿と章単位の書き直しは writer に任せてよい（書く範囲を「全部」か章の id で渡す）。writer に章や全体の書き直しを頼むときは、閉じた指摘（`ledger.py list <workdir> --state closed`）で直した言い回しを戻さないよう伝える（writer は `review/ledger.json` を読む）。一文の言い回しや動作 1 つの直しは、進行役が `<workdir>/storyboard.json` を直接直す。行の id と章の id は振り直さない。
+writer には、初稿と章単位の書き直しを任せられる（書く範囲を「全部」か章の id で渡す）。writer は `review/ledger.json` を読むので、閉じた指摘（`ledger.py list <workdir> --state closed`）で直した言い回しは、頼むときに伝えれば保たれる。一文の言い回しや動作 1 つなら、進行役が `<workdir>/storyboard.json` を直接直すほうが、writer に文脈を渡す往復より速い。
 
 台本を変えるたびに、機械検査を回す（時刻は見積もり）。
 
@@ -127,8 +118,8 @@ python3 ${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/check_text.py <workdir>/storyb
 
 - `--outline` は、場面の章と長さに加えて、構成メモのスライドと台本のスライドが同じ id でそろっているかも見る
 - 台本を書き終えたら `--complete` も付ける（場面のない章と、構成メモか台本の片方にしかないスライドが誤りになり、全体の長さも構成メモと比べる）。章の一部だけを書いた段階では付けない
-- `check_storyboard.cjs` は警告だけなら終了コード 0。出力に「辺 … に label がない」があれば、意図して省いた辺でなければ label を付ける（G-M2）。章ごとの見積もりの行（`章 c2: 見積もり 28.4 秒（目安 30 秒）`）を含む出力は、`script` の director に渡す（A-4）
-- 誤りは、進行役が直すか、機械検査の差し戻しで writer に直させて、検査を回し直す（指摘の一覧には載せない）。答えが一つに決まる不具合は利用者に聞かずに直し、直したことを報告する
+- `check_storyboard.cjs` は警告だけなら終了コード 0。「辺 … に label がない」は G-M2 の警告。章ごとの見積もりの行（`章 c2: 見積もり 28.4 秒（目安 30 秒）`）を含む出力は、`script` の director に渡す（A-4）
+- 誤りは、進行役が直すか、機械検査の差し戻しで writer に直させる（扱いは SKILL.md の「検査」）
 
 ## スライドコンテと粗い再生ページ
 
@@ -151,14 +142,12 @@ python3 ${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/build_sheet.py <workdir>/story
 ```
 
 - スライドコンテは Artifact ツールで見せる（`file_path` に `<workdir>/sheet.html`、`title` に「<台本の題> スライドコンテ」、`icon` に `storyboard`。書き写さない）。作業フォルダのファイルを受け付けないと言われたら、スクラッチパッドのフォルダに写してから公開する。利用者が手元のファイルで見たいと言ったら、`--artifact` を外して作り、パスを伝える
-- **スライドコンテの Artifact は 1 つにする。** 見せ直すときは、同じ `file_path` で公開し直す（同じページが更新される）。直すたびに新しい Artifact を作らない
-- ページに出るのは、スライド・原稿・意図と、位置の札（`s2 / l2 @0:14`）だけである。章ごとに題・章の意図・前の章からのつながり、スライドごとに完成形のコマとスライドの意図、その下に各行のコマと字幕の全文が並ぶ
-- 次のことはページに出ないので、見せるときに会話で伝える: 進行役が決めたこと（`check_outline.py --json` の `proposed`）、まだ利用者が見ていない意図があること、まだ決めていないこと（構成メモの `open`）、機械検査と評価役の結果
-- 動き（Morph・`zoom`・`draw` など）は、各章の「この章を再生」で見られる（音声なし、字幕つき。`--no-play` で作ったページにはない）。見せるときに、会話でそう添える。見どころがあれば、どの章を再生すると分かるかをひとこと添えてもよい。ページには書かない（メタな文章になるため）
+- 同じ `file_path` で公開し直すと、同じページが更新される（スライドコンテの Artifact を 1 つに保つやり方）
+- ページに何が出て、何を会話で伝えるかは、SKILL.md の「見せるもの」。`--no-play` で作ったページには「この章を再生」がない
 
 ### 案を並べる
 
-進行役が迷ったスライドと、利用者が気に入らないと言ったスライドは、案を 2〜4 つ作って、スライドコンテの中に並べる。案の組に名前（`g1` など）を付け、置き換えるスライドの id（続いて出る 1 枚以上）と、案の名前を渡す。
+いつ並べるかは SKILL.md の「案を並べる」。`alts.py` が扱える案は 1 組に 2〜4 つ。案の組に名前（`g1` など）を付け、置き換えるスライドの id（続いて出る 1 枚以上）と、案の名前を渡す。
 
 ```sh
 python3 ${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/alts.py new <workdir> g1 --replaces ux-def --options a,b,c
@@ -199,7 +188,7 @@ python3 ${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/alts.py pick <workdir> g1 b
 
 - `pick` は、選んだ案の場面とスライドを今の台本に入れ、構成メモのスライドと意図を合わせ、その組（案の台本とコマ）を片付ける。案の id が範囲の外と重なるか、入れた後の台本に誤りがあると、何も書かずに終了コード 1 で止まる
 - どの案も選ばないと決まったら、`alts.py drop <workdir> g1` で片付ける
-- 声を合成した後や公開した後の直しでも、案を並べてよい。原稿が違う案の声は、選んでから作る（`pick` は声に触らないので、選んだ後に `tts.py` を回し直す）
+- `pick` は声に触らない。声を合成した後に原稿が違う案を選んだら、`tts.py` を回し直す
 
 動きと間を見たいときは、声なしの粗い再生ページを作って同じように見せる（時刻は見積もり）。
 
@@ -209,17 +198,7 @@ python3 ${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/build_player.py <workdir>/stor
 
 ## 評価役と指摘の一覧
 
-呼ぶ場面と担当の基準は `criteria/README.md` の表のとおり。
-
-| 場面 | `target` | 呼ぶ評価役 |
-|---|---|---|
-| 章の意図が固まったとき | `outline` | director。資料のある題材なら fact-checker も |
-| 最初のスライドコンテを見せる前 | `script`・`screen` | director（スライドと、コマ） |
-| スライドが固まったとき | `script` | fact-checker・writing-reviewer（原稿）。スライドを変えていたら director も |
-| 合成の前 | `voice` | writing-reviewer（読みモード） |
-| 直した後 | 元と同じ | 指摘を出した評価役。直したキーと、変えた章・行を渡す |
-
-機械検査を通してから呼び、出力を取り込んで、本文を読む。
+呼ぶ場面と指摘の扱いは `review-protocol.md`、担当の基準は `criteria/README.md` の表。呼び方と出力先は上の「エージェントと渡すもの」。機械検査を通してから呼び、出力を取り込んで、本文を読む。
 
 ```sh
 python3 ${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/ledger.py ingest <workdir> <workdir>/review/03-script/fact-checker.json <workdir>/review/03-script/director.json <workdir>/review/03-script/writing-reviewer.json
@@ -228,35 +207,23 @@ python3 ${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/ledger.py list <workdir> --ful
 
 `screen` で PNG がない（`frames.json` の `png` が false）ときは、director に「PNG がない」と添えて呼ぶ。目で見ないと決められない基準は UNKNOWN になる（最後の報告に「コマの画像なし」と書く）。
 
-**台本の初稿に限り、1 回だけ先に直す。** 対象は、最初のスライドコンテを見せる前の評価と、スライドが固まった後の原稿の初稿の評価で出た指摘である。
-
-1. 評価役の出力を `ingest` し、`list --full` で本文を読む
-2. 合意した内容を変えない指摘（言い回し、読み、スライドの見やすさ、出どころを調べて付けること）を選び、記録してから直す（小さな直しは進行役、まとまった直しは writer にキーを渡す）。構成メモの意図（`flow`・`intent`・`link`）・章の順・利用者が見て決めたスライドの切り方を変えることになる指摘は選ばない
+初稿の指摘を先に直すとき（最初のスライドコンテを見せる前の評価と、原稿の初稿の評価）は、直す指摘を記録してから直す（小さな直しは進行役、まとまった直しは writer にキーを渡す）。機械検査を通し、指摘を出した評価役に直したキーの再確認を 1 回頼んで `ingest` する。通らなかったものは `open` に戻る。任されているときは、構成メモの評価の指摘も対象になる（範囲は `review-protocol.md`）。
 
 ```sh
 python3 ${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/ledger.py decide <workdir> --by lead --fix l7:S-W1 s4:G-D14
-```
-
-3. 機械検査を通し、指摘を出した評価役に、直したキーの再確認を 1 回だけ頼んで `ingest` する。通らなかったものは `open` に戻るので、そのまま利用者に見せる
-4. 利用者に見せるのは、残った指摘と、先に直した件数と中身
-
-任されているときは、構成メモの評価（章の意図が固まったとき）で出た指摘も同じに扱う。自分で決めた項目（`proposed`）の言い回しを直す指摘は先に直して再確認を 1 回頼み、意図の中身を変える、章を変える指摘は直さずに、スライドコンテと一緒に見せる。
-
-```sh
 python3 ${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/ledger.py list <workdir>
 python3 ${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/ledger.py list <workdir> --by lead
 ```
 
-利用者がどれを直すかを選んだら、記録してから直す。直したら、指摘を出した評価役に、直したキーと変えた章・行だけを渡して再確認を頼み、`ingest` する。
+利用者が選んだら記録して直し、指摘を出した評価役に、直したキーと変えた章・行だけを渡して再確認を頼み、`ingest` する。
 
 ```sh
 python3 ${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/ledger.py decide <workdir> --by user --fix s4:A-3 --keep l12:S-D4
 python3 ${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/ledger.py status <workdir>
 ```
 
-- `list` の出力（must は全文、should は 1 件 1 行、nits は件数だけ）を、そのまま利用者に見せる。求められたら `--full` で開く
-- 「同じ箇所に <キー>」と添えられた指摘は、直し方が食い違っていないかを見て、1 つにまとめてから見せる
-- 再確認を頼まずに済ませた指摘（評価役の見落とし、利用者が自分の言葉で直した）は、理由を書いて閉じる。公開の前に `status` が「直し中 0」になっているようにする（must を閉じられるのは `--by user` だけ）
+- `list` の出力は、must は全文、should は 1 件 1 行、nits は件数だけ。`--full` で全部を開く。見せ方と、同じ箇所の指摘・直し中の指摘の扱いは `review-protocol.md` の「指摘の扱い」
+- 再確認なしで閉じるときは `--close` と `--note`（must を閉じられるのは `--by user` だけ）
 
 ```sh
 python3 ${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/ledger.py decide <workdir> --by lead --close l18:S-W4 --note "read は前から付いていた"
@@ -265,8 +232,7 @@ python3 ${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/ledger.py decide <workdir> --b
 - スライドへの指摘のキーは、そのスライドを最初に使う場面の id で始まる（`s4:A-3`）。どのスライドのどの部品かは、指摘の本文の頭に書いてある（`review-format.md` の「`where` の書き方」）
 - どの評価役の指摘かは、`list --full` と `--json` の `reviewer` で分かる（`--reviewer director` で絞れる）
 - `*` で始まるキー（場所の決まらない指摘）は、シェルに展開されないよう引用符で囲む（`--fix '*:V-1'`）
-- 直しが合意に関わるなら、先に構成メモを直して検査し、それから台本を直す
-- `status` が「今の台本にも構成メモにもない id を指す指摘」を警告したら、writer に「行の id を振り直さない約束」を伝えて戻させる
+- `status` が「今の台本にも構成メモにもない id を指す指摘」を警告するのは、行や章の id が振り直されたとき（writer が振り直したなら、その約束を伝えて戻させる）
 
 ## 声
 
@@ -285,7 +251,7 @@ python3 ${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/setup_voice.py --agree
 
 このコマンドが許可されずに止まったら（利用者の同意を、進行役が代わりに渡すことになるため、自動の許可では通らないことがある）、利用者に、プロンプトで `! python3 ${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/setup_voice.py --agree` と打って実行してもらう（`${CLAUDE_PLUGIN_ROOT}` は実際のパスに置き換えて伝える）。VOICEVOX がもう入っているとき（`tts.py --readings` が動く）は、実行しなくてよい。
 
-最後に、入っている声の一覧が出る。名前だけでは声を選べないときは、候補の話者 2〜3 人に同じ 1 文を読ませた、声の試聴のページを作る。
+最後に、入っている声の一覧が出る。名前だけでは声を選べないときは、候補の話者に同じ 1 文を読ませた、声の試聴のページを作れる（比べる声は 2〜3 人が選びやすい）。
 
 ```sh
 python3 ${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/tts.py -o <workdir>/voice --audition 8,2,3 --sample "<聞き比べる 1 文>" --artifact
@@ -299,9 +265,9 @@ python3 ${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/tts.py -o <workdir>/voice --au
 python3 ${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/tts.py <workdir>/storyboard.json -o <workdir>/voice --readings
 ```
 
-`tts.py` の終了コード 3 は時間で区切っただけ。0 になるまで同じコマンドを繰り返す。一覧ができたら、writing-reviewer を `target: voice`（読みモード）で呼び、出力を `ingest` する。一覧の「間」の列に「区切りが多い」と出た行は、1 桁ずつ読ませる区切りなら `read` の読点を中黒（・）に替える（中黒の間は短い）。
+`tts.py` の終了コード 3 は時間で区切っただけ。0 になるまで同じコマンドを繰り返す。一覧ができたら、writing-reviewer を `target: voice`（読みモード）で呼び、出力を `ingest` する。一覧の「間」の列の「区切りが多い」は、読点が多くて間が延びる行の印（1 桁ずつ読ませる区切りの書き方は `storyboard.md` の `read`）。
 
-読みの指摘は合意した内容を変えないので、`decide --by lead --fix` で記録して、行の `read`（と `<workdir>/voice_dict.json`）だけを直す。字幕 `text` は変えない。直したら `--readings` を回し直し、writing-reviewer に直したキーの再確認を 1 回だけ頼む。通らなかった読みは、最後の報告に書く。
+読みを直すのは、行の `read` と `<workdir>/voice_dict.json`（扱いは SKILL.md の「声」）。直したら `--readings` を回し直す。
 
 合成する。
 
@@ -315,7 +281,7 @@ python3 ${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/tts.py <workdir>/storyboard.js
 node ${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/check_storyboard.cjs <workdir>/storyboard.json --theme <テーマ> --outline <workdir>/outline.json --complete --timeline <workdir>/voice/timeline.json
 ```
 
-誤りか「辺 … に label がない」があれば、動作 `do` だけを直して検査し直す（進行役が直すか、機械検査の差し戻しで writer に `--timeline` の出力を渡す）。`text` か `read` が変わったら、`tts.py`（`--readings` なし）をもう一度実行してから検査し直す。
+合成の後に動作 `do` だけを直すなら、声はそのまま使える（機械検査の差し戻しで writer に `--timeline` の出力を渡すこともできる）。`text` か `read` が変わると声が古くなるので、`tts.py`（`--readings` なし）をもう一度実行してから検査し直す。
 
 ## 組み立てと公開
 
@@ -354,9 +320,9 @@ python3 ${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/workdir.py list
 - 構成メモのない作業フォルダ（`outline.json` がない。前の進め方で作ったもの）では、下のコマンドから `--outline <workdir>/outline.json` と `--complete` を外す。合意の記録がないので、中身や章を変える直しは、変える前に利用者に確認する
 - 前の形式の構成メモ（`ugoku-zukai-outline/1`。章に `says`・`shows` がある）と、場面が `figure` を指す台本の作業フォルダは、前の形式のまま直す。コマンドは同じで、スライドコンテには章の題とコマと原稿だけが出る
 
-**2. 直す前に、機械検査を 1 回回す。** 直す前からある誤りを、直しで入った誤りと見分けるためである。コマンドは 4 と同じ（声があれば `--timeline` を付ける）。直す前からある誤り（頼まれた範囲の外）は、黙って直さず、利用者に伝えて、直すかを聞く。直さないと決まったら、そのまま進めて、報告に書く。
+**2. 直す前に、機械検査を 1 回回す。** 直す前からある誤りを、直しで入った誤りと見分けるためである（見つけたときの扱いは SKILL.md）。コマンドは 4 と同じ（声があれば `--timeline` を付ける）。
 
-**3. 行を特定して直す。** 指された id を `<workdir>/storyboard.json` で確かめる。指された数行の言い回しや動作は、進行役が直す。章単位の書き直しは writer に、書く範囲（章の id）を渡して任せる。`read` のある行の字幕を変えるときは、`text` と `read` の両方を直す。直しが合意に関わるなら、先に `<workdir>/outline.json` を直して `check_outline.py --ready` を通す。
+**3. 行を特定して直す。** 指された id を `<workdir>/storyboard.json` で確かめる。章単位の書き直しは writer に、書く範囲（章の id）を渡して任せられる。構成メモを直したら `check_outline.py --ready` を通す。
 
 **4. 機械検査。** 文（`text`・`read`）を変えたか、行を足した・消したなら、合成した声が古くなるので、`--timeline` を付けずに回す（付けると「時刻表にない」「音声が古い」の誤りになる）。図や動作だけを変えたら、`--timeline` を付けて回す。
 
@@ -373,7 +339,7 @@ node ${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/frames.cjs <workdir>/storyboard.j
 
 直しが行の id で来たときは、`--scenes` の代わりに `--lines l8,l33` と書ける（その行のある場面のコマを書く）。
 
-**6. 評価役。** SKILL.md の表の評価役を呼ぶ。渡すのは、`target`、出力先（新しい連番）、見る範囲（変えた行と場面の id）、前の指摘を直したのなら再確認するキー。出力を `ingest` し、指摘が出たら、いつものとおり `list` で利用者に見せて選んでもらう（先に直すのは初稿だけなので、ここでは先に直さない）。
+**6. 評価役。** SKILL.md の表の評価役を呼ぶ。渡すのは、`target`、出力先（新しい連番）、見る範囲（変えた行と場面の id）、前の指摘を直したのなら再確認するキー。出力を `ingest` し、指摘が出たら `list` で利用者に見せる。
 
 - 図や動作を変えたときの director は、`script` と `screen` の 2 回呼ぶ。`screen` には、コマの場所として `<workdir>/frames-part` を渡す（`<workdir>/frames` は直す前のコマなので、見せない）
 - 字幕を変えたときの writing-reviewer は、`script` で変えた行の文章を見る。読みは、8 で読みの一覧を書いてから `voice` で見る
@@ -387,7 +353,7 @@ target: screen
 見る範囲: 場面 s3 の行 l6・l7
 ```
 
-**7. 変えた場面を見せる。** 5 のコマからスライドコンテを作って見せる。同じセッションでスライドコンテを公開していれば、Artifact ツールの `url` にそのページの URL を渡して、同じ Artifact を更新する。別のセッションで、前のスライドコンテの URL が分からないときだけ、新しく作る（`title` は「<台本の題> スライドコンテ（直した場面）」、`icon` は `storyboard`）。直し方に迷うときは、案を並べて選んでもらう（「案を並べる」）。
+**7. 変えた場面を見せる。** 5 のコマからスライドコンテを作って見せる。同じセッションでスライドコンテを公開していれば、Artifact ツールの `url` にそのページの URL を渡して、同じ Artifact を更新する。別のセッションで、前のスライドコンテの URL が分からないときだけ、新しく作る（`title` は「<台本の題> スライドコンテ（直した場面）」、`icon` は `storyboard`）。
 
 ```sh
 python3 ${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/build_sheet.py <workdir>/storyboard.json --frames <workdir>/frames-part --outline <workdir>/outline.json -o <workdir>/sheet-part.html --artifact
@@ -399,7 +365,7 @@ python3 ${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/build_sheet.py <workdir>/story
 python3 ${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/build_player.py <workdir>/storyboard.json --theme <テーマ> [--voice <workdir>/voice] -o <workdir>/preview.html --artifact
 ```
 
-**8. 声。** 利用者が変えた場面を見てから合成する。文を変えた行があれば、先に `--readings` で読みの一覧を書き直し、writing-reviewer に `target: voice` で、変えた行だけを見てもらう。合成のコマンドは初回と同じで、変えていない行は作り直されない。出力の「新しく合成 N 行」を報告に書く。声だけを変える（話者・話速）ときは、台本の `voice` を直して同じコマンドを回す（全行が作り直される）。
+**8. 声。** 文を変えた行があれば、先に `--readings` で読みの一覧を書き直し、writing-reviewer に `target: voice` で、変えた行だけを見てもらう。合成のコマンドは初回と同じで、変えていない行は作り直されない。出力の「新しく合成 N 行」を報告に書く。声だけを変える（話者・話速）ときは、台本の `voice` を直して同じコマンドを回す（全行が作り直される）。
 
 ```sh
 python3 ${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/tts.py <workdir>/storyboard.json -o <workdir>/voice --readings
@@ -409,7 +375,7 @@ node ${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/check_storyboard.cjs <workdir>/st
 
 図や動作だけの直しでは、`tts.py` は「新しく合成 0 行」で終わる（時刻表を作り直すだけ）。別のセッションでも、VOICEVOX は `${CLAUDE_PLUGIN_DATA}/voicevox` に入っていれば入れ直さない（`tts.py` が「voicevox_core が入っていない」と止まったら、`setup_voice.py --agree` を実行する。同意の記録は `setup_voice.py --status` で分かる）。
 
-**9. 組み立てて、同じ Artifact に公開し直す。** 組み立ては「組み立てと公開」と同じコマンド。同じセッションなら、同じ `file_path` で公開し直す（同じページが更新される）。別のセッションなら、Artifact ツールの `url` に `published.json` の `url` を渡す（`title` と `icon` は渡さない。前のままになる）。更新の前に今のページを読むよう求められたら、読んでから公開する（公開するのは、組み立て直した `<workdir>/player.html`）。再生ページは、新しいページを作らない。公開し直したら、記録を更新する（テーマを変えたら `--theme` も渡す）。
+**9. 組み立てて、同じ Artifact に公開し直す。** 組み立ては「組み立てと公開」と同じコマンド。同じセッションなら、同じ `file_path` で公開し直す（同じページが更新される）。別のセッションなら、Artifact ツールの `url` に `published.json` の `url` を渡す（`title` と `icon` は渡さない。前のままになる）。更新の前に今のページを読むよう求められたら、読んでから公開する（公開するのは、組み立て直した `<workdir>/player.html`）。公開し直したら、記録を更新する（テーマを変えたら `--theme` も渡す）。
 
 ```sh
 python3 ${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/workdir.py publish <workdir> --url <同じ URL>

@@ -25,17 +25,17 @@ vg=references/visual-grammar.md
 grep -q '^## キャンバスとカメラ' $vg || ng "visual-grammar.md に「キャンバスとカメラ」の節がない"
 for id in VG-10 VG-11 VG-12; do grep -q "^### $id " $vg || ng "visual-grammar.md に $id がない"; done
 grep -q 'Lichtschlag' $vg || ng "visual-grammar.md の VG-11 に、出どころ（Lichtschlag ら）がない"
-for f in $A/writer.md $A/director.md references/storyboard.md SKILL.md references/run-code.md references/run-chat.md; do
+for f in $A/writer.md $A/director.md references/storyboard.md SKILL.md references/run-chat.md; do
   grep -q '「キャンバスとカメラ」' $f || ng "$f が visual-grammar.md の「キャンバスとカメラ」を指していない"
 done
 # 前の、規則として書いた言い回しが残っていない
-for w in '同じものが育つなら' '話している 1〜数個に寄せる' '線の形を追わせるときだけ' 'Morph でつなぐかを' '意図に合う所でだけ使う' '静止画なので'; do
-  grep -qF -- "$w" $vg $A/writer.md $A/director.md $c/structure.md references/storyboard.md SKILL.md references/run-code.md references/run-chat.md && ng "前の規則の言い回し「$w」が残っている"
+for w in '同じものが育つなら' '話している 1〜数個に寄せる' '線の形を追わせるときだけ' 'Morph でつなぐかを' '意図に合う所でだけ使う' '静止画なので' '演出の約束' 'その他の VG の約束' '線は一方向にする' '象限は塗り分ける。' '`table` か `list` にする' 'セルの中に箱を並べていない' '1 行 1 つの画面変化にし' '途中で質問を挟まない' '最初に全部読む' '| 呼びどころ |' '直してよいのは次のときだけ'; do
+  grep -qF -- "$w" $vg $A/writer.md $A/director.md $c/structure.md references/storyboard.md references/themes.md SKILL.md references/run-code.md references/run-chat.md && ng "前の規則の言い回し「$w」が残っている"
 done
 for w in 'ugoku-zukai/4' '"morph"' '"zoom"' '"pan"' '"draw"'; do grep -qF -- "$w" references/storyboard.md || ng "storyboard.md に $w がない"; done
 grep -q '^# 台本の形式（ugoku-zukai/3）' references/storyboard.md && ng "storyboard.md の題が ugoku-zukai/3 のまま"
 for id in G-D17 G-D18 G-D19; do
-  grep -q "^| $id " $c/structure.md && grep -q "$id" $A/director.md && grep -q "$id" $c/README.md && grep -q "$id" references/run-chat.md || ng "$id が、structure.md・director.md・criteria/README・run-chat にそろっていない"
+  grep -q "^| $id " $c/structure.md && grep -q "$id" $A/director.md && grep -q "$id" $c/README.md || ng "$id が、structure.md・director.md・criteria/README にそろっていない"
 done
 grep -q 'M7' $c/structure.md && ng "structure.md に内部の語「M7」が残っている"
 grep -q "morph" $A/writer.md && grep -q "camera-morph.json" $A/writer.md || ng "writer.md に morph と camera-morph.json がない"
