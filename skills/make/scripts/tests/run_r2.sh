@@ -45,9 +45,16 @@ grep -q "brief.md" $A/researcher.md || ng "researcher.md が brief.md を書か�
 grep '^tools:' $A/researcher.md | grep -q "check_contract" && ng "researcher の tools: に check_contract.py が残っている"
 for w in "outline.json" "chapter" "tone" "knows" "機械検査の差し戻し" "意図" "完成形"; do grep -q "$w" $A/writer.md || ng "writer.md に $w がない"; done
 for id in O-F1 O-F2 S-F1 S-F2 S-F4 S-F5; do grep -q "$id" $A/fact-checker.md || ng "fact-checker.md に $id がない"; done
-for id in O-D1 O-D5 O-D6 O-D8 A-1 A-4 A-5 S-D1 G-D1 G-D12 V-1 V-6; do grep -q "$id" $A/director.md || ng "director.md に $id がない"; done
-for id in S-W1 S-W10 S-W12 S-W13 S-W8 S-W9; do grep -q "$id" $A/writing-reviewer.md || ng "writing-reviewer.md に $id がない"; done
+# 担当の基準の正は criteria/README.md の表。評価役の定義は、そこを指していればよい（R5）
+for f in fact-checker writing-reviewer director; do grep -q "criteria/README.md" $A/$f.md || ng "agents/$f.md が criteria/README.md（担当の基準の表）を指していない"; done
+for row in "director（\`outline\`）.*O-D1〜O-D9" "director（\`script\`）.*A-1〜A-5.*G-D1〜G-D7.*G-D11〜G-D16.*S-D1" "director（\`screen\`）.*V-1〜V-6" "writing-reviewer（\`script\`）.*S-W1〜S-W7.*S-W12・S-W13" "writing-reviewer（\`voice\`.*S-W8・S-W9"; do
+  grep -q "$row" $c/README.md || ng "criteria/README.md の表に「$row」の行がない"
+done
 grep -q "読みモード" $A/writing-reviewer.md || ng "writing-reviewer.md に読みモードがない"
+# 判定のしかた（読む順）の正は review-protocol.md。評価役の定義と run-chat.md はそこを指す（R5）
+grep -q "^## 判定のしかた" references/review-protocol.md || ng "review-protocol.md に「判定のしかた」の節がない"
+for f in $A/fact-checker.md $A/writing-reviewer.md $A/director.md references/run-chat.md; do grep -q "「判定のしかた」" $f || ng "$f が review-protocol.md の「判定のしかた」を指していない"; done
+grep -q "判定のしかたで、基準の表に書いていないこと" references/run-chat.md && ng "run-chat.md に判定のしかたの写しが残っている"
 # SKILL.md（原則・道具の一覧・必ず守る条件。番号の付いたフェーズは置かない）
 s=SKILL.md
 for h in "最初に環境を判定する" "会話の進め方" "任せると言われたとき" "必ず守る条件" "道具" "見せるもの" "検査" "指摘の扱い" "声" "組み立てと公開" "報告" "不変条件"; do
