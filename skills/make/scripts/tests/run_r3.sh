@@ -41,7 +41,7 @@ grep -q "題をなぞるだけ" references/writing/spoken.md && grep -q "題を�
 for id in G-D9 G-D10; do grep -q "^| $id " references/criteria/structure.md && grep -q "$id" references/criteria/README.md || ng "$id が、基準と README の表にそろっていない"; done
 grep -q "^## 既定のテーマ（koo）" references/themes.md && grep -q "字幕の帯と章扉の色も、デザインから決める" references/themes.md && grep -q "colors.boxes" references/themes.md || ng "themes.md に、既定のテーマ・字幕の帯と章扉の決め方・colors.boxes がない"
 for f in references/run-code.md references/run-chat.md SKILL.md; do grep -q "章扉" $f && grep -q "字幕の帯" $f || ng "$f に、字幕の帯と章扉の色をデザインから決めることがない"; done
-grep -rq "3b1b\|--theme flat" SKILL.md references ../../agents ../../CLAUDE.md && ng "なくしたテーマ（3b1b・flat）が文書に残っている"
+grep -rqE -e "--theme (3b1b|flat)|\"theme\": \"(3b1b|flat)\"|themes/(3b1b|flat)" SKILL.md references ../../agents ../../CLAUDE.md && ng "なくしたテーマ（3b1b・flat）が文書に残っている"
 grep -q '"tone": "light"' references/storyboard.md || ng "storyboard.md に、題の札の tone がない"
 # 1 桁ずつ読ませる所の書き方の正は storyboard.md の read。環境ごとの文書は、読みの一覧の「区切りが多い」からそこを指す
 grep -q "中黒" references/storyboard.md && grep -q "中黒" references/criteria/script.md && grep -q "中黒" ../../agents/writing-reviewer.md && grep -q "中黒" ../../agents/writer.md || ng "1 桁ずつ読ませる所を中黒で区切る書き方が、仕様・基準・writer・writing-reviewer にそろっていない"

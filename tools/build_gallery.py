@@ -30,6 +30,7 @@ SAMPLES = [
 THEMES = [
     ("koo", os.path.join(MAKE, "player", "themes", "koo.json")),
     ("kumo", os.path.join(MAKE, "examples", "themes", "kumo.json")),
+    ("kuro", os.path.join(MAKE, "player", "themes", "kuro.json")),
 ]
 
 PAGE = r"""<title>ugoku-zukai 見本帳</title>
