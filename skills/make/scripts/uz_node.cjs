@@ -1,7 +1,7 @@
 // プレーヤーの共通 JS を node に読み込む（ブラウザと同じコードで検査するため）
 const fs = require("fs"), path = require("path"), vm = require("vm");
 const PLAYER = path.join(__dirname, "..", "player");
-const SRC = ["util.js", "figures.js", "figures2.js", "figures3.js", "validate.js", "slides.js", "geo.js", "engine.js", "check.js"];
+const SRC = ["util.js", "figures.js", "figures2.js", "figures3.js", "validate.js", "slides.js", "geo.js", "space.js", "engine.js", "check.js"];
 function load() {
   const ELK = require(path.join(PLAYER, "vendor", "elk.bundled.js"));
   globalThis.UZ = { ELK };

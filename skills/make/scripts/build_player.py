@@ -20,7 +20,7 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 PLAYER = os.path.join(os.path.dirname(HERE), "player")
-CORE = ["util.js", "figures.js", "figures2.js", "figures3.js", "validate.js", "slides.js", "geo.js", "engine.js", "check.js", "view_svg.js"]
+CORE = ["util.js", "figures.js", "figures2.js", "figures3.js", "validate.js", "slides.js", "geo.js", "space.js", "engine.js", "check.js", "view_svg.js"]
 
 
 def load_theme(name):

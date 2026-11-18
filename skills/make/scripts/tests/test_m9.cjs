@@ -156,6 +156,72 @@ const tests = {
     assert.ok(renderSvg(M, s2.start + 0.65).includes("項目") && !renderSvg(M, s2.start + 0.65).includes("名前"), "後半に新しい見出しが出ていない");
     assert.ok(renderSvg(M, s2.start + 1.2).includes("数値"), "終わっても新しい見出しが出ない");
   },
+  space_project_front() {
+    const cam = UZ.spaceCamera({ yaw: 0, pitch: 0, scale: 10, target: [0, 0, 0] }, 200, 100, { min: [0, 0, 0], max: [1, 1, 1] });
+    assert.deepStrictEqual(cam.project([1, 0, 0]).map(Math.abs), [110, 50, 0]);
+    assert.deepStrictEqual(cam.project([0, 0, 1]), [100, 40, 0]);
+    assert.strictEqual(cam.project([0, 1, 0])[2], 1);
+  },
+  space_project_top() {
+    const cam = UZ.spaceCamera({ yaw: 0, pitch: 90, scale: 10, target: [0, 0, 0] }, 200, 100, { min: [0, 0, 0], max: [1, 1, 1] });
+    assert.ok(Math.abs(cam.project([0, 1, 0])[1] - 40) < 1e-9);
+    assert.ok(Math.abs(cam.project([0, 0, 1])[2] + 1) < 1e-9);
+  },
+  space_pitch_clamp() {
+    const B = { min: [0, 0, 0], max: [1, 1, 1] }, p = [0.3, 0.7, 0.5];
+    const a = UZ.spaceCamera({ yaw: 20, pitch: 120, scale: 10 }, 200, 100, B).project(p), b = UZ.spaceCamera({ yaw: 20, pitch: 90, scale: 10 }, 200, 100, B).project(p);
+    assert.deepStrictEqual(a, b);
+  },
+  space_auto_scale_rotation_invariant() {
+    const B = { min: [-1, -2, 0], max: [3, 2, 4] };
+    assert.strictEqual(UZ.spaceCamera({ yaw: 0 }, 300, 200, B).s, UZ.spaceCamera({ yaw: 37 }, 300, 200, B).s);
+    assert.strictEqual(UZ.spaceCamera({}, 300, 200, { min: [1, 1, 1], max: [1, 1, 1] }).s, 1);
+  },
+  space_expr() {
+    assert.strictEqual(UZ.spaceExpr("a*2+sin(0)", ["a"])({ a: 3 }), 6);
+    assert.strictEqual(UZ.spaceExpr(5, [])({}), 5);
+    assert.throws(() => UZ.spaceExpr("b+1", ["a"]));
+    assert.strictEqual(UZ.spaceExpr("a", ["a"]), UZ.spaceExpr("a", ["a"]), "同じ式はキャッシュされる");
+  },
+  space_sort() {
+    const mkc = () => UZ.spaceCamera({ yaw: 0, pitch: 0, scale: 10 }, 200, 100, { min: [0, 0, 0], max: [4, 4, 4] });
+    const sq = (id, y) => ({ id, kind: "polygon", points: [[0, y, 0], [1, y, 0], [1, y, 1], [0, y, 1]] });
+    for (const items of [[sq("far", 3), sq("near", 1)], [sq("near", 1), sq("far", 3)]]) {
+      const P = UZ.spacePrims({ items }, {}, mkc(), UZ.styleOf(TH));
+      assert.deepStrictEqual(P.map(p => p.id), ["far", "near"]);
+    }
+  },
+  space_surface_nan() {
+    const S = UZ.styleOf(TH), decl = { items: [{ id: "s", kind: "surface", f: "1/x", x: [-1, 1], y: [-1, 1], grid: 4 }] };
+    const cam = UZ.spaceCamera({}, 200, 100, UZ.spaceBounds(decl, {}));
+    const P = UZ.spacePrims(decl, {}, cam, S);
+    assert.ok(P.length > 0 && P.every(p => p.pts.every(q => q.every(Number.isFinite))));
+    assert.ok(P.length < 16, "NaN を含む四角形が除かれている");
+  },
+  space_max_prims() {
+    const S = UZ.styleOf(TH), sf = id => ({ id, kind: "surface", f: "x*y", x: [-1, 1], y: [-1, 1], grid: 64 });
+    const decl = { items: [sf("a"), sf("b")] }, cam = UZ.spaceCamera({}, 200, 100, UZ.spaceBounds(decl, {}));
+    assert.throws(() => UZ.spacePrims(decl, {}, cam, S), /プリミティブが多すぎる/);
+    assert.ok(UZ.spacePrims({ items: [sf("a")] }, {}, cam, S).length <= UZ.SPACE.maxPrims);
+  },
+  space_kinds() {   // 各種類がプリミティブになり、plate は無視される
+    const S = UZ.styleOf(TH), v = { a: 1 };
+    const decl = { axes: { x: [-2, 2], y: [-2, 2], z: [0, 3], labels: { x: "x" } }, items: [
+      { id: "p", kind: "point", at: [1, "a", 2], label: "P" }, { id: "ln", kind: "line", from: [0, 0, 0], to: [1, 1, 1] },
+      { id: "ar", kind: "arrow", from: [0, 0, 0], to: [1, 2, 2] }, { id: "bx", kind: "box", min: [0, 0, 0], max: [1, 1, 1] },
+      { id: "cv", kind: "curve", fn: ["cos(t)", "sin(t)", "t"], t: [0, 3], n: 8 }, { id: "tx", kind: "text", at: [0, 0, 3], text: "最大" },
+      { id: "pl", kind: "plate", figure: "x", origin: [0, 0, 0], size: [1, 1] }] };
+    const cam = UZ.spaceCamera({ yaw: 30, pitch: 25 }, 300, 200, UZ.spaceBounds(decl, v));
+    const P = UZ.spacePrims(decl, v, cam, S), cnt = k => P.filter(p => p.el === k).length;
+    assert.strictEqual(cnt("bx"), 6); assert.strictEqual(cnt("cv"), 8); assert.strictEqual(cnt("p"), 2); assert.strictEqual(cnt("pl"), 0);
+    assert.strictEqual(cnt("ar"), 2); assert.ok(P.some(p => p.kind === "text" && p.text === "最大"));
+    for (let i = 1; i < P.length; i++) assert.ok(P[i - 1].depth >= P[i].depth, "奥から手前");
+  },
+  space_shade() {
+    const S = UZ.styleOf(TH), c = "#2255aa";
+    assert.strictEqual(UZ.spaceShade(c, [0.4, -0.5, 0.75], S), c, "光に正対すると元の色");
+    assert.notStrictEqual(UZ.spaceShade(c, [0.5, 0.4, 0], S), c);
+  },
   async series_z_avoids_boxes() {   // 系列で置き換わる辺（a>c）が、間にある箱 b を貫かない（M7 の制限 5）
     const N = ["a", "b", "c"].map(id => ({ id, label: id }));
     const H1 = { type: "graph", nodes: N, edges: [{ from: "a", to: "b" }, { from: "b", to: "c" }, { from: "a", to: "c" }] };
