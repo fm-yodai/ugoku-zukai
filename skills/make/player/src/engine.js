@@ -3,9 +3,9 @@
   "use strict";
   const { clamp, mix, smooth, ease } = UZ;
 
-  UZ.FORMATS = ["ugoku-zukai/2", "ugoku-zukai/3", "ugoku-zukai/4"];   // /2 = 場面が図を指す形だけ。/3 = スライドも使える。/4 = morph・zoom・pan・draw も使える
-  UZ.FORMAT = "ugoku-zukai/4";
-  UZ.VERBS = ["show", "hide", "focus", "unfocus", "blur", "unblur", "pulse", "mark", "unmark", "trace", "reply", "note", "badge", "relabel", "tint", "move", "resize", "zoom", "pan", "custom"];
+  UZ.FORMATS = ["ugoku-zukai/2", "ugoku-zukai/3", "ugoku-zukai/4", "ugoku-zukai/5"];   // /2 = 場面が図を指す形だけ。/3 = スライドも使える。/4 = morph・zoom・pan・draw も使える。/5 = values・set も使える
+  UZ.FORMAT = "ugoku-zukai/5";
+  UZ.VERBS = ["show", "hide", "focus", "unfocus", "blur", "unblur", "pulse", "mark", "unmark", "trace", "reply", "note", "badge", "relabel", "tint", "move", "resize", "zoom", "pan", "set", "custom"];
   const MARK_RE = /\{([A-Za-z0-9_]+)\}/g;
 
   // ---- 字幕の文と印 ----
@@ -62,7 +62,7 @@
 
   // ---- 動作の既定の長さ ----
   const LABEL_HOLD = 1.0;   // 点の札を見せておく秒数（この間、点は動かない）
-  const DUR = { show: 0.7, hide: 0.5, focus: 0.6, unfocus: 0.6, blur: 0.6, unblur: 0.6, pulse: 0.8, mark: 0.5, unmark: 0.4, trace: 2.0, reply: 0.8, note: 0.6, badge: 0.5, relabel: 0.6, tint: 0.6, move: 1.0, resize: 0.9, zoom: 1.0, pan: 0.9, custom: 2.0 };
+  const DUR = { show: 0.7, hide: 0.5, focus: 0.6, unfocus: 0.6, blur: 0.6, unblur: 0.6, pulse: 0.8, mark: 0.5, unmark: 0.4, trace: 2.0, reply: 0.8, note: 0.6, badge: 0.5, relabel: 0.6, tint: 0.6, move: 1.0, resize: 0.9, zoom: 1.0, pan: 0.9, set: 1.0, custom: 2.0 };
   const STAGGER = 0.22;
   // カメラ（zoom・pan）: 倍率の上限と、寄せたときの既定の余白（画面の px）
   // 上限は 2.0。箱 1 つに寄せたとき、2.5 では文字が 40px を超えて隣の箱が画面から外れ、どこを見ているかが分からなくなった（M7 の見本で確認）
@@ -255,6 +255,7 @@
 
     // ---- 動作の列 ----
     const acts = [], extras = { marks: {}, notes: {}, dots: {}, replies: [], customs: [] };
+    const values0 = { ...(sb.values || {}) };   // 名前付きの値の初め（set で動かす）
     const itemByKey = {};
     for (const F of Object.values(figs)) for (const it of Object.values(F.items)) itemByKey[it.key] = it;
     const dotState = {};   // 点の今の位置（台本を読みながら追う）
@@ -447,6 +448,10 @@
             // Morph のある場面では、Morph が終わってから動かす
             if (morphHere) { start = Math.max(start, sc.start + 0.8); act.start = start; }
             act.run = sc.run;
+          } else if (verb === "set") {
+            // 名前付きの値を to へ動かす。始まりの値は、下の「値」で前の set から決める
+            if (!Object.prototype.hasOwnProperty.call(values0, val)) { err(`${where}: set の「${val}」が values にない`); return; }
+            act.name = val; act.to = a.to; act.ease = a.ease === "linear" ? "linear" : "smooth";
           } else if (verb === "custom") {
             const src = sb.custom && sb.custom[val];
             if (!src) { err(`${where}: custom「${val}」が台本の custom にない`); return; }
@@ -651,6 +656,14 @@
       acts.push({ verb: "morph", scene: sc.id, line: sc.lines[0].id, start: sc.start, dur: 0.8, end: sc.start + 0.8, from: mo.from, to: mo.to, series, pairs });
     }
     acts.sort((a, b) => a.start - b.start);
+    // ---- 値: 名前ごとに set を始まりの順に並べ、各 set の始まりの値（from）を、その時点の値から決めておく ----
+    // （前の set の途中で始まる set は、その時点の値から動く。これで valuesAt は t だけで決まる）
+    const lastSet = {};
+    for (const a of acts) if (a.verb === "set") {
+      const p = lastSet[a.name];
+      a.from = p ? valueOfSet(p, a.start) : values0[a.name];
+      lastSet[a.name] = a;
+    }
     const lastLine = timeline.lines[timeline.lines.length - 1];
     const speechEnd = lastLine.start + lastLine.dur;
     const actsEnd = Math.max(...acts.map(a => a.end), speechEnd);
@@ -672,7 +685,23 @@
     }
     const sp = (sb.voice && sb.voice.speaker) ?? UZ.DEFAULT_SPEAKER;
     const credit = sb.credit || (sb.voice && sb.voice.credit) || timeline.credit || `VOICEVOX:${UZ.SPEAKER_NAMES[sp] || "話者 " + sp}`;
-    return { errors, warnings, sb, theme, S, timeline, TL, scenes, figs, series, slides, assets, credits, acts, itemByKey, duration, endCard, credit, title: sb.title || "" };
+    return { errors, warnings, sb, theme, S, timeline, TL, scenes, figs, series, slides, assets, credits, acts, itemByKey, values0, duration, endCard, credit, title: sb.title || "" };
+  };
+
+  // ---- 名前付きの値 ----
+  // set 1 つの、時刻 t での値（始まる前は from、終わった後は to）
+  const valueOfSet = (a, t) => {
+    const q = clamp((t - a.start) / Math.max(0.001, a.dur));
+    return a.from + (a.to - a.from) * (a.ease === "linear" ? q : smooth(q));
+  };
+  // 時刻 t の値: 名前ごとに、t 以前に始まった最後の set を補間する（なければ初めの値）
+  UZ.valuesAt = function (M, t) {
+    const v = { ...(M.values0 || {}) };
+    for (const a of M.acts) {
+      if (t < a.start) break;
+      if (a.verb === "set") v[a.name] = valueOfSet(a, t);
+    }
+    return v;
   };
 
   // Morph で要素をつなぐ type と、要素の kind（group は描かない。印・注記・点は動作で足したもので、引き継がない）
@@ -937,7 +966,7 @@
     const header = { text: sc.header, opacity: (prev && prev.header !== sc.header ? k : 1) * (1 - endP), prev: prev && prev.header !== sc.header ? { text: prev.header, opacity: 1 - k } : null };
     const stSame = prev && prev.statement.join("\n") === sc.statement.join("\n");
     const statement = { lines: sc.statement, opacity: (prev && !stSame ? k : 1) * (1 - endP), prev: prev && !stSame && prev.statement.length ? { lines: prev.statement, opacity: 1 - k } : null };
-    return { t, st, figs: figsF, camera, scene: sc, statement, captions: sc.captions.map(c => ({ ...c, opacity: (prev && prev.figs.includes(c.fig) && prev.captions.some(x => x.text === c.text) ? 1 : k) * (1 - endP) })), header, sub, badge, customs, end: endP, dark };
+    return { t, st, figs: figsF, camera, scene: sc, statement, captions: sc.captions.map(c => ({ ...c, opacity: (prev && prev.figs.includes(c.fig) && prev.captions.some(x => x.text === c.text) ? 1 : k) * (1 - endP) })), header, sub, badge, customs, values: UZ.valuesAt(M, t), end: endP, dark };
   };
   // ================= スライドの完成形のコマ =================
   // 完成形 = 宣言した部品がすべて出た状態。完成形に含めない部品（transient）と、動作で足したもの（印・注記・点・戻りの矢印）は出さない。
@@ -946,6 +975,7 @@
     const sl = M.slides && M.slides[slideId];
     if (!sl) return null;
     const sc = M.scenes.find(s => s.id === sl.scenes[0]);
+    const lastSc = M.scenes.find(s => s.id === sl.scenes[sl.scenes.length - 1]);   // 値は、このスライドを使う最後の場面の終わりのもの
     const st = {}, figsF = {};
     for (const fid of Object.keys(M.figs)) figsF[fid] = { opacity: 0, place: null };
     for (const fid of sl.figs) {
@@ -959,7 +989,7 @@
     // 大きさを変えた箱（resize）は、変えた後の形で出す（中に入れた部品と重ならないように）
     for (const a of M.acts) if (a.verb === "resize" && sl.scenes.includes(a.scene) && st[a.key]) { st[a.key].rect = { ...a.to }; st[a.key].textOff = a.textTo.slice(); }
     return { t: sc.start, st, figs: figsF, camera: { ...CAM0, clip: { ...sc.body }, on: false }, scene: sc, statement: { lines: sc.statement, opacity: 1, prev: null }, captions: [],
-      header: { text: sc.header, opacity: 1, prev: null }, sub: null, badge: { text: "", show: 0, from: "" }, customs: {}, end: 0, dark: sc.tone === "dark" ? 1 : 0 };
+      header: { text: sc.header, opacity: 1, prev: null }, sub: null, badge: { text: "", show: 0, from: "" }, customs: {}, values: UZ.valuesAt(M, lastSc.end - 0.001), end: 0, dark: sc.tone === "dark" ? 1 : 0 };
   };
   const lineCache = new WeakMap();
   function findLine(sb, id) {

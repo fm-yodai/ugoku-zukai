@@ -19,17 +19,31 @@
     if (sb.figures != null && typeof sb.figures !== "object") E("figures（図の宣言）はオブジェクトで書く");
     if (sb.figures == null && sb.slides == null) E("figures（図の宣言）がない");
     if (!Array.isArray(sb.scenes) || !sb.scenes.length) E("scenes（場面の列）がない");
+    const allActs = (Array.isArray(sb.scenes) ? sb.scenes : []).flatMap(sc => sc && Array.isArray(sc.lines) ? sc.lines.flatMap(ln => ln && Array.isArray(ln.do) ? ln.do.map(a => [ln.id, a]) : []) : []);
     // /4 の機能（part の morph・動作の zoom・pan・show の draw）は、/3 以前の format では使えない。種類ごとに 1 件ずつ出す
-    if (UZ.FORMATS.includes(sb.format) && sb.format !== "ugoku-zukai/4") {
+    if (["ugoku-zukai/2", "ugoku-zukai/3"].includes(sb.format)) {
       const need = (what, where) => E(`${where}で ${what} を使っている。使うには format を "ugoku-zukai/4" と書く（今は ${JSON.stringify(sb.format)}）`);
       const parts = Object.entries(sb.slides && typeof sb.slides === "object" ? sb.slides : {}).flatMap(([sid, sl]) => sl && Array.isArray(sl.parts) ? sl.parts.map(p => [sid, p]) : []);
       const hit = parts.find(([, p]) => p && p.morph != null);
       if (hit) need("morph", `スライド「${hit[0]}」`);
-      const acts = (Array.isArray(sb.scenes) ? sb.scenes : []).flatMap(sc => sc && Array.isArray(sc.lines) ? sc.lines.flatMap(ln => ln && Array.isArray(ln.do) ? ln.do.map(a => [ln.id, a]) : []) : []);
       for (const [what, test] of [["zoom", a => a.zoom != null], ["pan", a => a.pan != null], ["draw", a => a.draw != null]]) {
-        const h = acts.find(([, a]) => a && typeof a === "object" && test(a));
+        const h = allActs.find(([, a]) => a && typeof a === "object" && test(a));
         if (h) need(what, `行「${h[0]}」`);
       }
+    }
+    // /5 の機能（最上位の values・動作の set）は、/4 以前の format では使えない。種類ごとに 1 件ずつ出す
+    if (UZ.FORMATS.includes(sb.format) && sb.format !== "ugoku-zukai/5") {
+      const need = (what, where) => E(`${where}で ${what} を使っている。使うには format を "ugoku-zukai/5" と書く（今は ${JSON.stringify(sb.format)}）`);
+      if (sb.values != null) need("values", "台本の最上位");
+      const h = allActs.find(([, a]) => a && typeof a === "object" && Object.prototype.hasOwnProperty.call(a, "set"));
+      if (h) need("set", `行「${h[0]}」`);
+    }
+    // 名前付きの値: { 名前: 数 }
+    const values = sb.values == null ? {} : sb.values;
+    if (typeof values !== "object" || Array.isArray(values)) E("values（名前付きの値）は { 名前: 数 } のオブジェクトで書く");
+    else for (const [k, v] of Object.entries(values)) {
+      if (!ID_RE.test(k)) E(`values の「${k}」: 名前に使えない文字がある（/ : 空白は不可）`);
+      if (typeof v !== "number" || !Number.isFinite(v)) E(`values の「${k}」は数で書く（今は ${JSON.stringify(v)}）`);
     }
     if (errors.length) return { errors, warnings };
     UZ.validateSlides(sb, E, W, ID_RE);
@@ -281,6 +295,12 @@
           if ((a.zoom != null || a.pan != null) && a.pad != null && !(typeof a.pad === "number" && Number.isFinite(a.pad) && a.pad >= 0)) E(`${lw} の do[${ai}]: pad は 0 以上の数で書く`);
           if (a.draw != null && typeof a.draw !== "boolean") E(`${lw} の do[${ai}]: draw は true か false で書く`);
           if (a.draw != null && verbs[0] !== "show") E(`${lw} の do[${ai}]: draw は show にだけ付けられる`);
+          if (verbs[0] === "set") {
+            if (typeof a.set !== "string" || !Object.prototype.hasOwnProperty.call(values, a.set)) E(`${lw} の do[${ai}]: set の「${a.set}」が values にない`);
+            if (typeof a.to !== "number" || !Number.isFinite(a.to)) E(`${lw} の do[${ai}]: set の to は数で書く`);
+            if (a.ease != null && !["smooth", "linear"].includes(a.ease)) E(`${lw} の do[${ai}]: ease は smooth か linear で書く`);
+            if (a.dur != null && !(typeof a.dur === "number" && Number.isFinite(a.dur) && a.dur > 0)) E(`${lw} の do[${ai}]: dur は 0 より大きい数で書く`);
+          }
           if (a.at != null) { used.add(a.at); if (p.marks[a.at] == null) E(`${lw} の do[${ai}]: 印 {${a.at}} が text にない`); }
         });
         for (const k of Object.keys(p.marks)) if (!used.has(k)) W(`${lw}: 印 {${k}} を使う動作がない`);
