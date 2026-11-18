@@ -610,6 +610,38 @@ const tests = {
     assert.deepStrictEqual(M.errors || [], []);
     assert.ok(UZ.checkLayout(M).some(x => /layer1\/t1 と layer1\/t2 の文字が重なる/.test(x.msg)), JSON.stringify(UZ.checkLayout(M)));
   },
+  async plate_fill_label() {   // 板の fill（板の長方形の面を図の後ろに塗る）と label（板の上に、板と同じ行列で描く名前）
+    const bad = async (items, re) => hasErr(await build(plateDeck(items, [{ id: "l1", text: "{a}出します。", do: [{ show: "sp", at: "a" }] }])), re);
+    await bad([PL("layer1", "g1", 0, { label: 3 })], /要素 layer1 の label は文字列で書く/);
+    await bad([PL("layer1", "g1", 0, { fill: 1 })], /要素 layer1 の fill は色の名前/);
+    await bad([PL("layer1", "g1", 0, { labelWidth: -1 })], /要素 layer1 の labelWidth は正の数/);
+    const items = [PL("layer1", "g1", 3, { tilt: "th", fill: "muted", opacity: 0.3, label: "画面" }), PL("layer2", "f2", 2, { tilt: "th", fill: "muted", label: "処理" })];
+    const M = await build(plateDeck(items, [{ id: "l1", text: "{a}出して{b}倒します。", do: [{ show: "sp", at: "a" }, { set: "th", to: 90, at: "b", dur: 1.5 }, { set: "pt", to: 50, at: "b", dur: 1.5 }] }]));
+    assert.deepStrictEqual(M.errors || [], []);
+    // fill: 板ごとに面が 1 枚、同じ奥行きで板の直前（奥 → 手前の並びで、面 → 板）
+    const tEnd = lastEnd(M), v = UZ.valuesAt(M, tEnd);
+    const P = M.figs.sp, pl = M.scenes[0].place.sp, cam = UZ.spaceView(P.spec, v, pl.w, pl.h, P.v0);
+    const prims = UZ.spacePrims(P.spec, v, cam, M.S).filter(p => p.id === "layer1" || p.id === "layer2").map(p => `${p.id}:${p.kind}`);
+    assert.deepStrictEqual(prims, ["layer2:face", "layer2:plate", "layer1:face", "layer1:plate"], "fill の面が板の直前の奥行きの順にない");
+    // label の帯の分だけ、図の区画が狭い（帯の幅 lw > 0 が置き方に入る）
+    assert.ok(M.figs.layer1.fit.lw > 0, "label の帯の幅が置き方にない");
+    const svg = renderSvg(M, tEnd);
+    // 面は板の図より前（奥）に描かれ、opacity が塗りに掛かる
+    const iFace = svg.indexOf('data-s3="layer1"'), iPlate = svg.indexOf('data-plate="layer1"');
+    assert.ok(iFace >= 0 && iFace < iPlate, "fill の面が板の図の前に描かれていない");
+    assert.ok(/<path data-s3="layer1"[^>]*fill-opacity="0\.30"/.test(svg), "fill に opacity が掛かっていない");
+    // label: 板の図と同じ matrix の g の中の text
+    const mPlate = /<g\b[^>]*data-plate="layer1"[^>]*transform="(matrix\([^"]*\))"/.exec(svg) || /<g\b[^>]*transform="(matrix\([^"]*\))"[^>]*data-plate="layer1"/.exec(svg);
+    const mLabel = /<g data-s3="layer1:label" transform="(matrix\([^"]*\))"><text[^>]*>画面<\/text><\/g>/.exec(svg);
+    assert.ok(mPlate && mLabel, "label が板の行列の g の中にない");
+    assert.strictEqual(mLabel[1], mPlate[1], "label の行列が板の図と違う");
+    // 板の中の図だけを出しても（show に板の id）、面と名前が出る
+    const M2 = await build(plateDeck(items, [{ id: "l1", text: "{a}一枚だけ出します。", do: [{ show: "layer1", at: "a" }] }]));
+    assert.deepStrictEqual(M2.errors || [], []);
+    const svg2 = renderSvg(M2, lastEnd(M2));
+    assert.ok(/<path data-s3="layer1"/.test(svg2) && /data-s3="layer1:label"/.test(svg2), "中の図だけを出したとき、面と名前が出ない");
+    assert.ok(!/data-s3="layer2/.test(svg2), "出していない板の面と名前が出ている");
+  },
   space_project_front() {
     const cam = UZ.spaceCamera({ yaw: 0, pitch: 0, scale: 10, target: [0, 0, 0] }, 200, 100, { min: [0, 0, 0], max: [1, 1, 1] });
     assert.deepStrictEqual(cam.project([1, 0, 0]).map(Math.abs), [110, 50, 0]);

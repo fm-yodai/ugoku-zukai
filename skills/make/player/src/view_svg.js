@@ -531,7 +531,7 @@
           while (E.inner.firstChild) E.inner.removeChild(E.inner.firstChild);
           const fo = fr.figs[it.fig];
           if (fo && fo.opacity > 0.002) {
-            const states = UZ.spaceStates(E.F, fr.st);
+            const states = UZ.plateKidStates(this.M, fr, E.F, UZ.spaceStates(E.F, fr.st));
             // 板の中の図は、その要素がどれか出ていれば描く（板の要素自身を出していなくても）
             const kidOn = E.kids.some(k => UZ.childShown(this.M, fr, k));
             if (kidOn || Object.values(states).some(x => x.show > 0.002)) {
@@ -543,8 +543,21 @@
                 if (!K || !kg || !K.parent) return;
                 const m = UZ.childMatrix(K, p.plate, v, cam);
                 if (!m.every(Number.isFinite)) return;
-                kg.setAttribute("transform", `matrix(${m.slice(0, 4).map(x => x.toFixed(5)).join(",")},${m[4].toFixed(2)},${m[5].toFixed(2)})`);
+                const mat = `matrix(${m.slice(0, 4).map(x => x.toFixed(5)).join(",")},${m[4].toFixed(2)},${m[5].toFixed(2)})`;
+                kg.setAttribute("transform", mat);
                 g.appendChild(kg);
+                // 板の名前（label）: 板の面の上、左の帯に、中の図と同じ行列で描く（板と一緒に傾く。正面を向き直さない）
+                const o = p.plate, st = states[p.id];
+                if (o.label != null && String(o.label) !== "" && K.fit && st) {
+                  const op = st.opacity * st.dim;
+                  if (op > 0.002) {
+                    const L = UZ.plateLabelPlace(o, v, K.fit);
+                    const lg = el("g", { "data-s3": `${p.id}:label`, transform: mat }, g);
+                    const t = el("text", { x: L.x.toFixed(2), y: L.y.toFixed(2), "font-size": L.size.toFixed(2), "font-family": E.S.font, "font-weight": 500,
+                      fill: E.S.ink, "text-anchor": "start", "dominant-baseline": "central", opacity: op.toFixed(3) }, lg);
+                    t.textContent = String(o.label);
+                  }
+                }
               };
               try {
                 const r = UZ.spaceRender(el, E.inner, E.F.spec, v, pw, ph, states, E.S, E.F.v0, { plate });

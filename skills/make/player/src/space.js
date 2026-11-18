@@ -128,10 +128,16 @@
   // SVG の行列 [a, b, c, d, e, f]（図のローカル座標 → 部品の座標）にする。平行投影なので写像は 1 次（アフィン）。
   // fit = { s, ox, oy, w, h } は、板全体を表す w × h の px の矩形の中での図の置き方（普通の部品の place と同じ: 点 x → ox + x·s）。
   // その矩形を、縦横比を保って板に収める（中央寄せ）。fit を省くと、図の外接矩形をそのまま板に収める
+  // fit.lw = 板の名前（label）のために左に取った帯の幅（ワールドの単位）。図はその右の残り（W − lw）× H に収める
+  const plateFit = (P, fit) => {
+    const lw = (fit && fit.lw) || 0, W2 = Math.max(1e-9, P.W - lw);
+    const g = Math.min(W2 / fit.w, P.H / fit.h);
+    return { lw, g, cu: lw + (W2 - fit.w * g) / 2, cv: (P.H - fit.h * g) / 2 };
+  };
   UZ.plateMatrix = function (plate, v, cam, figBox, fit) {
     const P = plateOf(plate, v);
     fit = fit || { s: 1, ox: -figBox.x, oy: -figBox.y, w: Math.max(1e-9, figBox.w), h: Math.max(1e-9, figBox.h) };
-    const g = Math.min(P.W / fit.w, P.H / fit.h), cu = (P.W - fit.w * g) / 2, cv = (P.H - fit.h * g) / 2;
+    const { g, cu, cv } = plateFit(P, fit);
     const at = (x, y) => cam.project(P.at(cu + (fit.ox + x * fit.s) * g, cv + (fit.oy + y * fit.s) * g));
     const S0 = at(0, 0), S1 = at(1, 0), S2 = at(0, 1);
     const a = S1[0] - S0[0], b = S1[1] - S0[1], c = S2[0] - S0[0], d = S2[1] - S0[1];
@@ -143,9 +149,23 @@
     return nl > 0 ? Math.acos(clamp(Math.abs(n[2]) / nl, 0, 1)) / RAD : 90;
   };
   // 板の中の図を配置する大きさ（px）: 初めの値 v0 で、部品の区画 w × h のカメラに写した板の大きさ
+  // label があれば、左に名前の帯（lw。ワールドの単位）を取り、図の区画はその残りにする。帯の幅は labelWidth（ワールドの単位）か、
+  // 名前の文字（板の上で TEXT.size の px）の見積もりの幅 + 左右の余白
   UZ.plateArea = function (decl, plate, v0, w, h) {
     const P = plateOf(plate, v0), cam = UZ.spaceView(decl, v0, w, h, v0);
-    return { w: cam.s * P.W, h: cam.s * P.H };
+    let lw = 0;
+    if (plate.label != null && String(plate.label) !== "") {
+      lw = plate.labelWidth != null ? +plate.labelWidth : (UZ.textW(String(plate.label), TEXT.size, 500) + 2 * TEXT.platePad) / cam.s;
+      lw = clamp(lw, 0, P.W * 0.5);
+    }
+    return { w: cam.s * (P.W - lw), h: cam.s * P.H, lw };
+  };
+  // 板の名前の位置（板の中の図のローカル座標。板の行列でそのまま写せる）。帯の左の余白から、板の高さの中央に、左揃えで置く。
+  // 大きさは、図を配置した区画の px（fit）で TEXT.size になる値
+  UZ.plateLabelPlace = function (plate, v, fit) {
+    const P = plateOf(plate, v), { lw, g, cu, cv } = plateFit(P, fit), s = fit.s || 1;
+    const a = Math.min(TEXT.platePad * g, lw / 2), b = P.H / 2;
+    return { x: ((a - cu) / g - fit.ox) / s, y: ((b - cv) / g - fit.oy) / s, size: TEXT.size / s };
   };
 
   // 内容の外接箱。axes があればその範囲、なければ decl.bounds、なければ要素を今の値で評価した外接箱
@@ -283,8 +303,11 @@
         text(id, id, K.pt(o.at), o.text, colorOf(S, o.color, "ink"), o);
       } else if (o.kind === "plate") {
         // 板全体を 1 つのプリミティブにし、重心の奥行きで並べる（中の図は描く側が行列 1 つで描く。spaceRender の opts.plate）
-        const ps = plateGeom(o, K).pts;
-        if (ps.every(ok3)) push({ id, key: id, kind: "plate", pts: ps.map(xy), depth: depthOf(ps), plate: o });
+        const G = plateGeom(o, K), ps = G.pts;
+        if (!ps.every(ok3)) continue;
+        // fill: 板の長方形そのものを面として、中の図の後ろに塗る（同じ奥行きで先に積むので、板の直前に描かれる。opacity は塗りに掛かる）
+        if (o.fill != null) push({ id, key: `${id}:fill`, kind: "face", pts: ps.map(xy), depth: depthOf(ps), color: UZ.spaceShade(colorOf(S, o.fill), cam.dir(cross(G.u, G.vd)), S), opacity: o.opacity });
+        push({ id, key: id, kind: "plate", pts: ps.map(xy), depth: depthOf(ps), plate: o });
       }
       // 未知の種類は無視する
     }
@@ -318,7 +341,7 @@
   };
 
   // 文字のプリミティブの置き方（spaceRender と spacePrimBox が共有）: 目盛りは 13px、ほかは 18px。:label は右上にずらして左揃え
-  const TEXT = { size: 18, tick: 13, labelDx: 10, labelDy: -14 };
+  const TEXT = { size: 18, tick: 13, labelDx: 10, labelDy: -14, platePad: 14 };
   const textPlace = p => {
     const tick = /:tick:/.test(p.key), lab = /:label$/.test(p.key);
     return { tick, lab, size: tick ? TEXT.tick : TEXT.size, x: p.pts[0][0] + (lab ? TEXT.labelDx : 0), y: p.pts[0][1] + (lab ? TEXT.labelDy : 0), anchor: lab ? "start" : "middle" };

@@ -85,6 +85,10 @@
           else if (fg.type === "space") E(`${where}: ${w} の figure に space は置けない（板の中は 2D の図）`);
         }
         if (o.tilt != null) expr(o.tilt, `${w} の tilt`);
+        // fill = 板の面の色（色の名前）、label = 板の上の左に描く名前、labelWidth = 名前の帯の幅（ワールドの単位。省くと名前の幅から決める）
+        if (o.fill != null && (typeof o.fill !== "string" || !o.fill)) E(`${where}: ${w} の fill は色の名前（文字列）で書く（今は ${JSON.stringify(o.fill)}）`);
+        if (o.label != null && typeof o.label !== "string") E(`${where}: ${w} の label は文字列で書く（今は ${JSON.stringify(o.label)}）`);
+        if (o.labelWidth != null && !(typeof o.labelWidth === "number" && o.labelWidth > 0)) E(`${where}: ${w} の labelWidth は正の数（ワールドの単位）で書く`);
       }
       if (o.opacity != null && !(typeof o.opacity === "number" && o.opacity >= 0 && o.opacity <= 1)) E(`${where}: ${w} の opacity は 0〜1 の数で書く`);
     }
