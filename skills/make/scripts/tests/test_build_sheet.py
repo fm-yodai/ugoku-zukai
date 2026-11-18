@@ -20,12 +20,41 @@ PAIR_OUTLINE = os.path.join(HERE, "outlines", "pair", "outline.json")
 SLIDE_SB = os.path.join(SCRIPTS, "..", "examples", "slide-forms.json")
 SLIDE_OUTLINE = os.path.join(SCRIPTS, "..", "examples", "outlines", "slide-forms.json")
 
+CM_SB = os.path.join(SCRIPTS, "..", "examples", "camera-morph.json")
+CM_OUTLINE = os.path.join(SCRIPTS, "..", "examples", "outlines", "camera-morph.json")
+
+# ページの中の <script> を取り出して構文を確かめ、ELK とエンジンを vm で動かして、埋め込んだデータから M を組み立てる
+NODE_RUN = r"""
+const fs = require("fs"), vm = require("vm");
+const html = fs.readFileSync(process.argv[1], "utf8");
+const tags = [...html.matchAll(/<script([^>]*)>([\s\S]*?)<\/script>/g)];
+for (const [, attr, src] of tags) if (!/application\/json/.test(attr)) new vm.Script(src);   // 構文エラーなら投げる
+const code = tags.filter(([, attr]) => !/application\/json/.test(attr)).map(m => m[2]);
+const json = tags.find(([, attr]) => /application\/json/.test(attr));
+if (!json || code.length < 3) throw new Error("スクリプトが足りない: " + code.length);
+const data = JSON.parse(json[2]);
+const ctx = { console, setTimeout, clearTimeout, Promise };
+ctx.window = ctx; ctx.self = ctx; ctx.document = {};   // ELK は document があるとブラウザとみなし、worker を使わずに動く
+vm.createContext(ctx);
+vm.runInContext(code[0], ctx);   // ELK
+vm.runInContext(code[1], ctx);   // プレーヤーのコード
+ctx.UZ.ELK = ctx.ELK || (ctx.module && ctx.module.exports);
+ctx.UZ.build(data.storyboard, data.theme, data.timeline, { assets: data.assets || {} }).then(M => {
+  console.log(JSON.stringify({ errors: M.errors, scenes: M.scenes.map(s => s.id), duration: M.duration }));
+}, e => { console.error(e); process.exit(1); });
+"""
+
 sys.path.insert(0, SCRIPTS)
 sys.path.insert(0, HERE)
 try:
     import build_sheet
 except ImportError:  # まだ無いときは、各検査が失敗で知らせる
     build_sheet = None
+
+
+def visible(html):
+    """ページのうち、画面に出る部分（再生のための <script> を外したもの）"""
+    return re.sub(r"<script[^>]*>[\s\S]*?</script>", "", html)
 
 
 def load(path):
@@ -97,13 +126,97 @@ class BuildSheetTest(unittest.TestCase):
             self.assertIn(f"{sid} / {ln['id']} @", html)
         self.assertRegex(html, r"s1 / l1 @0:0\d")
         self.assertIn("社員が出勤を打刻すると、アプリはその時刻を勤怠システムに送ります。", html)   # 全文。印は出ない
-        self.assertNotIn("{a}", html)
+        self.assertNotIn("{a}", visible(html))
 
     def test_no_external(self):
         _, html = self.build(SEQ, self.frames_seq)
         self.assertNotRegex(html, r'(src|href)="https?:')
-        self.assertNotIn("<script", html)
         self.assertIn('src="data:image/svg+xml;base64,', html)
+
+    # --- 章ごとの動きの再生（M7） ---
+
+    def camera_morph(self):
+        if not hasattr(type(self), "_cm_frames"):
+            type(self)._cm_frames = self.frames(CM_SB)
+        return type(self)._cm_frames
+
+    def test_play_embeds_engine(self):
+        r, html = self.build(CM_SB, self.camera_morph(), "--outline", CM_OUTLINE)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("UZ.build", html)
+        self.assertIn("new UZ.View", html)
+        sb = load(CM_SB)
+        self.assertIn(json.dumps(sb, ensure_ascii=False).replace("<", "\\u003c"), html)   # 台本がそのまま埋め込まれる
+        sections = html.count('<section class="us-chapter">')
+        self.assertGreater(sections, 1)
+        self.assertEqual(visible(html).count('class="us-play"'), sections)   # 章の数だけ再生ボタン
+        self.assertEqual(visible(html).count("この章を再生"), sections)
+        self.assertEqual(html[:html.index("<script")].count("<svg "), 1)   # 再生領域の <svg> はページに 1 つ
+        # 章の範囲: 再生ボタンが、その章の最初と最後の場面を指す
+        outline = load(CM_OUTLINE)
+        want = [(c["scenes"][0], c["scenes"][-1]) for c in build_sheet.chapters(sb, outline)]
+        got = re.findall(r'class="us-play" data-from="([^"]+)" data-to="([^"]+)"', html)
+        self.assertEqual(got, want)
+
+    def test_no_play(self):
+        r, html = self.build(CM_SB, self.camera_morph(), "--outline", CM_OUTLINE, "--no-play")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertNotIn("<script", html)
+        self.assertNotIn("UZ.build", html)
+        self.assertNotIn("この章を再生", html)
+        self.assertNotIn("<svg", html)
+
+    def test_artifact_has_no_external_src(self):
+        r, html = self.build(CM_SB, self.camera_morph(), "--outline", CM_OUTLINE, "--artifact")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("UZ.build", html)
+        self.assertNotRegex(html, r'(src|href)\s*=\s*["\']?https?:')
+        self.assertNotIn("<html", html)
+        self.assertNotIn("<body", html)
+
+    def test_page_size_under_limit(self):
+        for extra in ((), ("--artifact",)):
+            r, html = self.build(CM_SB, self.camera_morph(), "--outline", CM_OUTLINE, *extra)
+            self.assertEqual(r.returncode, 0, r.stderr)
+            self.assertLess(len(html.encode()), 16 * 1024 * 1024)
+
+    def test_play_voice_timeline(self):
+        # --voice の timeline.json があれば、その時刻表を埋め込む
+        d = self.newdir()
+        os.makedirs(d)
+        shutil.copy(self.voice_timeline(), os.path.join(d, "timeline.json"))
+        r, html = self.build(PAIR_SB, self.frames(PAIR_SB, "--timeline", os.path.join(d, "timeline.json")), "--voice", d)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn('"speaker": 8', html)
+        # 時刻表がなければ（声の前）、見積もりで流す
+        r, html = self.build(PAIR_SB, self.frames_pair, "--voice", self.newdir())
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn('"timeline": null', html)
+
+    def test_play_voice_stale(self):
+        d = self.newdir()
+        os.makedirs(d)
+        good = self.voice_timeline()
+        tl = load(good)
+        tl["lines"][0]["text"] = "前の文"
+        with open(os.path.join(d, "timeline.json"), "w", encoding="utf-8") as f:
+            json.dump(tl, f, ensure_ascii=False)
+        r, html = self.build(PAIR_SB, self.frames(PAIR_SB, "--timeline", good), "--voice", d)
+        self.assertEqual(r.returncode, 2)
+        self.assertIn("音声が古い", r.stderr)
+
+    def test_play_scripts_run_in_node(self):
+        # ページの中のスクリプトが構文エラーなく読め、埋め込んだエンジンとデータで、ブラウザと同じ M を組み立てられる
+        out = self.newdir() + ".html"
+        r = subprocess.run([sys.executable, BUILD, CM_SB, "--frames", self.camera_morph(), "--outline", CM_OUTLINE, "-o", out, "--artifact"],
+                           capture_output=True, text=True)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        r = subprocess.run(["node", "-e", NODE_RUN, out], capture_output=True, text=True)
+        self.assertEqual(r.returncode, 0, r.stderr + r.stdout)
+        res = json.loads(r.stdout)
+        self.assertEqual(res["errors"], [])
+        self.assertEqual(res["scenes"], [sc["id"] for sc in load(CM_SB)["scenes"]])
+        self.assertGreater(res["duration"], 10)
 
     def test_chapters_without_outline(self):   # 図の title が章の見出しになる
         _, html = self.build(SEQ, self.frames_seq)
@@ -262,7 +375,7 @@ class BuildSheetTest(unittest.TestCase):
     def test_no_meta(self):
         _, html = self.build(SLIDE_SB, self.slide_setup(), "--outline", SLIDE_OUTLINE)
         for word in ("Claude が決めたこと", "まだ決めていないこと", "見積もり", "合成した声", "proposed", "agreed", "検査"):
-            self.assertNotIn(word, html)
+            self.assertNotIn(word, visible(html))
         self.assertRegex(html, r"<title>[^<]* スライドコンテ</title>")
 
     def test_slide_reused_once(self):
@@ -344,7 +457,6 @@ class BuildSheetTest(unittest.TestCase):
         self.assertNotIn("s3 / l4 @", outside)
         self.assertEqual(outside.count('class="us-final"'), 3)
         self.assertIn("s4 / l8 @", outside)
-        self.assertNotIn("<script", html)
 
     def test_alts_errors(self):
         wd, path = self.alts_setup()
@@ -477,14 +589,17 @@ class BuildSheetTest(unittest.TestCase):
     def test_note_estimate(self):
         self.assertEqual(load(os.path.join(self.frames_pair, "frames.json")).get("timed"), "estimate")
         r, html = self.build(PAIR_SB, self.frames_pair)
-        self.assertNotIn("見積もり", html)   # 時刻の出どころの注記は出さない
+        self.assertNotIn("見積もり", visible(html))   # 時刻の出どころの注記は出さない
         self.assertRegex(html, r"<title>[^<]* スライドコンテ</title>")
         self.assertNotIn("絵コンテ", html)
 
     def test_note_voice(self):
-        d = self.frames(PAIR_SB, "--timeline", self.voice_timeline())
+        vd = self.newdir()
+        os.makedirs(vd)
+        shutil.copy(self.voice_timeline(), os.path.join(vd, "timeline.json"))
+        d = self.frames(PAIR_SB, "--timeline", os.path.join(vd, "timeline.json"))
         self.assertEqual(load(os.path.join(d, "frames.json")).get("timed"), "voice")
-        r, html = self.build(PAIR_SB, d)
+        r, html = self.build(PAIR_SB, d, "--voice", vd)
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertNotIn("合成した声", html)
         self.assertRegex(html, r"s1 / l1 @0:01")   # 時刻は、渡した時刻表のもの
@@ -497,6 +612,85 @@ class BuildSheetTest(unittest.TestCase):
         with open(os.path.join(d, "frames.json"), "w", encoding="utf-8") as f:
             json.dump(fr, f, ensure_ascii=False)
         r, html = self.build(PAIR_SB, d)
+        self.assertEqual(r.returncode, 0, r.stderr)
+
+    # ---- 再生のテーマと時刻は、コマを書いたときのもの（frames.json の theme と timed）に合わせる ----
+    def other_theme(self):
+        """koo の地の色だけを変えた、同梱でないテーマのファイル"""
+        th = load(os.path.join(SCRIPTS, "..", "player", "themes", "koo.json"))
+        th["name"] = "other"
+        th["colors"]["bg"] = "#fafaf0"
+        path = self.newdir() + "-theme.json"
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(th, f, ensure_ascii=False)
+        return path
+
+    def frames_with_theme(self, sb, theme):
+        out = self.newdir()
+        r = subprocess.run(["node", FRAMES, sb, "--theme", theme, "-o", out], capture_output=True, text=True)
+        self.assertIn(r.returncode, (0, 4), r.stderr)
+        return out
+
+    def test_frames_records_theme(self):
+        self.assertEqual(load(os.path.join(self.frames_seq, "frames.json")).get("theme"), "koo")   # 同梱のテーマは名前
+        th = self.other_theme()
+        fr = load(os.path.join(self.frames_with_theme(SEQ, th), "frames.json"))
+        self.assertEqual(fr.get("theme"), os.path.realpath(th))   # それ以外は実体のパス
+        for k in ("png", "timed", "storyboard_sha256", "sheets", "lines", "slides"):
+            self.assertIn(k, fr)   # 前からの項目はそのまま
+
+    def test_play_follows_frames_theme(self):
+        # --theme を frames.cjs にだけ渡しても（themes.md の見本の手順）、再生はコマと同じテーマで流れる
+        d = self.frames_with_theme(SEQ, self.other_theme())
+        r, html = self.build(SEQ, d)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertTrue("#fafaf0" in html, "再生のテーマがコマのテーマでない")
+
+    def test_play_theme_disagrees_with_frames(self):
+        d = self.frames_with_theme(SEQ, self.other_theme())
+        r, html = self.build(SEQ, d, "--theme", "koo")
+        self.assertEqual(r.returncode, 2)
+        self.assertIn("コマを書いたテーマ", r.stderr)
+        self.assertEqual(html, "")
+        r, html = self.build(SEQ, d, "--theme", "koo", "--no-play")   # 再生しないなら、テーマは使わない
+        self.assertEqual(r.returncode, 0, r.stderr)
+
+    def test_outline_theme_disagrees_with_frames(self):
+        # コマを書いた後で、構成メモの見た目を変えた
+        wd = self.newdir()
+        os.makedirs(wd)
+        sb = os.path.join(wd, "storyboard.json")
+        shutil.copy(PAIR_SB, sb)
+        d = self.frames_with_theme(sb, self.other_theme())
+        shutil.copy(PAIR_OUTLINE, os.path.join(wd, "outline.json"))   # basics.look.theme = koo
+        r, html = self.build(sb, d)
+        self.assertEqual(r.returncode, 2)
+        self.assertIn("コマを書いたテーマ", r.stderr)
+        self.assertIn("構成メモ", r.stderr)
+
+    def test_old_frames_without_theme(self):
+        d = self.copy_frames(self.frames_seq)
+        fr = load(os.path.join(d, "frames.json"))
+        fr.pop("theme", None)
+        with open(os.path.join(d, "frames.json"), "w", encoding="utf-8") as f:
+            json.dump(fr, f, ensure_ascii=False)
+        r, html = self.build(SEQ, d)
+        self.assertEqual(r.returncode, 0, r.stderr)
+
+    def test_play_timeline_disagrees_with_frames(self):
+        vd = self.newdir()
+        os.makedirs(vd)
+        shutil.copy(self.voice_timeline(), os.path.join(vd, "timeline.json"))
+        # 見積もりで書いたコマに、声の時刻表を渡した
+        r, html = self.build(PAIR_SB, self.frames_pair, "--voice", vd)
+        self.assertEqual(r.returncode, 2)
+        self.assertIn("timed = estimate", r.stderr)
+        # 声の時刻で書いたコマに、時刻表を渡していない
+        d = self.frames(PAIR_SB, "--timeline", os.path.join(vd, "timeline.json"))
+        r, html = self.build(PAIR_SB, d)
+        self.assertEqual(r.returncode, 2)
+        self.assertIn("timed = voice", r.stderr)
+        r, html = self.build(PAIR_SB, d, "--no-play")
         self.assertEqual(r.returncode, 0, r.stderr)
 
 

@@ -30,13 +30,19 @@ function decidedTheme(storyboardPath) {
   const inDir = path.resolve(dir, look);
   return { value: look, path: fs.existsSync(inDir) ? inDir : look };
 }
-function pickTheme(storyboardPath, given) {
+function pickThemeRef(storyboardPath, given) {   // pickTheme が使うテーマの名前かパス
   const fail = m => { const e = new Error(m); e.code = "THEME"; return e; };
   const dec = decidedTheme(storyboardPath);
-  if (!dec) return theme(given || "koo");
+  if (!dec) return given || "koo";
   const want = themeId(dec.path);
   if (!want) throw fail(`構成メモの見た目（basics.look.theme = ${dec.value}）のテーマが見つからない。テーマを作るか、構成メモを直す`);
   if (given && themeId(given) !== want) throw fail(`--theme ${given} が、構成メモで決めた見た目（basics.look.theme = ${dec.value}）と違う。--theme を外すか合わせる。見た目を変えるなら、利用者と決めて構成メモを先に直す`);
-  return theme(dec.path);
+  return dec.path;
 }
-module.exports = { load, theme, pickTheme, PLAYER, SRC };
+function pickTheme(storyboardPath, given) { return theme(pickThemeRef(storyboardPath, given)); }
+// 後から別の道具が同じテーマを開けるように書き残す形（同梱のテーマは名前、それ以外は実体の絶対パス。frames.json の theme）
+function themeRecord(ref) {
+  const id = themeId(ref);
+  return id && id.startsWith("同梱:") ? id.slice(3) : (id || path.resolve(ref));
+}
+module.exports = { load, theme, pickTheme, pickThemeRef, themeRecord, PLAYER, SRC };

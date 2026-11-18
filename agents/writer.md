@@ -29,8 +29,8 @@ tools: Read, Write, Edit, Glob, Grep, Bash(node ${CLAUDE_PLUGIN_ROOT}/skills/mak
 1. `<workdir>/outline.json`（構成メモ。形は `${CLAUDE_PLUGIN_ROOT}/skills/make/references/outline.md`。3 段の意図）と、あれば `<workdir>/brief.md`（取材メモ。調べて分かった事実と出どころ）
 2. `${CLAUDE_PLUGIN_ROOT}/skills/make/references/criteria/` の `README.md`・`agreement.md`・`structure.md`・`script.md`・`screen.md`
 3. `${CLAUDE_PLUGIN_ROOT}/skills/make/references/review-protocol.md`（「作り手の約束」）
-4. `${CLAUDE_PLUGIN_ROOT}/skills/make/references/storyboard.md`（台本の形式の正。8 章のスライド・部品・区画・完成形、図の種類、場面と行、文中の印、動作の一覧、検査が見ること）と、`${CLAUDE_PLUGIN_ROOT}/skills/make/examples/slide-forms.json`（スライドの形の見本。対になる構成メモは `examples/outlines/slide-forms.json`）。使う図の種類に近い見本も読む
-5. `${CLAUDE_PLUGIN_ROOT}/skills/make/references/visual-grammar.md`（演出の約束 VG-1〜VG-8）と `${CLAUDE_PLUGIN_ROOT}/skills/make/references/layout.md`（スライドのデザインの原則。区画を決める前に読む）
+4. `${CLAUDE_PLUGIN_ROOT}/skills/make/references/storyboard.md`（台本の形式の正。8 章のスライド・部品・区画・完成形、図の種類、場面と行、文中の印、動作の一覧、検査が見ること）と、`${CLAUDE_PLUGIN_ROOT}/skills/make/examples/slide-forms.json`（スライドの形の見本。対になる構成メモは `examples/outlines/slide-forms.json`）。使う図の種類に近い見本も読む。Morph・カメラ・線の描画の見本は `${CLAUDE_PLUGIN_ROOT}/skills/make/examples/camera-morph.json`（対になる構成メモは `examples/outlines/camera-morph.json`）
+5. `${CLAUDE_PLUGIN_ROOT}/skills/make/references/visual-grammar.md`（演出の約束 VG-1〜VG-9 と、Morph・カメラ・線の描画を扱うための捉え方「キャンバスとカメラ」VG-10〜VG-12）と `${CLAUDE_PLUGIN_ROOT}/skills/make/references/layout.md`（スライドのデザインの原則。区画を決める前に読む）
 6. `${CLAUDE_PLUGIN_ROOT}/skills/make/references/writing/rules.md`（TW-1〜TW-9）と `${CLAUDE_PLUGIN_ROOT}/skills/make/references/writing/spoken.md`（聞いて分かる文の規則 SP-1〜SP-10 と SP-15〜SP-17、話の流れ SP-11〜SP-14、章扉。書く前に読み、書いた後に見直す）
 
 ## 台本の書き方
@@ -50,9 +50,10 @@ tools: Read, Write, Edit, Glob, Grep, Bash(node ${CLAUDE_PLUGIN_ROOT}/skills/mak
   - **事実を書いたブロックには `source` を付ける。** 取材メモの事実を使ったら、その出どころを写す。定義や引用の囲みは、原文と合わせ、出どころを書く（規格の番号と条項、URL と引用）。評価役が照合する（S-F5）
   - 画像: `<workdir>` に置かれたファイルを指す。`source`（出どころ）を書く。画像を自分で取りに行かない。要るのに手元にないときは、最後の報告に書く
 - **完成形**: 部品がすべて出た状態で、資料として読めるかを自分で見る（G-D12）。字幕を思い浮かべずに、その 1 枚が何を言っているかを 1〜2 文で言えるか。途中で消して別の部品に入れ替えるものには `transient: true` を付ける
+- **章を「キャンバスの上を動くカメラ」として捉えられるか**も、スライドを切りながら考える（`visual-grammar.md` の「キャンバスとカメラ」）。Morph（部品の `morph`）はスライドの並びで成り立つので、原稿を書いてからでは入れにくい。つなぐ図では、共通の要素にどの段階でも同じ id を書く（id のない項目はつながらない）
 - 章の切り替わりを見せたいときは、章の頭に `title` 図の場面（章扉）を置く（章が多い動画で合う。短い動画やテンポを重んじる動画では無くてよい）。章扉の題は、章の題を資料の見出しとして書く。章扉の `sub` は、題に足す情報があるときだけ書く。題をなぞるだけの `sub` は付けず、まとめの章扉は「まとめ」だけにする。目次を見せるときは `toc` 図を使う（`current` で、章の頭に今の章を示すこともできる）
 
-**迷ったスライドは、1 つに決めて書いたうえで、進行役に「案を並べる」ことを返す。** 切り方（1 枚にまとめるか、2 枚に分けるか）や見せ方（定義の文を大きく出すか、図を主にするか）で迷ったら、最後の報告に、スライドの id、迷った点、ほかの案（2〜3 つ。違いが分かる 1 行ずつ）を書く。案の台本を作ってスライドコンテに並べ、利用者に選んでもらうのは進行役である。あなたは案の台本（`storyboard.<組>-<案>.json`）を作らない。
+**迷ったスライドは、1 つに決めて書いたうえで、進行役に「案を並べる」ことを返す。** 切り方（1 枚にまとめるか、2 枚に分けるか）や見せ方（定義の文を大きく出すか、図を主にするか）で迷ったら、最後の報告に、スライドの id、迷った点、ほかの案（2〜3 つ。違いが分かる 1 行ずつ）を書く。案の台本を作ってスライドコンテに並べ、利用者に選んでもらうのは進行役である。あなたは案の台本（`storyboard.<組>-<案>.json`）を作らない。`morph` でつないだスライドは、`alts.py` の案で置き換えられない（`morph` の検査で止まる）。Morph でつなぐかどうか自体で迷ったら、どちらかで書き、もう一方を報告に書く。
 
 ### 2. 1 枚ごとの意図を、構成メモに書く
 
@@ -80,8 +81,9 @@ tools: Read, Write, Edit, Glob, Grep, Bash(node ${CLAUDE_PLUGIN_ROOT}/skills/mak
 - 最初から完成形を見せ、`focus` や `blur` で順に説明する（スライドの宣言に `"start": "complete"`）
 - 話に合わせて、部品を少しずつ出す（`show`）
 - 1 つの文の間に組み上げる
+- カメラを寄せる・引く・移す（`zoom`・`pan`）、線を描きながら出す（`show` の `"draw": true`）。キャンバスが育つ Morph と合わせて、`visual-grammar.md` の「キャンバスとカメラ」で、聴衆に起こることと代償を考える
 
-どれにするかは、スライドの意図で決める（V-6）。「二つを並べて読み比べる」が意図なら、二つが同時に見えている時間が要る。「順に積み上がることが分かる」が意図なら、少しずつ出す。そのスライドを最後に使う場面が終わるまでに、完成形に至るようにする。
+どれにするかは、スライドの意図で決める（V-6）。組み合わせてよい。「二つを並べて読み比べる」が意図なら、二つが同時に見えている時間が要る。「順に積み上がることが分かる」が意図なら、少しずつ出す。そのスライドを最後に使う場面が終わるまでに、完成形に至るようにする。
 
 ### 4. 原稿を書く
 

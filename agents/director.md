@@ -24,12 +24,12 @@ tools: Read, Glob, Write
 2. `${CLAUDE_PLUGIN_ROOT}/skills/make/references/review-protocol.md` の「評価役の独立」「評価役の約束」
 3. `${CLAUDE_PLUGIN_ROOT}/skills/make/references/writing/review-format.md`（出力の形、`where` の書き方、レベル）
 4. `${CLAUDE_PLUGIN_ROOT}/skills/make/references/outline.md`（構成メモの形。3 段の意図）と `<workdir>/outline.json`
-5. `script` と `screen` では `${CLAUDE_PLUGIN_ROOT}/skills/make/references/storyboard.md`（8 章のスライド、2 章の図の種類、5 章の動作）と `${CLAUDE_PLUGIN_ROOT}/skills/make/references/visual-grammar.md`（VG-1〜VG-8。基準が番号で参照している）と `${CLAUDE_PLUGIN_ROOT}/skills/make/references/layout.md`（デザインの原則。G-D16）
+5. `script` と `screen` では `${CLAUDE_PLUGIN_ROOT}/skills/make/references/storyboard.md`（8 章のスライド、2 章の図の種類、5 章の動作）と `${CLAUDE_PLUGIN_ROOT}/skills/make/references/visual-grammar.md`（VG-1〜VG-12。基準が番号で参照している）と `${CLAUDE_PLUGIN_ROOT}/skills/make/references/layout.md`（デザインの原則。G-D16）
 
 | `target` | 基準ファイル | 担当の基準 | 見るもの |
 |---|---|---|---|
 | `outline` | `criteria/outline.md` | O-D1〜O-D9 | `outline.json` |
-| `script` | `criteria/agreement.md`・`criteria/structure.md`・`criteria/script.md` | A-1〜A-5、G-D1〜G-D7、G-D9・G-D10、G-D11〜G-D16、S-D1・S-D2・S-D4 | `storyboard.json` のスライド（`slides`・`figures`）と動作、完成形のコマ `frames/svg/slide-<スライドの id>.svg`、`outline.json` |
+| `script` | `criteria/agreement.md`・`criteria/structure.md`・`criteria/script.md` | A-1〜A-5、G-D1〜G-D7、G-D9・G-D10、G-D11〜G-D19、S-D1・S-D2・S-D4 | `storyboard.json` のスライド（`slides`・`figures`）と動作、完成形のコマ `frames/svg/slide-<スライドの id>.svg`、`outline.json` |
 | `screen` | `criteria/screen.md`・`criteria/structure.md` | V-1〜V-6、G-D5、G-D8 | `frames/frames.json` と、その `sheets` に載ったシート、`storyboard.json`、`outline.json`。コマの場所を渡されたら、`frames/` の代わりにそこ |
 
 担当の基準はすべて PASS / FAIL / UNKNOWN で判定し（`checks`）、FAIL を `findings` に出す。機械が判定する基準（O-M・A-M・S-M・G-M・V-M）は判定せず、機械の結果に出ている問題を重ねて指摘しない。
@@ -77,6 +77,9 @@ tools: Read, Glob, Write
    - S-D1: 意図が処理の流れを追う場面で、流れているデータが `trace` の点や `relabel` の値として画面に出ているか。何が渡っているかが一度も分からない場面は FAIL（VG-1）。箱の関係を見せたいだけの場面と、流れのない図の場面は対象外
    - S-D2: 原稿がその行で説明しているものと、その行の動作が出す・強調するものが同じか（VG-6）。画面の変化は 1 行に 1 つが目安（VG-3）。同時に出すほうが分かるなら複数でよい。ここでは字幕を読んでよい
    - S-D4 は基準どおり
+8. **見せ方が意図に効いているかを見る（G-D17〜G-D19）。** `visual-grammar.md` の「キャンバスとカメラ」の捉え方で、章とスライドの意図に照らし、キャンバスを育てる（Morph）・カメラを動かす（`zoom`・`pan`）・線を描く（`draw`）見せ方が、聴衆に起こしたいことを代償より大きく起こしているかを判断する。使いすぎと、効くはずの所で使っていないことの両方を見る。決まった組み合わせや回数を物差しにしない
+   - 動きはコマに出ないので、宣言と動作から思い描く。`morph` でつないだ 2 枚は、前後のスライドの完成形のコマ（`slide-<id>.svg`。あれば PNG）を 2 枚並べて見る。`graph` の系列では各スライドが自分の部分を写すので、同じ箱の大きさや画面上の位置が 2 枚で違うことは問題にしない
+   - `suggestion` には、どのスライドや行で、どう見せるか（どの部品に `morph` を書き、どの id をそろえるか、どこに寄せてどこで引くか）を書く
 
 スライドの見出しと字幕の言い回しが違うことは、指摘しない。スライドは資料として、原稿はその説明として書いてある。原稿の言い回し、原稿がスライドを説明しているかは、文章担当が後で見る。
 
@@ -92,6 +95,7 @@ tools: Read, Glob, Write
 
 - **重なり・はみ出し・文字の大きさは判定しない**（VLM は苦手で、機械が判定済み）。意味だけを見る: 原稿がその行で説明している部品が、そのコマに読める大きさで出ているか（V-1）、強調がその部品に付いているか（V-2）、前の行の残り物（V-3）、一時的な書き換えの結果が、原稿が結論を言い終えるまで残るか（V-4）、関係の無い要素（V-5）、色の意味（G-D5）、辺が無関係の箱を貫いていないか・点が箱の名前を隠していないか（G-D8）
 - **V-6 完成形への至り方**: スライドごとに、そのスライドを使う場面のコマを順に見る（`frames.json` の `slides` の `scenes`）。最初から全部を出して順に説明しているのか、少しずつ出しているのか、ぼかして 1 つずつ見せているのかを言葉にし、構成メモのスライドの意図に照らして、その出し方で意図に書かれたことが伝わるかを判定する。`evidence` に、照らした意図の文と、見たコマを書く
+- `zoom`・`pan` の行のコマは、本文が寄って周りが切り取られた絵になる。切り取られていること自体は不具合ではない（寄せたことが意図に効いているかは、`script` の G-D18 で見る）
 - 位置は、シートのファイル名と行 id で書く（例 `sheet-02.png の行 l7`）。直す人が元の動作までたどれるように、`where` にも同じ行 id を入れる。V-6 の `where` は、そのスライドを最初に使う場面の id
 - PNG が無い（`frames.json` の `png` が false）ときは、`frames/svg/<行 id>.svg` と `frames.json` と台本から判定できる範囲だけを判定し、目で見ないと決められない基準は UNKNOWN にして、`problem` に「コマの画像が無い」と書く
 - 較正の例（`criteria/screen.md` と `criteria/structure.md` の末尾）と同程度の問題を見逃していないか、最後に見直す
@@ -108,7 +112,7 @@ tools: Read, Glob, Write
 
 **最後の手順として、必ず出力先のファイルに Write する。** 本文で JSON を返したり、「JSON にしてください」と進行役に頼んだりしない（進行役は出力ファイルを `ledger.py ingest` で取り込む）。Write した後の返事は、出力先のパスと件数（must・should・nits）だけでよい
 
-- `level` は基準の表に従う。重さが must だけの基準（O-D1〜O-D4・O-D6・O-D8、A-1〜A-3・A-5、G-D1・G-D2・G-D11・G-D12、V-1〜V-4）の指摘は must。must と should を分けている基準（O-D7、A-4、S-D2、G-D7・G-D13・G-D14、V-6）では、基準の表の定義どおりに付ける。should の基準（O-D5・O-D9、S-D1・S-D4、G-D3〜G-D6、G-D8〜G-D10、G-D15・G-D16、V-5）では、伝わりやすさに効くものを should、直さなくても伝わり方が変わらない好みの範囲を nits にする
+- `level` は基準の表に従う。重さが must だけの基準（O-D1〜O-D4・O-D6・O-D8、A-1〜A-3・A-5、G-D1・G-D2・G-D11・G-D12、V-1〜V-4）の指摘は must。must と should を分けている基準（O-D7、A-4、S-D2、G-D7・G-D13・G-D14、V-6）では、基準の表の定義どおりに付ける。should の基準（O-D5・O-D9、S-D1・S-D4、G-D3〜G-D6、G-D8〜G-D10、G-D15〜G-D19、V-5）では、伝わりやすさに効くものを should、直さなくても伝わり方が変わらない好みの範囲を nits にする
 - 根拠の無い判定は無効になる
 
 ## してはいけないこと

@@ -37,6 +37,12 @@ def elk_js():
     return open(os.path.join(PLAYER, "vendor", "elk.bundled.js"), encoding="utf-8").read()
 
 
+def engine_scripts():
+    """ELK とプレーヤーのコード（CORE の順）を、<script> の中にそのまま置ける形で返す。
+    再生ページとスライドコンテ（build_sheet.py）の両方が使う"""
+    return tuple(js.replace("</script", "<\\/script") for js in (elk_js(), core_js()))
+
+
 def safe_json(obj):
     # </script> を閉じないよう < をエスケープする
     return json.dumps(obj, ensure_ascii=False).replace("<", "\\u003c")
@@ -72,9 +78,8 @@ def theme_id(p):
     return real
 
 
-def pick_theme(storyboard_path, given):
-    """台本と同じフォルダの構成メモが見た目を決めていたら（basics.look.theme）、そのテーマを返す。
-    違うテーマを渡されたら止まる（uz_node.cjs の pickTheme と同じ約束）"""
+def decided_theme(storyboard_path):
+    """台本と同じフォルダの構成メモが決めた見た目（basics.look.theme）。戻り値: (書いてある値, 開くパスか名前)。決めていなければ None"""
     wd = os.path.dirname(os.path.abspath(storyboard_path))
     try:
         with open(os.path.join(wd, "outline.json"), encoding="utf-8") as f:
@@ -82,8 +87,17 @@ def pick_theme(storyboard_path, given):
     except (OSError, ValueError, KeyError, TypeError):
         look = None
     if not isinstance(look, str) or not look.strip():
+        return None
+    return look, (os.path.join(wd, look) if os.path.exists(os.path.join(wd, look)) else look)
+
+
+def pick_theme(storyboard_path, given, who="build_player"):
+    """台本と同じフォルダの構成メモが見た目を決めていたら（basics.look.theme）、そのテーマを返す。
+    違うテーマを渡されたら止まる（uz_node.cjs の pickTheme と同じ約束）"""
+    dec = decided_theme(storyboard_path)
+    if not dec:
         return given or "koo"
-    path = os.path.join(wd, look) if os.path.exists(os.path.join(wd, look)) else look
+    look, path = dec
     want = theme_id(path)
     msg = None
     if not want:
@@ -92,7 +106,7 @@ def pick_theme(storyboard_path, given):
         msg = (f"--theme {given} が、構成メモで決めた見た目（basics.look.theme = {look}）と違う。"
                "--theme を外すか合わせる。見た目を変えるなら、利用者と決めて構成メモを先に直す")
     if msg:
-        print("build_player: " + msg, file=sys.stderr)
+        print(f"{who}: " + msg, file=sys.stderr)
         sys.exit(2)
     return path
 
@@ -121,8 +135,9 @@ def build(storyboard, theme, timeline=None, audio_b64=None, artifact=False, asse
     esc = title.replace("&", "&amp;").replace("<", "&lt;").replace('"', "&quot;")
     html = tpl.replace("__TITLE__", esc).replace("__FONT_LINK__", font_link)
     # 置換文字列にバックスラッシュが含まれても壊れないよう、関数で置き換える
-    html = html.replace("/*UZ:ELK*/", "\n" + elk_js().replace("</script", "<\\/script") + "\n")
-    html = html.replace("/*UZ:CORE*/", "\n" + core_js() + "\n")
+    elk, core = engine_scripts()
+    html = html.replace("/*UZ:ELK*/", "\n" + elk + "\n")
+    html = html.replace("/*UZ:CORE*/", "\n" + core + "\n")
     html = html.replace("/*UZ:DATA*/null", safe_json(data))
     if artifact:
         head = html[html.index("<!--UZ:HEAD-->") + len("<!--UZ:HEAD-->"):html.index("<!--UZ:HEAD_END-->")]

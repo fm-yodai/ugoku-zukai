@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """利用者向けのスライドコンテのページ（HTML 1 枚）を作る。frames.cjs が書いたコマを、章ごと・スライドごと・行ごとに並べる。
 
-  python3 build_sheet.py <storyboard.json> --frames <frames.cjs の出力先> -o <sheet.html> [--outline <outline.json>] [--artifact]
+  python3 build_sheet.py <storyboard.json> --frames <frames.cjs の出力先> -o <sheet.html> [--outline <outline.json>]
+                         [--voice <tts.py の出力先>] [--theme koo] [--no-play] [--artifact]
 
 ページに出すのは、スライド・原稿・それらの意図・位置の札だけ（進行役が決めたこと、検査の結果、時刻の出どころなどは出さない。会話で伝える）。
 - 章の段: 章の題。構成メモ（--outline）が 3 段の意図の形（/2）なら、章の意図と、前の章からのつながり。最初の章の前に、章の順番の意図
@@ -16,11 +17,20 @@
   案ごとに、名前・違いの 1 行・案のスライド（完成形と意図）・その場面の行を出す。その範囲の今の台本の段は、案の段の外には出さない。
   案は 2〜4 つ。案の台本とコマは alts.py が作る（alts.json の形は references/run-code.md）
 - --artifact: Artifact で公開する形（<html>・<head>・<body> を外した断片）で書く
-- コマは SVG を data: の画像として埋め込む。外部のファイルは読まず、JS も使わない。PNG（resvg）は要らない
+- コマは SVG を data: の画像として埋め込む。外部のファイルは読まない。PNG（resvg）は要らない
+- 章ごとの動きの再生: 章の段の頭に「この章を再生」のボタンを置く。再生領域はページに 1 つ（<svg> 1 つと UZ.View 1 つ）で、
+  押した章の頭へ移り、その章の場面の時間（最初の場面の start から最後の場面の end まで）だけを流す。音声は鳴らさず、字幕は出す。
+  プレーヤーと同じエンジン（ELK と CORE。build_player.py の engine_scripts）と、台本・テーマ・時刻表・画像を埋め込む。
+  時刻は --voice の timeline.json があればそれ（台本が変わっていれば止まる）、なければ文字数からの見積もり。
+  コマの時刻の出どころ（frames.json の timed）と食い違えば止まる（声の時刻のコマに時刻表がない、見積もりのコマに時刻表を渡した）。
+  テーマは、コマを書いたテーマ（frames.json の theme）。--theme か構成メモの basics.look.theme がそれと違えば止まる。
+  theme のない前の版の frames.json では、build_player.py と同じ決め方（構成メモ、なければ --theme か koo）。
+  --no-play: 再生を付けない（JS を含まない軽いページ）
 
 - コマが今の台本のものでない（台本を直した後に frames.cjs を回し直していない、別の台本のコマ）ときは、書かずに止まる
 
-終了コード: 0 = 書けた、2 = 使い方の誤りか、frames.json・コマの SVG がないか、コマが今の台本のものでないか、構成メモの形に誤りがある。
+終了コード: 0 = 書けた、2 = 使い方の誤りか、frames.json・コマの SVG がないか、コマが今の台本のものでないか、構成メモの形に誤りがあるか、
+  音声が古いか（--voice）、再生のテーマか時刻の出どころがコマと食い違うか、画像の部品を読めないか、ページが 15MB を超える。
 """
 import argparse
 import base64
@@ -33,6 +43,7 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
+import build_player  # noqa: E402
 import check_outline  # noqa: E402
 
 STYLE = """
@@ -63,6 +74,63 @@ STYLE = """
   .us-ref { margin: 0 0 4px; font: 13px/1.5 ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace; color: var(--accent); font-variant-numeric: tabular-nums; }
   .us-sub { margin: 0; overflow-wrap: anywhere; }
   @media (max-width: 640px) { .us-row { grid-template-columns: minmax(0, 1fr); gap: 8px; } }
+  .us-play { font: inherit; font-weight: 700; color: var(--ink); background: transparent; border: 1px solid var(--line); border-radius: 999px;
+             padding: 4px 16px; margin: 4px 0 8px; cursor: pointer; }
+  .us-play:hover, .us-play:focus-visible, .us-play[aria-pressed="true"] { border-color: var(--accent); outline: none; }
+  .us-play[aria-pressed="true"] { color: var(--accent); }
+  .us-player { margin: 0 0 12px; }
+  .us-player svg { display: block; width: 100%; height: auto; aspect-ratio: 16 / 9; border-radius: 6px; border: 1px solid var(--line); }
+  .us-player p { margin: 4px 0 0; color: var(--muted); font-size: 13px; white-space: pre-wrap; }
+"""
+
+# 章ごとの再生。再生領域（#us-player）は 1 つで、押した章のボタンの直後へ移して流す
+PLAY_JS = r"""
+(function () {
+  "use strict";
+  const box = document.getElementById("us-player"), stage = document.getElementById("us-stage"), err = document.getElementById("us-play-err");
+  const PLAY = "この章を再生", STOP = "止める";
+  let M = null, view = null, ready = null, cur = null, raf = 0;
+  UZ.ELK = window.ELK;
+  function prepare() {
+    if (!ready) ready = (async () => {
+      const data = JSON.parse(document.getElementById("us-data").textContent);
+      M = await UZ.build(data.storyboard, data.theme, data.timeline, { assets: data.assets || {} });
+      if (M.errors.length) throw new Error(M.errors.join("\n"));
+      view = new UZ.View(stage, M);
+    })();
+    return ready;
+  }
+  function stop() {
+    cancelAnimationFrame(raf);
+    if (cur) { cur.btn.textContent = PLAY; cur.btn.setAttribute("aria-pressed", "false"); }
+    cur = null;
+  }
+  async function play(btn) {
+    const again = cur && cur.btn === btn;
+    stop();
+    if (again) return;   // 流れている章のボタンは「止める」
+    btn.after(box);
+    box.hidden = false;
+    btn.textContent = STOP; btn.setAttribute("aria-pressed", "true");
+    const me = cur = { btn };
+    try { await prepare(); } catch (e) { err.textContent = "再生できませんでした: " + e.message; err.hidden = false; stop(); console.error(e); return; }
+    if (cur !== me) return;
+    const from = M.scenes.find(s => s.id === btn.dataset.from), to = M.scenes.find(s => s.id === btn.dataset.to);
+    if (!from || !to) { stop(); return; }
+    const start = from.start, end = Math.max(start, to.end - 0.01), t0 = performance.now();
+    box.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    const tick = () => {
+      if (cur !== me) return;
+      const t = Math.min(start + (performance.now() - t0) / 1000, end);
+      view.render(t);
+      if (t >= end) { stop(); return; }   // 止めた後も、章の最後の絵を残す
+      raf = requestAnimationFrame(tick);
+    };
+    tick();
+  }
+  for (const btn of document.querySelectorAll(".us-play")) btn.addEventListener("click", () => play(btn));
+  document.addEventListener("keydown", e => { if (e.key === "Escape" && cur) stop(); });
+})();
 """
 
 esc = html.escape  # & < > " ' をすべて置き換える
@@ -301,8 +369,31 @@ def _row(line, frames_dir):
             f'<div><p class="us-ref">{esc(ref)}</p><p class="us-sub">{esc(line["text"])}</p></div></div>')
 
 
-def build(storyboard, frames_dir, outline=None, artifact=False, alts=None, sb_path=None):
-    """スライドコンテのページの HTML を返す。frames.json やコマの SVG がなければ OSError、形が違えば ValueError"""
+def play_data(storyboard, sb_path, theme, timeline=None):
+    """再生に埋め込むデータ（台本・テーマ・時刻表・画像）。build_player.py と同じ約束で読む。
+    時刻表が今の台本のものでなければ、画像を読めなければ ValueError"""
+    stale = build_player.stale_voice(storyboard, timeline) if timeline else []
+    if stale:
+        raise ValueError("音声が古い（tts.py をもう一度実行する）: " + " / ".join(stale))
+    import uz_assets
+    try:
+        assets = uz_assets.load_assets(sb_path, storyboard)
+    except uz_assets.AssetError as e:
+        raise ValueError(str(e))
+    return {"storyboard": storyboard, "theme": theme, "timeline": timeline, "assets": assets or {}}
+
+
+def _play_scripts(data):
+    """再生領域を動かすスクリプト（ELK・CORE・データ・再生の順）"""
+    elk, core = build_player.engine_scripts()
+    return (f"<script>\n{elk}\n</script>\n<script>\n{core}\n</script>\n"
+            f'<script type="application/json" id="us-data">{build_player.safe_json(data)}</script>\n'
+            f"<script>{PLAY_JS}</script>")
+
+
+def build(storyboard, frames_dir, outline=None, artifact=False, alts=None, sb_path=None, play=None):
+    """スライドコンテのページの HTML を返す。frames.json やコマの SVG がなければ OSError、形が違えば ValueError。
+    play（play_data の戻り値）を渡すと、章ごとに再生ボタンを置き、エンジンとデータを埋め込む"""
     frames = _load_frames(frames_dir, storyboard, sb_path)
     lines = frames["lines"]
     title = storyboard.get("title") or "動く図解"
@@ -321,6 +412,7 @@ def build(storyboard, frames_dir, outline=None, artifact=False, alts=None, sb_pa
     for g in alts or []:
         alt_at[g["scenes"][0]] = g
         alt_skip.update(g["scenes"])
+    player_at = None   # 再生領域を最初に置く場所（最初の章の再生ボタンの直後。押すまで隠しておく）
     for ch in chapters(storyboard, outline):
         parts = []
         for sid in ch["scenes"]:
@@ -349,15 +441,51 @@ def build(storyboard, frames_dir, outline=None, artifact=False, alts=None, sb_pa
             body.append(f'<p class="us-link">前の章から: {esc(_item_text(c["link"]))}</p>')
         if c and _item_text(c.get("intent")):
             body.append(f'<p class="us-intent">{esc(_item_text(c["intent"]))}</p>')
+        if play is not None:
+            body.append(f'<button type="button" class="us-play" data-from="{esc(ch["scenes"][0])}" data-to="{esc(ch["scenes"][-1])}" aria-pressed="false">この章を再生</button>')
+            if player_at is None:
+                player_at = len(body)
+                body.append('<div class="us-player" id="us-player" hidden><svg id="us-stage" role="img" aria-label="再生"></svg>'
+                            '<p id="us-play-err" hidden></p></div>')
         body.extend(parts)
         body.append("</section>")
     head = f"<title>{esc(title)} スライドコンテ</title>\n<style>{STYLE}</style>"
     main = '<div class="us-wrap">\n' + "\n".join(body) + "\n</div>"
+    if play is not None and player_at is not None:
+        main += "\n" + _play_scripts(play)
     if artifact:
         return head + "\n" + main + "\n"
     return ('<!doctype html>\n<html lang="ja">\n<head>\n<meta charset="utf-8">\n'
             '<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">\n'
             f"{head}\n</head>\n<body>\n{main}\n</body>\n</html>\n")
+
+
+def play_theme(sb_path, given, drawn):
+    """再生のテーマ。コマを書いたテーマ（frames.json の theme）を既定にし、--theme か構成メモの見た目がそれと違えば ValueError。
+    theme のない前の版の frames.json では、構成メモ → --theme → koo の順に決める"""
+    if not isinstance(drawn, str) or not drawn:
+        return build_player.pick_theme(sb_path, given, who="build_sheet")
+    want = build_player.theme_id(drawn)
+    if not want:
+        raise ValueError(f"コマを書いたテーマ（frames.json の theme = {drawn}）が見つからない。テーマを置き直すか、frames.cjs を回し直す")
+    if given and build_player.theme_id(given) != want:
+        raise ValueError(f"--theme {given} が、コマを書いたテーマ（frames.json の theme = {drawn}）と違う。"
+                         "--theme を外すか、そのテーマで frames.cjs を回し直す")
+    dec = build_player.decided_theme(sb_path)
+    if dec and build_player.theme_id(dec[1]) != want:
+        raise ValueError(f"構成メモで決めた見た目（basics.look.theme = {dec[0]}）が、コマを書いたテーマ（frames.json の theme = {drawn}）と違う。"
+                         "frames.cjs を回し直す")
+    return drawn
+
+
+def check_timed(timed, has_timeline):
+    """コマの時刻の出どころ（frames.json の timed）と、再生に使う時刻表が食い違っていれば ValueError"""
+    if timed == "voice" and not has_timeline:
+        raise ValueError("コマは合成した声の時刻で書いてある（frames.json の timed = voice）のに、再生に使う時刻表がない。"
+                         "--voice に timeline.json のある声の出力先を渡すか、--timeline を付けずに frames.cjs を回し直す")
+    if timed == "estimate" and has_timeline:
+        raise ValueError("コマは文字数からの見積もりの時刻で書いてある（frames.json の timed = estimate）のに、--voice の時刻表で再生しようとした。"
+                         "frames.cjs を --timeline <声の出力先>/timeline.json で回し直すか、--voice を外す")
 
 
 def main():
@@ -367,6 +495,9 @@ def main():
     ap.add_argument("-o", "--out", required=True)
     ap.add_argument("--outline")
     ap.add_argument("--alts", help="案の一覧 alts.json。置き換えるスライドの位置に、案を並べて出す（alts.py が作る）")
+    ap.add_argument("--voice", help="tts.py の出力先。timeline.json があれば、再生をその時刻で流す（なければ文字数からの見積もり）")
+    ap.add_argument("--theme", help="再生のテーマ。省くと、コマを書いたテーマ（frames.json の theme）。違うテーマを渡すと止まる")
+    ap.add_argument("--no-play", action="store_true", help="章ごとの再生を付けない（JS を含まない軽いページ）")
     ap.add_argument("--artifact", action="store_true")
     a = ap.parse_args()   # 使い方の誤りは argparse が終了コード 2 で止める
     try:
@@ -383,9 +514,25 @@ def main():
                     print("  " + e, file=sys.stderr)
                 return 2
         alts = load_alts(a.alts, sb) if a.alts else None
-        page = build(sb, a.frames, outline, a.artifact, alts, a.storyboard)
+        play = None
+        if not a.no_play:
+            with open(os.path.join(a.frames, "frames.json"), encoding="utf-8") as f:
+                drawn = json.load(f)
+            theme = build_player.load_theme(play_theme(a.storyboard, a.theme, drawn.get("theme")))
+            tl_path = os.path.join(a.voice, "timeline.json") if a.voice else None
+            timeline = None
+            if tl_path and os.path.exists(tl_path):
+                with open(tl_path, encoding="utf-8") as f:
+                    timeline = json.load(f)
+            check_timed(drawn.get("timed"), timeline is not None)
+            play = play_data(sb, a.storyboard, theme, timeline)
+        page = build(sb, a.frames, outline, a.artifact, alts, a.storyboard, play)
     except (OSError, ValueError) as e:
         print(f"スライドコンテを作れない: {e}", file=sys.stderr)
+        return 2
+    size = len(page.encode())
+    if size > build_player.PAGE_LIMIT:
+        print(f"スライドコンテを作れない: ページが 15MB を超える（{size / 1e6:.1f}MB）。--no-play で再生を外すか、画像を小さくする", file=sys.stderr)
         return 2
     os.makedirs(os.path.dirname(os.path.abspath(a.out)), exist_ok=True)
     with open(a.out, "w", encoding="utf-8") as f:

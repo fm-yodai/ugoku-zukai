@@ -80,6 +80,9 @@
     if (sb.format === "ugoku-zukai/2") { if (slides != null || usesSlide) E(`slides を使うには format を "ugoku-zukai/3" と書く`); return; }
     if (slides == null) return;
     if (typeof slides !== "object" || Array.isArray(slides)) { E("slides は、スライドの id をキーにしたオブジェクトで書く"); return; }
+    const typeOfId = {};   // morph の指す先を引く: 図の id と、スライドの中で宣言した部品の id → type
+    for (const [fid, f] of Object.entries(sb.figures || {})) if (f && typeof f === "object") typeOfId[fid] = f.type;
+    for (const sl of Object.values(slides)) for (const p of (sl && Array.isArray(sl.parts) ? sl.parts : [])) if (p && p.figure == null && p.id != null && p.type != null) typeOfId[p.id] = p.type;
     const declared = new Set();   // スライドの中で宣言した部品の id（台本全体で 1 つ）
     for (const [sid, sl] of Object.entries(slides)) {
       const where = `スライド「${sid}」`;
@@ -106,6 +109,13 @@
         }
         if (seen.has(id)) { E(`${pw}: 同じスライドに 2 度置いている`); continue; }
         seen.add(id);
+        if (p.morph != null) {
+          const mt = typeof p.morph === "string" && Object.prototype.hasOwnProperty.call(typeOfId, p.morph) ? typeOfId[p.morph] : undefined;
+          const own = p.figure != null ? sb.figures[p.figure].type : p.type;
+          if (typeof p.morph !== "string" || mt === undefined) E(`${pw}: morph「${p.morph}」が台本にない（図の id か、他のスライドで宣言した部品の id を書く）`);
+          else if (mt !== own) E(`${pw}: morph は同じ type の部品どうしでだけ使える（${p.morph} は ${mt}、この部品は ${own}）`);
+          else if (sl.parts.some(q => q && partId(q) === p.morph)) E(`${pw}: morph「${p.morph}」と同じスライドには一緒に置けない（前のスライドの部品を指す）`);
+        }
         if (p.transient != null && typeof p.transient !== "boolean") E(`${pw}: transient は true か false`);
         if (p.area == null) {
           if (sl.parts.length > 1) E(`${pw}: area が要る（部品が 2 つ以上のスライドでは、全部の部品に区画を書く）`);

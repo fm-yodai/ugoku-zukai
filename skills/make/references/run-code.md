@@ -110,9 +110,9 @@ python3 ${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/check_theme.py <workdir>/theme
 
 台本（`<workdir>/storyboard.json`）は、スライドを先に書き、原稿を後に書く（形式は `storyboard.md`。スライドは 8 章、見本は `${CLAUDE_PLUGIN_ROOT}/skills/make/examples/slide-forms.json`）。
 
-- **スライド**: 章の意図から、その章に要るスライドを切り出す。1 枚ごとに、見出し（字幕の言い回しに合わせず、資料の見出しとして書く）、言いたいこと（この 1 枚で伝えたいことの 1 文）、部品（図・テキスト・画像・フレーム）を置いて、完成形を作る。声と字幕がなくても、資料として読める 1 枚にする
+- **スライド**: 章の意図から、その章に要るスライドを切り出す。1 枚ごとに、見出し（字幕の言い回しに合わせず、資料の見出しとして書く）、言いたいこと（この 1 枚で伝えたいことの 1 文）、部品（図・テキスト・画像・フレーム）を置いて、完成形を作る。声と字幕がなくても、資料として読める 1 枚にする。Morph（後のスライドの部品の `morph`）はスライドの並びで成り立つので、つなぐかはここで考える（見本は `${CLAUDE_PLUGIN_ROOT}/skills/make/examples/camera-morph.json`）
 - **スライドの意図**: 台本のスライドと同じ id で、構成メモの章の `slides` に書く（`by: claude`・`state: proposed`）
-- **動かし方**: 最初から完成形を見せて `focus` や `blur` で順に説明するか（`start: "complete"`）、行の動作で部品を出して組み上げるかを、スライドごとに選ぶ
+- **動かし方**: 最初から完成形を見せて `focus` や `blur` で順に説明するか（`start: "complete"`）、行の動作で部品を出して組み上げるかを、スライドごとに選ぶ。カメラ（`zoom`・`pan`）と線の描画（`show` の `"draw": true`）も使える。Morph と合わせて、`references/visual-grammar.md` の「キャンバスとカメラ」で、聴衆に起こることと代償を考える
 - **原稿**（字幕と読み）: スライドを説明する文にする。スライドの文字を読み上げるだけにしない。事実を言う行には `source` を付ける。スライドのテキストに書いた事実にも `source` を付ける
 - 画像やイラストは `<workdir>/assets/` に置き、出どころ（`source`）と利用条件（`license`）を書く
 
@@ -136,12 +136,13 @@ python3 ${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/check_text.py <workdir>/storyb
 
 ```sh
 python3 ${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/setup_render.py
-node ${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/frames.cjs <workdir>/storyboard.json --theme <テーマ> -o <workdir>/frames
-python3 ${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/build_sheet.py <workdir>/storyboard.json --frames <workdir>/frames --outline <workdir>/outline.json -o <workdir>/sheet.html --artifact
+node ${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/frames.cjs <workdir>/storyboard.json --theme <テーマ> -o <workdir>/frames [--timeline <workdir>/voice/timeline.json]
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/build_sheet.py <workdir>/storyboard.json --frames <workdir>/frames --outline <workdir>/outline.json [--voice <workdir>/voice] -o <workdir>/sheet.html --artifact
 ```
 
 - `setup_render.py` か `frames.cjs` の終了コード 4 は、PNG のシートを作れなかったという意味（SVG と `frames.json` は書けている）。スライドコンテのページは SVG から作るので、そのまま `build_sheet.py` に進める
 - **台本を直したら `frames.cjs` を回し直す。** コマが古いと、`build_sheet.py` は書かずに終了コード 2 で止まる
+- 「この章を再生」は、コマを書いたときのテーマと時刻で流れる（`frames.json` の `theme` と `timed`）。`build_sheet.py` の `--voice` は、`frames.cjs` に `--timeline` を渡したときだけ付ける。`--theme`・構成メモの見た目・時刻表がコマと食い違うと、書かずに終了コード 2 で止まる
 - 直した場面だけを見せるときは、`--scenes` で場面を選び、**別の出力先**に書く（同じ出力先に書くと、全体のコマが消える）
 
 ```sh
@@ -153,6 +154,7 @@ python3 ${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/build_sheet.py <workdir>/story
 - **スライドコンテの Artifact は 1 つにする。** 見せ直すときは、同じ `file_path` で公開し直す（同じページが更新される）。直すたびに新しい Artifact を作らない
 - ページに出るのは、スライド・原稿・意図と、位置の札（`s2 / l2 @0:14`）だけである。章ごとに題・章の意図・前の章からのつながり、スライドごとに完成形のコマとスライドの意図、その下に各行のコマと字幕の全文が並ぶ
 - 次のことはページに出ないので、見せるときに会話で伝える: 進行役が決めたこと（`check_outline.py --json` の `proposed`）、まだ利用者が見ていない意図があること、まだ決めていないこと（構成メモの `open`）、機械検査と評価役の結果
+- 動き（Morph・`zoom`・`draw` など）は、各章の「この章を再生」で見られる（音声なし、字幕つき。`--no-play` で作ったページにはない）。見せるときに、会話でそう添える。見どころがあれば、どの章を再生すると分かるかをひとこと添えてもよい。ページには書かない（メタな文章になるため）
 
 ### 案を並べる
 

@@ -160,7 +160,7 @@
         const x = ci * (cw + gap);
         const pts = (it.points || []).map((p, pi) => {
           const o = typeof p === "string" ? { text: p } : p;
-          return { id: o.id || `${it.id}.${pi + 1}`, text: o.text, kind: o.kind || "plain", lines: UZ.wrap(o.text, ptSize, cw - pad * 2 - 34, 400, 3) };
+          return { id: o.id || `${it.id}.${pi + 1}`, autoId: !o.id, text: o.text, kind: o.kind || "plain", lines: UZ.wrap(o.text, ptSize, cw - pad * 2 - 34, 400, 3) };
         });
         let y = headH + 24;
         const placed = pts.map(p => {
@@ -182,7 +182,7 @@
         for (const p of placed) {
           const glyph = p.kind === "pro" ? "check" : p.kind === "con" ? "cross" : "dot";
           const gcol = p.kind === "pro" ? S.good : p.kind === "con" ? S.bad : S.muted;
-          items.push({ id: p.id, kind: "text", texts: [p.t], glyph: { kind: glyph, x: x + pad + 12, y: p.gy, size: 18, color: gcol }, bbox: { x: x + pad, y: p.t.bbox.y, w: p.t.bbox.x + p.t.bbox.w - x - pad, h: p.t.bbox.h }, parent: it.id });
+          items.push({ id: p.id, kind: "text", texts: [p.t], glyph: { kind: glyph, x: x + pad + 12, y: p.gy, size: 18, color: gcol }, bbox: { x: x + pad, y: p.t.bbox.y, w: p.t.bbox.x + p.t.bbox.w - x - pad, h: p.t.bbox.h }, parent: it.id, ...(p.autoId ? { autoId: true } : {}) });
           order.push(p.id);
         }
       }
@@ -363,6 +363,12 @@
   // ======== 箱と矢印（graph）========
   FIG.graph = {
     async layout(f, S, ctx) {
+      // ctx.canvas: Morph の系列のキャンバス（UZ.graphCanvas）。キャンバスの座標をそのまま使い、自分の要素だけを描く
+      if (ctx.canvas) {
+        const r = await layoutGraph(f, S, ctx.canvas.dir, ctx);
+        r.score = Math.min(ctx.area.w / r.w, ctx.area.h / r.h, 1.3);
+        return r;
+      }
       const dir = (f.direction || "right").toLowerCase();
       const tries = [dir, dir === "right" ? "down" : "right"];
       let best = null;
@@ -378,11 +384,9 @@
     },
   };
 
-  async function layoutGraph(f, S, dir, ctx) {
-    const nsize = 25, lsize = 19, gsize = 19;
-    const groups = f.groups || [];
-    const bands = groups.filter(g => g.style === "band");
-    const frames = groups.filter(g => g.style !== "band");
+  // ノードの大きさと折り返し（graph の箱の文字は 25px、補足は 17px）
+  function nodeSpecOf(f) {
+    const nsize = 25;
     const nodeSpec = {};
     for (const n of f.nodes) {
       const lines = UZ.wrap(n.label, nsize, 250, 500, 2);
@@ -392,67 +396,21 @@
       const h = 72 + (lines.length - 1) * 32 + subLines.length * 22;
       nodeSpec[n.id] = { w: Math.round(w2), h, lines, subLines };
     }
+    return nodeSpec;
+  }
+
+  async function layoutGraph(f, S, dir, ctx) {
+    const nsize = 25, lsize = 19, gsize = 19;
+    const groups = f.groups || [];
+    const bands = groups.filter(g => g.style === "band");
+    const frames = groups.filter(g => g.style !== "band");
+    const nodeSpec = nodeSpecOf(f);
+    // ctx.sizes: 系列の和集合を組むとき、同じ id のノードの一番大きい大きさ
+    if (ctx && ctx.sizes) for (const id of Object.keys(nodeSpec)) Object.assign(nodeSpec[id], ctx.sizes[id]);
+    const canvas = ctx && ctx.canvas;
     const edges = f.edges.map(e => ({ ...e, id: e.id || `${e.from}>${e.to}` }));
-    const elkNode = id => {
-      const s = nodeSpec[id];
-      const o = { id, width: s.w, height: s.h };
-      if (bands.length) {
-        const bi = bands.findIndex(b => b.members.includes(id));
-        o.layoutOptions = { "elk.partitioning.partition": String(Math.max(0, bi)) };
-      }
-      return o;
-    };
-    const inFrame = {};
-    for (const g of frames) for (const m of g.members) inFrame[m] = g.id;
-    const root = {
-      id: "__root",
-      layoutOptions: {
-        "elk.algorithm": "layered", "elk.direction": dir === "down" ? "DOWN" : "RIGHT",
-        "elk.edgeRouting": "ORTHOGONAL", "elk.randomSeed": "1",
-        "elk.layered.spacing.nodeNodeBetweenLayers": "44", "elk.spacing.nodeNode": "46",
-        "elk.layered.spacing.edgeNodeBetweenLayers": "22", "elk.spacing.edgeLabel": "6", "elk.spacing.edgeEdge": "18",
-        "elk.layered.edgeLabels.sideSelection": "ALWAYS_UP", "elk.hierarchyHandling": "INCLUDE_CHILDREN",
-        "elk.layered.nodePlacement.strategy": "NETWORK_SIMPLEX",
-        "elk.partitioning.activate": bands.length ? "true" : "false",
-      },
-      children: [], edges: [],
-    };
-    for (const g of frames) {
-      root.children.push({ id: g.id, layoutOptions: { "elk.padding": "[top=46,left=22,bottom=22,right=22]",
-        ...(bands.length ? { "elk.partitioning.partition": String(Math.max(0, bands.findIndex(b => b.members.includes(g.id)))) } : {}) },
-        children: g.members.filter(m => nodeSpec[m]).map(elkNode) });
-    }
-    for (const n of f.nodes) if (!inFrame[n.id]) root.children.push(elkNode(n.id));
-    for (const e of edges) {
-      root.edges.push({ id: e.id, sources: [e.from], targets: [e.to],
-        labels: e.label ? [{ text: e.label, width: UZ.textW(e.label, lsize) + 10, height: lsize + 8 }] : [] });
-    }
-    const elk = new UZ.ELK();
-    const r = await elk.layout(root);
-    // 枠の中のノードの座標を絶対座標に直す
-    const abs = {};
-    const walk = (node, ox, oy) => {
-      for (const c of node.children || []) {
-        abs[c.id] = { x: ox + c.x, y: oy + c.y, w: c.width, h: c.height };
-        walk(c, ox + c.x, oy + c.y);
-      }
-    };
-    walk(r, 0, 0);
-    // 辺: elkjs は INCLUDE_CHILDREN のとき、辺の座標を辺の container（共通の親）基準で返す
-    const edgeGeom = {};
-    const collectEdges = (node, ox, oy) => {
-      for (const e of node.edges || []) {
-        const cont = e.container && e.container !== node.id && abs[e.container] ? abs[e.container] : { x: ox, y: oy };
-        const sec = (e.sections || [])[0];
-        if (!sec) continue;
-        const pts = [[sec.startPoint.x, sec.startPoint.y], ...(sec.bendPoints || []).map(b => [b.x, b.y]), [sec.endPoint.x, sec.endPoint.y]]
-          .map(p => [p[0] + cont.x, p[1] + cont.y]);
-        const lb = (e.labels || [])[0];
-        edgeGeom[e.id] = { pts, label: lb ? { x: lb.x + cont.x, y: lb.y + cont.y, w: lb.width, h: lb.height } : null };
-      }
-      for (const c of node.children || []) collectEdges(c, ox + c.x, oy + c.y);
-    };
-    collectEdges(r, 0, 0);
+    const { abs, edgeGeom, r } = canvas ? { abs: canvas.abs, edgeGeom: canvas.edgeGeom, r: { width: canvas.width, height: canvas.height } }
+      : await elkGeom(f, nodeSpec, edges, bands, frames, dir, lsize, !!(ctx && ctx.sizes));
 
     const items = [], order = [];
     let topPad = 0;
@@ -496,9 +454,12 @@
         dotAt: [cx, a.y + a.h - 12] });
       order.push(n.id);
     }
+    const morphWarn = [];
     for (const e of edges) {
-      const g = edgeGeom[e.id];
+      // 置き換わる辺は、キャンバスが系列で 1 回だけ決めた経路（canvas.replaced）を使う
+      const g = edgeGeom[e.id] || (canvas && canvas.replaced[e.id]);
       if (!g) continue;
+      if (canvas && canvas.replaced[e.id] && g.hit) morphWarn.push(e.id);
       let pts = g.pts;
       let label = null;
       if (g.label && e.label) label = UZ.mkText(e.label, g.label.x + g.label.w / 2, g.label.y + g.label.h / 2, lsize, { color: S.ink });
@@ -523,9 +484,178 @@
     const minX = Math.min(...all.map(b => b.x)), minY = Math.min(...all.map(b => b.y));
     const maxX = Math.max(...all.map(b => b.x + b.w)), maxY = Math.max(...all.map(b => b.y + b.h));
     const pad = 6;
+    if (canvas) {
+      // 系列の図: キャンバスと同じだけずらし、外枠は自分の要素の外接矩形（キャンバス座標）にする
+      UZ.shiftItems(items, canvas.dx, canvas.dy);
+      return { w: maxX + canvas.dx + pad, h: maxY + canvas.dy + pad, x0: minX + canvas.dx - pad, y0: minY + canvas.dy - pad, items, order: finalOrder, dir, morphWarn };
+    }
     UZ.shiftItems(items, -minX + pad, -minY + pad);
-    return { w: maxX - minX + pad * 2, h: maxY - minY + pad * 2, items, order: finalOrder, dir };
+    const out = { w: maxX - minX + pad * 2, h: maxY - minY + pad * 2, items, order: finalOrder, dir };
+    if (ctx && ctx.sizes) out.geom = { abs, edgeGeom, width: r.width, height: r.height, dx: -minX + pad, dy: -minY + pad, dir };
+    return out;
   }
+
+  // 置き換わる辺の経路: 流れの方向に向かい合う辺の中点どうしを、まっすぐ（揃っていれば）か、中ほどで 1 回折れる Z で結ぶ。
+  // この図にあるノード（boxes）に重なれば、向きを変えた Z（流れと直交する辺から出る）を試し、どちらも重なればまっすぐにして hit を立てる。
+  // ラベルは一番長い区間の中点に置く（横の区間なら上、縦の区間なら右。ELK のラベルと同じく ALWAYS_UP）
+  function routeReplaced(a, b, boxes, dir, lab) {
+    const down = dir === "down";
+    // 流れの方向を x、直交する方向を y として考え、最後に戻す
+    const T = r => down ? { x: r.y, y: r.x, w: r.h, h: r.w } : r;
+    const P = p => down ? [p[1], p[0]] : p;
+    const A = T(a), B = T(b);
+    const s = [A.x + A.w, A.y + A.h / 2], t = [B.x, B.y + B.h / 2];
+    const cands = [];
+    if (Math.abs(s[1] - t[1]) < 0.5) cands.push([s, [t[0], s[1]]]);
+    else {
+      const mx = (s[0] + t[0]) / 2;
+      cands.push([s, [mx, s[1]], [mx, t[1]], t]);
+      // 向きを変えた Z: 直交する方向の辺から出て、中ほどで流れの方向に渡る
+      const up = t[1] < s[1];
+      const s2 = [A.x + A.w / 2, up ? A.y : A.y + A.h], t2 = [B.x + B.w / 2, up ? B.y + B.h : B.y], my = (s2[1] + t2[1]) / 2;
+      cands.push([s2, [s2[0], my], [t2[0], my], t2]);
+    }
+    const crosses = pts => boxes.some(r0 => { const r = T(r0); return pts.slice(1).some((q, i) => {
+      const p = pts[i], x0 = Math.min(p[0], q[0]), x1 = Math.max(p[0], q[0]), y0 = Math.min(p[1], q[1]), y1 = Math.max(p[1], q[1]);
+      return x0 < r.x + r.w - 0.5 && x1 > r.x + 0.5 && y0 < r.y + r.h - 0.5 && y1 > r.y + 0.5;
+    }); });
+    let pts = cands.find(c => !crosses(c)), hit = false;
+    if (!pts) { pts = [s, [t[0], s[1]]]; hit = true; }
+    let best = 0;
+    pts.forEach((p, i) => { if (i && Math.hypot(p[0] - pts[i - 1][0], p[1] - pts[i - 1][1]) > Math.hypot(pts[best + 1][0] - pts[best][0], pts[best + 1][1] - pts[best][1])) best = i - 1; });
+    const out = pts.map(P);
+    let label = null;
+    if (lab) {
+      const p = out[best], q = out[best + 1], mx = (p[0] + q[0]) / 2, my = (p[1] + q[1]) / 2;
+      label = Math.abs(p[1] - q[1]) < 0.5 ? { x: mx - lab.w / 2, y: my - 6 - lab.h, w: lab.w, h: lab.h } : { x: mx + 6, y: my - lab.h / 2, w: lab.w, h: lab.h };
+    }
+    return { pts: out, label, hit };
+  }
+
+  // ELK で組む: ノードの絶対座標（abs）と、辺の経路とラベルの位置（edgeGeom）
+  async function elkGeom(f, nodeSpec, edges, bands, frames, dir, lsize, series) {
+    const elkNode = id => {
+      const s = nodeSpec[id];
+      const o = { id, width: s.w, height: s.h };
+      if (bands.length) {
+        const bi = bands.findIndex(b => b.members.includes(id));
+        o.layoutOptions = { "elk.partitioning.partition": String(Math.max(0, bi)) };
+      }
+      return o;
+    };
+    const inFrame = {};
+    for (const g of frames) for (const m of g.members) inFrame[m] = g.id;
+    const root = {
+      id: "__root",
+      layoutOptions: {
+        "elk.algorithm": "layered", "elk.direction": dir === "down" ? "DOWN" : "RIGHT",
+        "elk.edgeRouting": "ORTHOGONAL", "elk.randomSeed": "1",
+        "elk.layered.spacing.nodeNodeBetweenLayers": "44", "elk.spacing.nodeNode": "46",
+        "elk.layered.spacing.edgeNodeBetweenLayers": "22", "elk.spacing.edgeLabel": "6", "elk.spacing.edgeEdge": "18",
+        "elk.layered.edgeLabels.sideSelection": "ALWAYS_UP", "elk.hierarchyHandling": "INCLUDE_CHILDREN",
+        "elk.layered.nodePlacement.strategy": "NETWORK_SIMPLEX",
+        "elk.partitioning.activate": bands.length ? "true" : "false",
+      },
+      children: [], edges: [],
+    };
+    // 系列のキャンバス: 先の図の要素を先に渡し、その順を考慮させる（後から加わる箱ができるだけ外側に入る）。
+    // さらに同じノードに出入りする辺の端を 1 か所にまとめる。まとめないと、後の図で辺が加わったノードの入口が中心からずれ、
+    // 先の図のノードがその入口に合わせて一段ずれる（UX の評価で、v1 の「ヒアリング」だけが下がった）
+    if (series) Object.assign(root.layoutOptions, { "elk.layered.considerModelOrder.strategy": "NODES_AND_EDGES", "elk.layered.mergeEdges": "true" });
+    const frameNode = g => ({ id: g.id, layoutOptions: { "elk.padding": "[top=46,left=22,bottom=22,right=22]",
+        ...(bands.length ? { "elk.partitioning.partition": String(Math.max(0, bands.findIndex(b => b.members.includes(g.id)))) } : {}) },
+        children: (series ? f.nodes.map(n => n.id).filter(id => g.members.includes(id)) : g.members.filter(m => nodeSpec[m])).map(elkNode) });
+    if (series) {
+      // 系列のキャンバス: ノードの順（初めて出る図の順）に、枠はその最初のメンバーの場所に置く
+      const placed = new Set();
+      for (const n of f.nodes) {
+        const g = frames.find(x => x.id === inFrame[n.id]);
+        if (!g) root.children.push(elkNode(n.id));
+        else if (!placed.has(g.id)) { placed.add(g.id); root.children.push(frameNode(g)); }
+      }
+      for (const g of frames) if (!placed.has(g.id)) root.children.push(frameNode(g));
+    } else {
+      for (const g of frames) root.children.push(frameNode(g));
+      for (const n of f.nodes) if (!inFrame[n.id]) root.children.push(elkNode(n.id));
+    }
+    for (const e of edges) {
+      root.edges.push({ id: e.id, sources: [e.from], targets: [e.to],
+        labels: e.label ? [{ text: e.label, width: UZ.textW(e.label, lsize) + 10, height: lsize + 8 }] : [] });
+    }
+    const elk = new UZ.ELK();
+    const r = await elk.layout(root);
+    // 枠の中のノードの座標を絶対座標に直す
+    const abs = {};
+    const walk = (node, ox, oy) => {
+      for (const c of node.children || []) {
+        abs[c.id] = { x: ox + c.x, y: oy + c.y, w: c.width, h: c.height };
+        walk(c, ox + c.x, oy + c.y);
+      }
+    };
+    walk(r, 0, 0);
+    // 辺: elkjs は INCLUDE_CHILDREN のとき、辺の座標を辺の container（共通の親）基準で返す
+    const edgeGeom = {};
+    const collectEdges = (node, ox, oy) => {
+      for (const e of node.edges || []) {
+        const cont = e.container && e.container !== node.id && abs[e.container] ? abs[e.container] : { x: ox, y: oy };
+        const sec = (e.sections || [])[0];
+        if (!sec) continue;
+        const pts = [[sec.startPoint.x, sec.startPoint.y], ...(sec.bendPoints || []).map(b => [b.x, b.y]), [sec.endPoint.x, sec.endPoint.y]]
+          .map(p => [p[0] + cont.x, p[1] + cont.y]);
+        const lb = (e.labels || [])[0];
+        edgeGeom[e.id] = { pts, label: lb ? { x: lb.x + cont.x, y: lb.y + cont.y, w: lb.width, h: lb.height } : null };
+      }
+      for (const c of node.children || []) collectEdges(c, ox + c.x, oy + c.y);
+    };
+    collectEdges(r, 0, 0);
+    return { abs, edgeGeom, r };
+  }
+
+  // Morph の系列（v1 → v2 → …）のキャンバス: 全図のノード・辺・group の和集合を 1 回だけ組む。
+  // ノードの大きさは同じ id で一番大きいもの、辺のラベルの場所は一番長い文言で取る。向きは dir（系列の最後の図の direction）
+  UZ.graphCanvas = async function (specs, S, dir) {
+    const nodes = {}, sizes = {}, edges = {}, groups = {};
+    const lw = e => e.label ? UZ.textW(e.label, 19) : 0;
+    // 置き換わる辺: ある図にあり、後の図では両端のノードが残っているのに辺がないもの（browser>app が browser>cdn>app になる、など）。
+    // 和集合の組み方に入れず、各図でキャンバスのノードの位置から引き直す。ノードと一緒に消える辺は和集合に入れる
+    const eid = e => e.id || `${e.from}>${e.to}`;
+    const has = specs.map(f => ({ nodes: new Set(f.nodes.map(n => n.id)), edges: new Set(f.edges.map(eid)) }));
+    const replaced = new Set();
+    specs.forEach((f, i) => { for (const e of f.edges) for (let j = i + 1; j < specs.length; j++) {
+      if (!has[j].edges.has(eid(e)) && has[j].nodes.has(e.from) && has[j].nodes.has(e.to)) replaced.add(eid(e));
+    } });
+    for (const f of specs) {
+      const ns = nodeSpecOf(f);
+      for (const n of f.nodes) {
+        if (!nodes[n.id]) nodes[n.id] = n;
+        const a = ns[n.id], z = sizes[n.id];
+        sizes[n.id] = z ? { w: Math.max(z.w, a.w), h: Math.max(z.h, a.h) } : { w: a.w, h: a.h };
+      }
+      for (const e of f.edges) {
+        const id = eid(e);
+        if (replaced.has(id)) continue;
+        if (!edges[id] || lw(e) > lw(edges[id])) edges[id] = { ...e, id };
+      }
+      for (const g of f.groups || []) {
+        const o = groups[g.id];
+        groups[g.id] = o ? { ...o, members: [...new Set([...o.members, ...g.members])] } : { ...g, members: [...g.members] };
+      }
+    }
+    const U = { type: "graph", nodes: Object.values(nodes), edges: Object.values(edges), groups: Object.values(groups) };
+    const geom = (await layoutGraph(U, S, dir, { sizes })).geom;
+    // 置き換わる辺の経路を、辺ごとに 1 回だけ決める（どの図でも同じ経路になる）。避ける箱は、その辺を持つ全図のノードの和集合（両端を除く）。
+    // ラベルの大きさは一番長い文言で取る
+    geom.replaced = {};
+    for (const id of replaced) {
+      const own = specs.filter((f, i) => has[i].edges.has(id));
+      const e = own.map(f => f.edges.find(x => eid(x) === id)).reduce((a, b) => lw(b) > lw(a) ? b : a);
+      const avoid = new Set();
+      for (const f of own) for (const n of f.nodes) if (n.id !== e.from && n.id !== e.to) avoid.add(n.id);
+      geom.replaced[id] = routeReplaced(geom.abs[e.from], geom.abs[e.to], [...avoid].map(n => geom.abs[n]), dir,
+        e.label ? { w: UZ.textW(e.label, 19) + 10, h: 19 + 8 } : null);
+    }
+    return geom;
+  };
 
   // ======== 下の層: 図形を直接書く（canvas）========
   FIG.canvas = {

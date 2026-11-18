@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 題材（コード・リポジトリ・PR・Web ページ・文書・題目）を、日本語ナレーション付きの「動く図解」（HTML 1 枚の再生ページ）にする Claude プラグイン `ugoku-zukai`。本体はスキル `skills/make/`。claude.ai / Claude Desktop のチャットと Claude Code の両方で動かすことが前提。
 
-- 設計の正は `docs/design.md`。マイルストーン（M1a / M1b / M2 / M3 済み。進め方の作り直し R1〜R4 と、両環境での通しも 2026-11-16 に済んだ。M4 の mp4 書き出しは 2026-11-16 に保留にした。M6 配布は 2026-11-17 に公開まで済んだ（感想集めは続く）。次は M7 カメラと連続性（§18）。M5 は 2026-11-17 に「manim-web の場面」へ狭めて保留にした）、合意済みの要件、claude.ai のサンドボックスで確かめた事実（通信先・道具・制約）はここにある。仕様を変えたら、ここの「Mn の実装」節に追記する
+- 設計の正は `docs/design.md`。マイルストーン（M1a / M1b / M2 / M3 済み。進め方の作り直し R1〜R4 と、両環境での通しも 2026-11-16 に済んだ。M4 の mp4 書き出しは 2026-11-16 に保留にした。M6 配布は 2026-11-17 に公開まで済んだ（感想集めは続く）。M7 カメラと連続性（Morph・zoom・pan・draw。§18）は 2026-11-18 に済んだ（意味のズームと 2.5D は後回し）。M5 は 2026-11-17 に「manim-web の場面」へ狭めて保留にした）、合意済みの要件、claude.ai のサンドボックスで確かめた事実（通信先・道具・制約）はここにある。仕様を変えたら、ここの「Mn の実装」節に追記する
 - 文書・コメント・コミットメッセージは日本語。コミットは `M2: 〜` のようにマイルストーンを頭に付ける（進め方の作り直しは `R3: 〜`、スライドを先に作る作り直しは `R4: 〜`）
 - 前身は個人用スキル explain-video-anywhere（v1、Manim＋Docker の VOICEVOX）。`agents/` と `references/criteria/` などは v1 からの移植で、M3 で新しいプレーヤー向けに、R2 で構成メモを物差しにする形に書き換えた（保留中の `agents/animator.md` だけ v1 の Manim 用のまま）
 
@@ -15,14 +15,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 依存のインストール手順はない（python3 と node をそのまま使う。elkjs は `player/vendor/` に同梱）。
 
 ```bash
-# まとめての検査。ふだんは run_r4.sh だけ回せば全部走る（r4 → r3 → r2 → r1 → m3 → m1 の順に呼ぶ）
+# まとめての検査。ふだんは run_m7.sh だけ回せば全部走る（m7 → r4 → r3 → r2 → r1 → m3 → m1 の順に呼ぶ）
 #   run_m1.sh: 見本台本 × テーマ 3 種の配置検査・テーマの検査・デザイン抽出
 #   run_m3.sh: 字幕と読み・コマ・再生ページ・作業フォルダと、文書とスクリプトの食い違い
 #   run_r1.sh: 構成メモ・台本の章・スライドコンテのページ
 #   run_r2.sh: 指摘の一覧・成功基準・エージェントの定義・進行役の文書
 #   run_r3.sh: 再生ページの位置の表示・公開先の記録と作業フォルダの一覧・声の試聴・直しの文書（VOICEVOX があれば、試聴と声の使い回しも）
+#   run_m7.sh: 台本の形式 /4 と、morph・zoom・pan・draw の検証、見本 camera-morph（Morph・カメラ・線の描画）のコマ、「キャンバスとカメラ」の文書
 #   run_r4.sh: スライド（区画・テキスト・画像・フレーム・完成形のコマ・blur）、図と動作の追加（包含のベン図・ロードマップの矢印・象限の塗り分け・resize）、スライドの文字の検査、構成メモと台本のスライドの照合、案の見比べ（alts.py）、進行役の文書、評価役と基準の文書（物差しが意図になっているか。前の進め方の言葉が残っていないか）
-bash skills/make/scripts/tests/run_r4.sh
+bash skills/make/scripts/tests/run_m7.sh
 
 # 台本 1 本の検査（形・id の解決・配置）。--timeline で実際の声の長さでも検査する
 node skills/make/scripts/check_storyboard.cjs skills/make/examples/sequence.json --theme koo [--timeline work/voice/timeline.json] [--json]
@@ -62,7 +63,7 @@ node skills/make/scripts/frames.cjs skills/make/examples/sequence.json --theme k
 node skills/make/scripts/frames.cjs skills/make/examples/mixed.json --theme koo -o work/frames-s2 --scenes s2   # 一部の場面のコマだけ書く（カンマ区切り。出力先の前の回のコマは消えるので、全体とは分ける。--lines l8,l33 なら、その行のある場面）
 
 # 利用者向けのスライドコンテのページ（スライドごとに完成形のコマ、行ごとにコマと「s2 / l2 @0:14」と字幕の全文。PNG は要らない。--outline で章の題と、章・スライドの意図とつながりが付く。出すのはスライド・原稿・意図だけ。台本を直したら frames.cjs を回し直す。コマが古いと終了コード 2 で止まる）
-python3 skills/make/scripts/build_sheet.py skills/make/examples/slide-forms.json --frames work/frames -o work/sheet.html [--outline skills/make/examples/outlines/slide-forms.json] [--alts <workdir>/alts.json] [--artifact]
+python3 skills/make/scripts/build_sheet.py skills/make/examples/slide-forms.json --frames work/frames -o work/sheet.html [--outline skills/make/examples/outlines/slide-forms.json] [--alts <workdir>/alts.json] [--voice work/voice] [--no-play] [--artifact]   # 既定で章ごとに「この章を再生」（音声なし・字幕あり。テーマはコマを書いたときのもの。--voice の timeline.json があればその時刻で、そのときはコマも frames.cjs --timeline で書く。食い違うと終了コード 2）。--no-play で JS なしの軽いページ
 
 # スライドの複数案（2〜4 つ）を作り、スライドコンテの中に並べ、選んだ案を台本と構成メモに入れる。案の台本は <workdir>/storyboard.<組>-<案>.json、コマは <workdir>/alts/<組>/<案>/frames、一覧は <workdir>/alts.json
 python3 skills/make/scripts/alts.py new <workdir> g1 --replaces <スライドの id,…> --options a,b [--keep-current]
@@ -96,12 +97,13 @@ python3 tools/build_voice_check.py
 - 文字の幅はフォントを実測せず文字の種類から見積もる（node の検査とブラウザで同じ値にするため）。この前提を崩さない
 - 図の種類: `figures.js`（箱と矢印＝ELK で自動配置、シーケンス、表・比較・箇条）、`figures2.js`（提案資料系 10 種。ELK を使わず図ごとの固定配置）、`figures3.js`（スライドの部品のうち図でないもの = テキスト・画像・フレーム）
 - スライド（`slides.js`）: 場面は、図の代わりにスライド（見出し・言いたいこと・12 列 × 6 行の区画に並べた部品）を指せる。部品は図と同じもの（`M.figs` の 1 件）として扱うので、動作と id の解決は図のときと同じ。画像は、道具が先に読んで渡す（node は `scripts/assets.cjs`、組み立ては `scripts/uz_assets.py`。2 つを同じ約束に保つ）
+- Morph とカメラ（M7）も engine が「時刻 → 2D の変換」として計算し、DOM は `view_svg.js` が本文の区画に transform と clip を掛けるだけ。Morph でつながる graph の系列は、和集合を 1 回だけ ELK にかけた 1 枚のキャンバスで、各スライドは自分の部分を写す（framing）。カメラの値は `UZ.CAMERA`（`engine.js`）
 
-**台本の形式**（`ugoku-zukai/3`。前の `/2` = 場面が図だけを指す形も読める。仕様は `references/storyboard.md`、見本は `examples/`）: 意味で書く層（図の宣言・`show` `trace` `focus` などの動作）が基本で、足りないところだけ下の層で直接書く。動作は字幕の文中の印（`{a}`）に結ぶ。時刻表がなければ文字数から見積もり、あれば `tts.py` がモーラ単位で出した印の時刻を使う。合成した後に台本の文を変えたり、行を足したり消したりすると、組み立て（`build_player.py`）と検査（`check_storyboard.cjs --timeline`）が「音声が古い」「時刻表にない」で止まる。
+**台本の形式**（`ugoku-zukai/4`。前の `/3` と、`/2` = 場面が図だけを指す形も読める。`/4` で足したのは、部品の `morph`（前のスライドの同じ type の図から、要素の id でつないで変形する）、動作の `zoom`・`pan`（本文の区画だけを寄せる。スライドが変わると戻る）、`show` の `draw`（線が伸びてから塗りと文字が出る）。仕様は `references/storyboard.md`、見本は `examples/`）: 意味で書く層（図の宣言・`show` `trace` `focus` などの動作）が基本で、足りないところだけ下の層で直接書く。動作は字幕の文中の印（`{a}`）に結ぶ。時刻表がなければ文字数から見積もり、あれば `tts.py` がモーラ単位で出した印の時刻を使う。合成した後に台本の文を変えたり、行を足したり消したりすると、組み立て（`build_player.py`）と検査（`check_storyboard.cjs --timeline`）が「音声が古い」「時刻表にない」で止まる。
 
 **テーマ**（`player/themes/*.json`、`references/themes.md`）: 色・文字・線の定義。同梱は `koo` の 1 つで、「空 提案書デザインシステム」（テーマの `derived_from` の Artifact）のトークンから作ってある。そこにない色を足さない（例外は、線と文字に使う暗くした Blue だけ。テーマの `tokens` に対応がある）。緑と赤はなく、良い・悪いは Gold とグレーアウトで言い分ける。`colors.boxes` が役割ごとの箱の面・枠・文字、`chapter` が章扉（`title` 図だけの場面）の地と文字を決める。字幕の帯と章扉は Navy。別のデザインを渡されたときは、進行役がそのデザインの色から決める。決めたテーマは構成メモの `basics.look.theme` に書く。台本と同じフォルダに構成メモがあれば、`check_storyboard.cjs`・`frames.cjs`・`build_player.py` は `--theme` を省くとそのテーマを使い、違うテーマを渡すと終了コード 2 で止まる（`uz_node.cjs` の `pickTheme` と `build_player.py` の `pick_theme`。2 か所を同じ約束に保つ）。`extract_design.py` が手持ちのデザイン（トークン・CSS・HTML・Tailwind・Office・画像・PDF）からテーマを作り、`check_theme.py` で検査する。
 
-**作り手と評価役**: Claude Code では `agents/` のサブエージェントを使う（作り手は researcher = 調べる、writer = 台本の初稿と章単位の書き直し。評価役は fact-checker / writing-reviewer / director。animator は保留中で呼ばない）。チャットでは 1 会話で役を順に演じる。作り手も評価役も、物差しは構成メモの意図である。writer は、章ごとにスライド → 1 枚ごとの意図（構成メモの `slides` に `proposed` で書く）→ 原稿の順に書き、迷ったスライドは、案を並べてほしいことを進行役に返す。researcher が調べた事実は取材メモ（`brief.md`）に置き、構成メモには書かない。評価役は「意図どおりのスライド・原稿になっているか」と、意図そのものが聴衆の側から書いてあるかを見る。director はスライド（完成形のコマ `svg/slide-<id>.svg` と行ごとのコマ）、writing-reviewer は原稿（スライドを説明しているか。字幕には TW- と SP-、スライドのテキストには TW- だけ）、fact-checker は出どころ（原稿の行の `source` と、スライドのテキストの事実。意図は照合しない）を受け持つ。評価役は決まった関門ではなく、章の意図が固まったとき・最初のスライドコンテを見せる前（スライド）・スライドが固まった後（原稿）・直した後・合成の前に呼ぶ。成功基準は `references/criteria/`（構成メモ O-、意図との照合 A-、スライドと図 G-、原稿 S-、画面 V-。文章の規則は `references/writing/` の TW- と SP-。SP-11〜SP-14 は行と章のつながり）。意図に照らす基準は数で決まらず、判定がぶれることは受け入れる（利用者が決めた）。その代わり、評価役は、意図のどの文に照らしたかを指摘の `evidence` に書く。評価役の約束と指摘の扱いは `references/review-protocol.md`、評価役の出力の形は `references/writing/review-format.md`。指摘にはレベル（must / should / nits）が付き、`scripts/ledger.py` の指摘の一覧に入る。スライドへの指摘の場所（`where`）は、そのスライドを最初に使う場面の id で書く（`ledger.py` がスライドの id をまだ知らないため）。どれを直すかは利用者が選ぶ（スライドと原稿の初稿に限り、意図を変えない指摘は進行役が 1 回だけ先に直す）。自動で合格まで回すことはしない。
+**作り手と評価役**: Claude Code では `agents/` のサブエージェントを使う（作り手は researcher = 調べる、writer = 台本の初稿と章単位の書き直し。評価役は fact-checker / writing-reviewer / director。animator は保留中で呼ばない）。チャットでは 1 会話で役を順に演じる。作り手も評価役も、物差しは構成メモの意図である。writer は、章ごとにスライド → 1 枚ごとの意図（構成メモの `slides` に `proposed` で書く）→ 原稿の順に書き、迷ったスライドは、案を並べてほしいことを進行役に返す。researcher が調べた事実は取材メモ（`brief.md`）に置き、構成メモには書かない。評価役は「意図どおりのスライド・原稿になっているか」と、意図そのものが聴衆の側から書いてあるかを見る。director はスライド（完成形のコマ `svg/slide-<id>.svg` と行ごとのコマ）、writing-reviewer は原稿（スライドを説明しているか。字幕には TW- と SP-、スライドのテキストには TW- だけ）、fact-checker は出どころ（原稿の行の `source` と、スライドのテキストの事実。意図は照合しない）を受け持つ。評価役は決まった関門ではなく、章の意図が固まったとき・最初のスライドコンテを見せる前（スライド）・スライドが固まった後（原稿）・直した後・合成の前に呼ぶ。Morph・カメラ・線の描画は規則ではなく、動画を「キャンバスの上を動くカメラ」と捉える概念として `references/visual-grammar.md` に宣言してあり、どこで使うかは writer が意図から判断する（director は効いているかを見る）。成功基準は `references/criteria/`（構成メモ O-、意図との照合 A-、スライドと図 G-、原稿 S-、画面 V-。文章の規則は `references/writing/` の TW- と SP-。SP-11〜SP-14 は行と章のつながり）。意図に照らす基準は数で決まらず、判定がぶれることは受け入れる（利用者が決めた）。その代わり、評価役は、意図のどの文に照らしたかを指摘の `evidence` に書く。評価役の約束と指摘の扱いは `references/review-protocol.md`、評価役の出力の形は `references/writing/review-format.md`。指摘にはレベル（must / should / nits）が付き、`scripts/ledger.py` の指摘の一覧に入る。スライドへの指摘の場所（`where`）は、そのスライドを最初に使う場面の id で書く（`ledger.py` がスライドの id をまだ知らないため）。どれを直すかは利用者が選ぶ（スライドと原稿の初稿に限り、意図を変えない指摘は進行役が 1 回だけ先に直す）。自動で合格まで回すことはしない。
 
 ## 守ること
 

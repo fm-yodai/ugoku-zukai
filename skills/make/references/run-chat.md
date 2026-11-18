@@ -102,9 +102,9 @@ python3 <skill>/scripts/check_theme.py <workdir>/theme.json --design <workdir>/d
 
 作り手として `<workdir>/storyboard.json` を書く（形式は `storyboard.md`。スライドは 8 章、見本は `<skill>/examples/slide-forms.json`）。物差しは構成メモの意図である。スライドを先に書き、原稿を後に書く。
 
-- **スライド**: 章の意図から、その章に要るスライドを切り出す。1 枚ごとに、見出し（字幕の言い回しに合わせず、資料の見出しとして書く）、言いたいこと（この 1 枚で伝えたいことの 1 文）、部品（図・テキスト・画像・フレーム）を置いて、完成形を作る。声と字幕がなくても、資料として読める 1 枚にする
+- **スライド**: 章の意図から、その章に要るスライドを切り出す。1 枚ごとに、見出し（字幕の言い回しに合わせず、資料の見出しとして書く）、言いたいこと（この 1 枚で伝えたいことの 1 文）、部品（図・テキスト・画像・フレーム）を置いて、完成形を作る。声と字幕がなくても、資料として読める 1 枚にする。Morph（後のスライドの部品の `morph`）はスライドの並びで成り立つので、つなぐかはここで考える（見本は `<skill>/examples/camera-morph.json`）
 - **スライドの意図**: 台本のスライドと同じ id で、構成メモの章の `slides` に書く（`by: claude`・`state: proposed`）
-- **動かし方**: 最初から完成形を見せて `focus` や `blur` で順に説明するか（`start: "complete"`）、行の動作で部品を出して組み上げるかを、スライドごとに選ぶ
+- **動かし方**: 最初から完成形を見せて `focus` や `blur` で順に説明するか（`start: "complete"`）、行の動作で部品を出して組み上げるかを、スライドごとに選ぶ。カメラ（`zoom`・`pan`）と線の描画（`show` の `"draw": true`）も使える。Morph と合わせて、`references/visual-grammar.md` の「キャンバスとカメラ」で、聴衆に起こることと代償を考える
 - **原稿**（字幕と読み）: スライドを説明する文にする。スライドの文字を読み上げるだけにしない。意図に書かれたことをスライドか原稿で伝え、意図にない主張を足さない。事実を言う行には `source` を付ける。スライドのテキストに書いた事実にも `source` を付ける
 - すべての場面に `chapter`（章の id）を書く。口調は `basics.tone`、言葉は `basics.knows` の聴衆に合わせ、声は `basics.voice` を台本の `voice` に写す
 - 原稿を書く前に `references/writing/spoken.md` を読み、書いた後に SP-1〜SP-15 で見直す（1 文ごとに誰が・何を・どうするを書く。語りとして書く。章の切り替わりを見せたいときは章扉を置く）。行の id と章の id は振り直さない
@@ -127,12 +127,13 @@ python3 <skill>/scripts/check_text.py <workdir>/storyboard.json
 
 ```sh
 python3 <skill>/scripts/setup_render.py
-node <skill>/scripts/frames.cjs <workdir>/storyboard.json --theme <テーマ> -o <workdir>/frames
-python3 <skill>/scripts/build_sheet.py <workdir>/storyboard.json --frames <workdir>/frames --outline <workdir>/outline.json -o <workdir>/sheet.html --artifact
+node <skill>/scripts/frames.cjs <workdir>/storyboard.json --theme <テーマ> -o <workdir>/frames [--timeline <workdir>/voice/timeline.json]
+python3 <skill>/scripts/build_sheet.py <workdir>/storyboard.json --frames <workdir>/frames --outline <workdir>/outline.json [--voice <workdir>/voice] -o <workdir>/sheet.html --artifact
 ```
 
 - `setup_render.py` か `frames.cjs` の終了コード 4 は、PNG のシートを作れなかったという意味（SVG と `frames.json` は書けている）。スライドコンテのページは SVG から作るので、そのまま `build_sheet.py` に進める
 - **台本を直したら `frames.cjs` を回し直す。** コマが古いと、`build_sheet.py` は書かずに終了コード 2 で止まる
+- 「この章を再生」は、コマを書いたときのテーマと時刻で流れる（`frames.json` の `theme` と `timed`）。`build_sheet.py` の `--voice` は、`frames.cjs` に `--timeline` を渡したときだけ付ける。`--theme`・構成メモの見た目・時刻表がコマと食い違うと、書かずに終了コード 2 で止まる
 - 直した場面だけを見せるときは、`--scenes` で場面を選び、**別の出力先**に書く（同じ出力先に書くと、全体のコマが消える）
 
 ```sh
@@ -144,6 +145,7 @@ python3 <skill>/scripts/build_sheet.py <workdir>/storyboard.json --frames <workd
 - **スライドコンテの Artifact は 1 つにする。** 見せ直すときは、前に公開したスライドコンテの Artifact を更新する。直すたびに新しい Artifact を作らない
 - ページに出るのは、スライド・原稿・意図と、位置の札（`s2 / l2 @0:14`）だけである。章ごとに題・章の意図・前の章からのつながり、スライドごとに完成形のコマとスライドの意図、その下に各行のコマと字幕の全文が並ぶ
 - 次のことはページに出ないので、見せるときに会話で伝える: 進行役が決めたこと（`check_outline.py --json` の `proposed`）、まだ利用者が見ていない意図があること、まだ決めていないこと（構成メモの `open`）、機械検査と評価役の結果
+- 動き（Morph・`zoom`・`draw` など）は、各章の「この章を再生」で見られる（音声なし、字幕つき。`--no-play` で作ったページにはない）。見せるときに、会話でそう添える。見どころがあれば、どの章を再生すると分かるかをひとこと添えてもよい。ページには書かない（メタな文章になるため）
 
 ### 案を並べる
 
@@ -203,7 +205,7 @@ python3 <skill>/scripts/build_player.py <workdir>/storyboard.json --theme <テ�
 | 場面 | `target` | まとめて判定する基準 |
 |---|---|---|
 | 章の意図が固まったとき | `outline` | O-D1〜O-D9、O-F1・O-F2（`criteria/outline.md`） |
-| 最初のスライドコンテを見せる前（スライド） | `script` | A-1〜A-5、G-D1〜G-D7、G-D9・G-D10、G-D11〜G-D15、S-D1・S-D2・S-D4（`criteria/agreement.md`・`structure.md`・`script.md`） |
+| 最初のスライドコンテを見せる前（スライド） | `script` | A-1〜A-5、G-D1〜G-D7、G-D9・G-D10、G-D11〜G-D16、G-D17（Morph）・G-D18（カメラ）・G-D19（線の描画）、S-D1・S-D2・S-D4（`criteria/agreement.md`・`structure.md`・`script.md`） |
 | 最初のスライドコンテを見せる前（コマ） | `screen` | V-1〜V-6、G-D5、G-D8（`criteria/screen.md`・`structure.md`） |
 | スライドが固まったとき（原稿） | `script` | S-W1〜S-W7、S-W10・S-W11、S-W12・S-W13、S-F1・S-F2・S-F4・S-F5（`criteria/script.md`）。スライドを変えていたら、変えたスライドの A- と G- も |
 | 合成の前 | `voice` | S-W8・S-W9（`criteria/script.md`） |

@@ -3,7 +3,23 @@
   "use strict";
   const NS = "http://www.w3.org/2000/svg";
   const { clamp, smooth, ease, outBack } = UZ;
+  // 箱の出方の区間（show を 0→1 として [始まり, 長さ]）。既定と、draw（線が先に伸びる）
+  const D0 = { line: 0.75, fill: [0.35, 0.55], text: [0.45, 0.5], label: [0.5, 0.5], smark: [0.6, 0.4] };
+  const D = { line: 0.7, fill: [0.65, 0.35], text: [0.7, 0.3], label: [0.7, 0.3], smark: [0.7, 0.3] };
   const C = UZ.color;
+
+  const polyLen = P => P.reduce((a, q, i) => i ? a + Math.hypot(q[0] - P[i - 1][0], q[1] - P[i - 1][1]) : 0, 0);
+
+  const ellLen = (a, b) => Math.PI * (3 * (a + b) - Math.sqrt((3 * a + b) * (a + 3 * b)));   // 楕円の周長（Ramanujan の近似）
+  // 箱の枠の長さ（形ごと。R は大きさを変えた箱の矩形）
+  function boxLen(it, R) {
+    const w = R.w, h = R.h;
+    if (it.shape === "ellipse") return ellLen(w / 2, h / 2);
+    if (it.shape === "diamond") return 4 * Math.hypot(w / 2, h / 2);
+    if (it.shape === "poly") return polyLen([...it.poly, it.poly[0]]);
+    if (it.shape === "store") return 1.5 * ellLen(w / 2, 9) + 2 * (h - 18);
+    return 2 * (w + h) - (8 - 2 * Math.PI) * it.r;
+  }
 
   function el(tag, attrs, parent) {
     const e = document.createElementNS(NS, tag);
@@ -12,6 +28,21 @@
     return e;
   }
   const ptsD = pts => "M" + pts.map(p => `${p[0].toFixed(1)},${p[1].toFixed(1)}`).join("L");
+  // 矢じり（折れ線の最後の区間の向き）
+  function headD(pts, k) {
+    const n = pts.length, tip = pts[n - 1], from = pts[n - 2];
+    const ang = Math.atan2(tip[1] - from[1], tip[0] - from[0]), Lh = 12 * k, Wh = 6 * k;
+    const a = [tip[0] - Lh * Math.cos(ang) + Wh * Math.sin(ang), tip[1] - Lh * Math.sin(ang) - Wh * Math.cos(ang)];
+    const b = [tip[0] - Lh * Math.cos(ang) - Wh * Math.sin(ang), tip[1] - Lh * Math.sin(ang) + Wh * Math.cos(ang)];
+    return `M${a}L${tip}L${b}Z`;
+  }
+  // 面の色の補間（Morph で role が変わったとき）。透明度も補間する。"none" は透明として扱う
+  function mixFill(c1, c2, p) {
+    if (c1 === "none" && c2 === "none") return "none";
+    const a = C.parse(c1 === "none" ? c2 : c1), b = C.parse(c2 === "none" ? c1 : c2);
+    const aa = c1 === "none" ? 0 : a[3], ba = c2 === "none" ? 0 : b[3], m = (x, y) => x + (y - x) * p;
+    return `rgba(${[0, 1, 2].map(i => Math.round(m(a[i], b[i]))).join(",")},${+m(aa, ba).toFixed(3)})`;
+  }
   const GLYPH = {
     check: "M-7,0 L-2,5 L8,-6",
     cross: "M-6,-6 L6,6 M6,-6 L-6,6",
@@ -57,7 +88,11 @@
       this.stMark = this.text(this.stG, ["▶"], H.x + 2, SB.y + ST.lineH / 2, 16, { color: S.accent, anchor: "start" });
       const stText = () => this.text(this.stG, [""], H.x + 26, SB.y, ST.size, { weight: ST.weight, color: S.ink, anchor: "start", lineH: ST.lineH });
       this.stT = stText(); this.stT2 = stText();
-      // 図
+      // 図: 1 つのレイヤーにまとめ、カメラで寄せている間だけ body の clipPath をかける（見出し・言いたいこと・字幕・札・クレジットはレイヤーの外）。
+      // clipPath は矩形ごとに初めて使うときに作り、id は矩形の値から決める（コマのシートで View を並べても、同じ id は同じ中身。
+      // 作った順の番号にすると、--scenes で書いたコマと全体のコマで中身が変わる）
+      this.clips = {};
+      this.figLayer = el("g", null, svg);
       this.figG = {};
       for (const F of Object.values(M.figs)) this.buildFig(F);
       this.capG = el("g", null, svg);
@@ -116,7 +151,7 @@
     }
 
     buildFig(F) {
-      const S = F.dark ? (this.SD || (this.SD = UZ.darkStyleOf(this.S))) : this.S, g = el("g", null, this.svg);   // 暗い地のスライドで組んだ部品は、暗い地の色
+      const S = F.dark ? (this.SD || (this.SD = UZ.darkStyleOf(this.S))) : this.S, g = el("g", null, this.figLayer);   // 暗い地のスライドで組んだ部品は、暗い地の色
       const L = { back: el("g", null, g), edge: el("g", null, g), box: el("g", null, g), fx: el("g", null, g) };
       this.figG[F.id] = g;
       const glow = this.M.theme.shape.glow, shadow = this.M.theme.shape.shadow;
@@ -143,7 +178,7 @@
           };
           E.fill = mk(it.fill, "none", shadow ? { filter: "url(#uz-shadow)" } : {});
           if (it.header) E.head = el("path", { d: `M${it.x},${it.y + it.header.h} V${it.y + it.r} Q${it.x},${it.y} ${it.x + it.r},${it.y} H${it.x + it.w - it.r} Q${it.x + it.w},${it.y} ${it.x + it.w},${it.y + it.r} V${it.y + it.header.h} Z`, fill: it.header.fill }, E.g);
-          E.stroke = mk("none", it.stroke, { pathLength: 1, "stroke-dasharray": "1 1" });
+          E.stroke = mk("none", it.stroke, {});
           if (glow) E.stroke.setAttribute("filter", "url(#uz-glow)");
           E.texts = (it.texts || []).map(T => this.textSpec(E.g, T));
           if (it.label) E.label = this.textSpec(E.g, it.label, { halo: true });
@@ -151,15 +186,10 @@
           if (it.life) E.life = el("path", { d: ptsD(it.life.pts), stroke: S.line, "stroke-width": 2, "stroke-dasharray": "6 6", fill: "none" }, L.back);
         } else if (it.kind === "edge") {
           E.g = el("g", null, it.isReply ? L.fx : L.edge);
+          E._elen = polyLen(it.pts);
           E.line = el("path", { d: ptsD(it.pts), fill: "none", stroke: it.stroke, "stroke-width": it.width, "stroke-linejoin": "round", "stroke-linecap": "round",
-            ...(it.dashed ? { "stroke-dasharray": "7 6" } : { pathLength: 1, "stroke-dasharray": "1 1" }) }, E.g);
-          if (it.head) {
-            const n = it.pts.length, tip = it.pts[n - 1], from = it.pts[n - 2];
-            const k = it.headScale || 1, ang = Math.atan2(tip[1] - from[1], tip[0] - from[0]), Lh = 12 * k, Wh = 6 * k;
-            const a = [tip[0] - Lh * Math.cos(ang) + Wh * Math.sin(ang), tip[1] - Lh * Math.sin(ang) - Wh * Math.cos(ang)];
-            const b = [tip[0] - Lh * Math.cos(ang) - Wh * Math.sin(ang), tip[1] - Lh * Math.sin(ang) + Wh * Math.cos(ang)];
-            E.head = el("path", { d: `M${a}L${tip}L${b}Z`, fill: it.stroke, stroke: it.stroke, "stroke-width": 1, "stroke-linejoin": "round" }, E.g);
-          }
+            ...(it.dashed ? { "stroke-dasharray": "7 6" } : {}) }, E.g);
+          if (it.head) E.head = el("path", { d: headD(it.pts, it.headScale || 1), fill: it.stroke, stroke: it.stroke, "stroke-width": 1, "stroke-linejoin": "round" }, E.g);
           if (it.label) E.label = this.textSpec(it.isReply ? E.g : L.fx, it.label, { halo: true });
         } else if (it.kind === "text") {
           E.g = el("g", null, L.box);
@@ -196,7 +226,8 @@
           E.texts = (it.texts || []).map(T => this.textSpec(E.g, T));
         } else if (it.kind === "frame") {
           E.g = el("g", null, L.back);
-          E.stroke = el("rect", { x: it.x, y: it.y, width: it.w, height: it.h, rx: it.r, fill: C.rgba(it.stroke, 0.04), stroke: C.rgba(it.stroke, 0.7), "stroke-width": 1.6, "stroke-dasharray": "8 6" }, E.g);
+          E.fill = el("rect", { x: it.x, y: it.y, width: it.w, height: it.h, rx: it.r, fill: C.rgba(it.stroke, 0.04) }, E.g);
+          E.stroke = el("rect", { x: it.x, y: it.y, width: it.w, height: it.h, rx: it.r, fill: "none", stroke: C.rgba(it.stroke, 0.7), "stroke-width": 1.6, "stroke-dasharray": "8 6" }, E.g);
           E.texts = (it.texts || []).map(T => this.textSpec(E.g, T));
         } else if (it.kind === "mark") {
           E.g = el("g", null, L.fx);
@@ -218,6 +249,38 @@
         this.els[it.key] = E;
       }
     }
+    // 破線を「伸びて描かれる」ように見せる: 実線のダッシュで描く線を mask にして破線に被せる
+    // （破線の stroke-dasharray と、描画の stroke-dashoffset は両立しない）。mask の id は部品のキーと進み具合から決める
+    // （View ごとの連番にすると、--scenes で書いたコマが全体のときと変わる）。on = false で外す
+    dashMask(E, key, it, p, on, pts) {
+      const line = E.stroke && it.kind === "frame" ? E.stroke : E.line;
+      if (!on) { if (E.dm) line.removeAttribute("mask"); return; }
+      if (!E.dm) {
+        const b = it.bbox || { x: it.x, y: it.y, w: it.w, h: it.h };
+        const m = el("mask", { maskUnits: "userSpaceOnUse", x: b.x - 20, y: b.y - 20, width: b.w + 40, height: b.h + 40 }, this.defs);
+        const w = (it.width || 1.6) + 6;
+        // resvg は pathLength を見ないので、mask の線は実際の長さで伸ばす（dasharray と dashoffset を長さ倍する）
+        const len = it.kind === "frame" ? 2 * (it.w + it.h) - (8 - 2 * Math.PI) * it.r : polyLen(pts || it.pts);
+        E.dmLen = len;
+        const base = { fill: "none", stroke: "#fff", "stroke-width": w, "stroke-dasharray": `${len.toFixed(2)} ${(len + 10).toFixed(2)}` };
+        E.dmPath = it.kind === "frame" ? el("rect", { x: it.x, y: it.y, width: it.w, height: it.h, rx: it.r, ...base }, m) : el("path", { d: ptsD(pts || it.pts), "stroke-linejoin": "round", ...base }, m);
+        E.dm = m;
+      }
+      if (it.kind === "edge" && pts && E._dmPts !== pts) { E._dmPts = pts; E.dmPath.setAttribute("d", ptsD(pts)); E.dmLen = polyLen(pts); const l = E.dmLen.toFixed(2); E.dmPath.setAttribute("stroke-dasharray", `${l} ${(E.dmLen + 10).toFixed(2)}`); }   // Morph で経路が変わったとき
+      const off = ((1 - p) * E.dmLen).toFixed(2);
+      E.dmPath.setAttribute("stroke-dashoffset", off);
+      const id = `uz-dm-${key.replace(/[^A-Za-z0-9_-]/g, "_")}-${Math.round((1 - p) * 1000)}`;
+      E.dm.setAttribute("id", id);
+      line.setAttribute("mask", `url(#${id})`);
+    }
+    // 線を p（0〜1）まで伸ばす。p が 1 なら dasharray を外す
+    strokeDraw(e, L, p) {
+      if (p >= 0.9999) { if (e._dashed) { e._dashed = false; e.removeAttribute("stroke-dasharray"); e.removeAttribute("stroke-dashoffset"); } return; }
+      e._dashed = true;
+      const l = L.toFixed(2);
+      e.setAttribute("stroke-dasharray", `${l} ${l}`);
+      e.setAttribute("stroke-dashoffset", ((1 - p) * L).toFixed(2));
+    }
     glyph(parent, kind, x, y, color, scale) {
       const g = el("g", { transform: `translate(${x},${y}) scale(${scale})` }, parent);
       if (kind === "dot") el("circle", { r: 4, fill: color }, g);
@@ -227,6 +290,11 @@
 
     render(t) {
       const M = this.M, S = this.S, fr = UZ.frame(M, t);
+      // カメラの clip（図の place には、カメラが合成済み）
+      const cam = fr.camera, c = cam && cam.on ? cam.clip : null;
+      const cid = c ? `uz-body-${[c.x, c.y, c.w, c.h].map(v => Math.round(v * 10) / 10).join("-").replace(/\./g, "_")}` : "";
+      if (c && !this.clips[cid]) this.clips[cid] = el("rect", { x: c.x, y: c.y, width: c.w, height: c.h }, el("clipPath", { id: cid }, this.defs));
+      if (this._clip !== cid) { this._clip = cid; if (cid) this.figLayer.setAttribute("clip-path", `url(#${cid})`); else this.figLayer.removeAttribute("clip-path"); }
       for (const [fid, g] of Object.entries(this.figG)) {
         const f = fr.figs[fid];
         g.style.opacity = f.opacity;
@@ -257,14 +325,15 @@
         const op = (x) => (x * dim).toFixed(3);
         const off = s.off || [0, 0];
         if (it.kind === "box") {
-          const draw = smooth(clamp(show / 0.75));
-          E.stroke.setAttribute("stroke-dashoffset", (1 - draw).toFixed(4));
+          // draw（show の draw: true）: 線が先に伸び（0〜0.7）、塗り（0.65〜）と文字（0.7〜）が後から出る
+          const dr = s.draw ? D : D0;
+          const draw = smooth(clamp(show / dr.line));
           E.stroke.style.opacity = op(show > 0 ? 1 : 0);
-          const fillO = smooth((show - 0.35) / 0.55);
+          const fillO = smooth((show - dr.fill[0]) / dr.fill[1]);
           E.fill.style.opacity = op(fillO); if (E.head) E.head.style.opacity = op(fillO);
-          for (const tx of E.texts) tx.style.opacity = op(smooth((show - 0.45) / 0.5));
-          if (E.label) E.label.style.opacity = op(smooth((show - 0.5) / 0.5));
-          if (E.smark) E.smark.style.opacity = op(smooth((show - 0.6) / 0.4));
+          for (const tx of E.texts) tx.style.opacity = op(smooth((show - dr.text[0]) / dr.text[1]));
+          if (E.label) E.label.style.opacity = op(smooth((show - dr.label[0]) / dr.label[1]));
+          if (E.smark) E.smark.style.opacity = op(smooth((show - dr.smark[0]) / dr.smark[1]));
           if (it.count && E.texts[it.count.index]) {
             const c = it.count, v = c.to * ease(clamp((show - 0.3) / 0.7));
             const str = c.prefix + UZ.fmtNum(show >= 1 ? c.to : v, c.decimals ?? (c.to % 1 ? 1 : 0));
@@ -282,7 +351,15 @@
             }
             const to = s.rect && s.textOff ? `translate(${s.textOff[0].toFixed(2)},${s.textOff[1].toFixed(2)})` : null;
             for (const tx of [...E.texts, E.smark].filter(Boolean)) { if (to) tx.setAttribute("transform", to); else tx.removeAttribute("transform"); }
+            // 見出しの帯（compare のカード）は、箱の形に合わせて伸び縮みする
+            if (E.head) { if (s.rect) E.head.setAttribute("transform", `translate(${R.x},${R.y}) scale(${R.w / it.w},${R.h / it.h}) translate(${-it.x},${-it.y})`); else E.head.removeAttribute("transform"); }
           }
+          // 枠の描画: 実際の長さで伸ばす（resvg は pathLength を見ない）。描き終えたら dasharray を外して、どの描画系でも実線にする
+          if (E._lenGeo !== geo || E._len == null) { E._lenGeo = geo; E._len = boxLen(it, R); }
+          this.strokeDraw(E.stroke, E._len, draw);
+          // 面の色（Morph で role が変わったとき）
+          const fillC = s.fillFrom != null ? mixFill(s.fillFrom, it.fill, s.tintP) : it.fill;
+          if (E._fillC !== fillC && (E._fillC != null || fillC !== it.fill)) { E._fillC = fillC; E.fill.setAttribute("fill", fillC); }
           const cx = R.x + R.w / 2, cy = R.y + R.h / 2;
           E.g.setAttribute("transform", `translate(${off[0]},${off[1]}) translate(${cx},${cy}) scale(${sc}) translate(${-cx},${-cy})`);
           const col = s.tint ? C.mix(s.tintFrom || it.stroke, s.tint, s.tintP) : (s.pulse > 0.01 ? C.mix(it.stroke, S.accent, s.pulse) : it.stroke);
@@ -291,17 +368,32 @@
           E.stroke.setAttribute("stroke", here > 0.01 ? C.mix(col, s.hereColor || S.warn, here) : col);
           E.stroke.setAttribute("stroke-width", S.stroke + 1.6 * (s.pulse || 0) + 2.4 * here);
           if (E.hereR) { E.hereR.setAttribute("stroke", s.hereColor || S.warn); E.hereR.setAttribute("opacity", (0.3 * here).toFixed(3)); }
-          if (s.text != null && E.texts[0]) this.relabel(E.texts[0], it.texts[0], s);
+          if (s.text != null && E.texts[0]) this.relabel(E.texts[0], it.texts[0], s); else if (E.texts[0]) this.unlabel(E.texts[0], it.texts[0]);
         } else if (it.kind === "edge") {
-          if (it.dashed) E.line.style.opacity = op(smooth(show));
-          else { E.line.setAttribute("stroke-dashoffset", (1 - smooth(clamp(show / 0.9))).toFixed(4)); E.line.style.opacity = op(show > 0 ? 1 : 0); }
+          // 経路の書き換え（Morph で両端が動くとき）。矢じりも描き直す
+          const pk = s.pts ? s.pts.map(p => `${p[0].toFixed(1)},${p[1].toFixed(1)}`).join(" ") : "";
+          if ((E._pts || "") !== pk) {
+            E._pts = pk;
+            const P = s.pts || it.pts;
+            E.line.setAttribute("d", ptsD(P)); E._elen = polyLen(P);
+            if (E.head) E.head.setAttribute("d", headD(P, it.headScale || 1));
+          }
+          if (s.draw) {
+            const p = smooth(clamp(show / 0.7));
+            if (it.dashed) { this.dashMask(E, key, it, p, show < 1, s.pts || it.pts); E.line.style.opacity = op(show > 0 ? 1 : 0); }
+            else { this.strokeDraw(E.line, E._elen, p); E.line.style.opacity = op(show > 0 ? 1 : 0); }
+          } else {
+            if (E.dm) this.dashMask(E, key, it, 1, false);
+            if (it.dashed) E.line.style.opacity = op(smooth(show));
+            else { this.strokeDraw(E.line, E._elen, smooth(clamp(show / 0.9))); E.line.style.opacity = op(show > 0 ? 1 : 0); }
+          }
           if (E.head) E.head.style.opacity = op(smooth((show - 0.85) / 0.15));
           if (E.label) E.label.style.opacity = op(smooth((show - 0.7) / 0.3));
           let col = s.tint ? C.mix(s.tintFrom || it.stroke, s.tint, s.tintP) : it.stroke;
           if (s.pulse > 0.01) col = C.mix(col, S.accent, s.pulse);
           E.line.setAttribute("stroke", col); if (E.head) { E.head.setAttribute("fill", col); E.head.setAttribute("stroke", col); }
-          E.line.setAttribute("stroke-width", it.width + (s.tint ? 1 * s.tintP : 0) + 1.5 * (s.pulse || 0));
-          if (s.text != null && E.label) this.relabel(E.label, it.label, s);
+          E.line.setAttribute("stroke-width", it.width + (s.tint && !s.morph ? 1 * s.tintP : 0) + 1.5 * (s.pulse || 0));   // Morph の色の補間では太くしない
+          if (s.text != null && E.label) this.relabel(E.label, it.label, s); else if (E.label) this.unlabel(E.label, it.label);
         } else if (it.kind === "text") {
           E.g.style.opacity = op(smooth(show));
           const dy = (1 - ease(show)) * 10;
@@ -309,7 +401,7 @@
           const b = it.bbox, cx = b.x + b.w / 2, cy = b.y + b.h / 2;
           E.g.setAttribute("transform", `translate(${off[0]},${off[1] + dy}) translate(${cx},${cy}) scale(${sc}) translate(${-cx},${-cy})`);
           if (E.hl) E.hl.setAttribute("opacity", (s.pulse || 0).toFixed(3));
-          if (s.text != null && E.texts[0]) this.relabel(E.texts[0], it.texts[0], s);
+          if (s.text != null && E.texts[0]) this.relabel(E.texts[0], it.texts[0], s); else if (E.texts[0] && this.unlabel(E.texts[0], it.texts[0])) E.texts[0].style.opacity = "";
           if (s.tint && E.texts[0]) E.texts[0].setAttribute("fill", C.mix(it.texts[0].color || S.ink, s.tint, s.tintP));
         } else if (it.kind === "bar") {
           const g = ease(clamp(show / 0.85));
@@ -326,6 +418,7 @@
           if (s.text != null && E.texts[0]) this.relabel(E.texts[0], it.texts[0], s);
         } else if (it.kind === "rect") {
           E.g.style.opacity = op(smooth(show));
+          this.offset(E.g, off);
           if (it.fill === "none") E.bg.setAttribute("fill", C.rgba(s.tint || S.accent, 0.16 * Math.max(s.pulse || 0, s.tint ? s.tintP : 0)));
           if (E.tintR) {
             // 塗り替えは、元の面を消しながら新しい面を重ねる。題の色も、塗りに合わせる
@@ -335,8 +428,19 @@
             if (s.tint) E.tintR.setAttribute("fill", s.tintOff ? UZ.QUAD_OFF(S) : UZ.QUAD_ON(s.tint));
             if (E.texts[0]) E.texts[0].setAttribute("fill", C.mix(it.texts[0].color || S.ink, s.tint ? (s.tintOff ? S.muted : s.tint) : it.texts[0].color || S.ink, p));
           }
+        } else if (it.kind === "frame" && s.draw) {
+          // 破線の枠: 線が伸び（0〜0.7）、面と文字は後から。破線は mask で隠して伸ばす
+          E.g.style.opacity = op(show > 0 ? 1 : 0);
+          this.dashMask(E, key, it, smooth(clamp(show / 0.7)), show < 1);
+          // 暗さ（dim）は E.g に 1 回だけ掛ける。子に掛けると 2 回掛かる
+          E.fill.style.opacity = smooth((show - 0.65) / 0.35).toFixed(3);
+          for (const tx of E.texts) tx.style.opacity = smooth((show - 0.7) / 0.3).toFixed(3);
+          this.offset(E.g, off);
         } else if (it.kind === "band" || it.kind === "frame" || it.kind === "image") {
+          if (E.dm) this.dashMask(E, key, it, 1, false);
+          if (it.kind === "frame") { E.fill.style.opacity = ""; for (const tx of E.texts) tx.style.opacity = ""; }
           E.g.style.opacity = op(smooth(show));
+          this.offset(E.g, off);
         } else if (it.kind === "mark") {
           const kind = s.mark || "check", col = kind === "cross" ? S.bad : kind === "question" ? S.warn : S.good;
           E.path.setAttribute("d", GLYPH[kind]); E.path.setAttribute("stroke", col); E.bgc.setAttribute("stroke", col);
@@ -411,10 +515,23 @@
       this.renderCustoms(fr);
       return fr;
     }
+    // 文の入れ替え（relabel と、Morph で文が違うとき）。改行（\n）で行を分ける
     relabel(tEl, spec, s) {
-      const want = s.textP < 0.5 ? (s.textFrom != null ? s.textFrom : spec.lines.join("")) : s.text;
-      if (tEl._cur !== want) { tEl._cur = want; this.setLines(tEl, [want]); }
+      const want = s.textP < 0.5 ? (s.textFrom != null ? s.textFrom : spec.lines.join("\n")) : s.text;
+      if (tEl._cur !== want) { tEl._cur = want; this.setLines(tEl, String(want).split("\n")); }
       tEl.style.opacity = (Math.abs(s.textP - 0.5) * 2).toFixed(3);
+    }
+    // 入れ替えた文を元に戻す（入れ替えより前へ戻ったときと、Morph が終わったとき）。戻したら true
+    unlabel(tEl, spec) {
+      if (tEl._cur == null) return false;
+      tEl._cur = null;
+      if (spec.spans) this.setSpans(tEl, spec.spans, spec.emColor); else this.setLines(tEl, spec.lines);
+      return true;
+    }
+    // 部品の位置のずれ（Morph の要素ごとの補間）
+    offset(g, off) {
+      const tr = off[0] || off[1] ? `translate(${off[0].toFixed(2)},${off[1].toFixed(2)})` : "";
+      if ((g._off || "") !== tr) { g._off = tr; if (tr) g.setAttribute("transform", tr); else g.removeAttribute("transform"); }
     }
     renderCustoms(fr) {
       const M = this.M;

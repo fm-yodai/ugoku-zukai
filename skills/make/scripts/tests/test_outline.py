@@ -92,7 +92,7 @@ class CheckOutlineTest(unittest.TestCase):
     def test_examples_are_ready(self):         # 通る見本は examples/outlines/（claude.ai 用 zip にも入る）
         ex = os.path.join(EXAMPLES, "outlines")
         names = sorted(os.listdir(ex))
-        self.assertEqual(names, ["keihi.json", "slide-forms.json", "ux.json"])
+        self.assertEqual(names, ["camera-morph.json", "keihi.json", "slide-forms.json", "ux.json"])
         for n in names:
             self.assertEqual(subprocess.run([sys.executable, CHECK, os.path.join(ex, n), "--ready"],
                                             capture_output=True).returncode, 0, n)
