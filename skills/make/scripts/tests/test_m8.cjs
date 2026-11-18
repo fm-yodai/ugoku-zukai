@@ -45,6 +45,18 @@ const renderSvg = (M, t, frameOverride) => {
   return serialize(svg);
 };
 const circleCx = str => [...str.matchAll(/<circle [^>]*cx="([0-9.]+)"[^>]*r="6"/g)].map(m => +m[1]);
+// geo の検査用: svg_dom の document で要素を作る el（view_svg.js の el と同じ形）と、空の <g>
+const SVGDOM = require("../svg_dom.cjs");
+const DOC = SVGDOM.makeDocument();
+const fakeEl = (tag, attrs, parent) => {
+  const e = DOC.createElementNS("http://www.w3.org/2000/svg", tag);
+  if (attrs) for (const k in attrs) if (attrs[k] != null) e.setAttribute(k, attrs[k]);
+  if (parent) parent.appendChild(e);
+  return e;
+};
+const newGeo = () => ({ geo: UZ.makeGeo(fakeEl, UZ.styleOf(TH)), g: fakeEl("g") });
+const ser = e => SVGDOM.serialize(e);
+const attrsOf = (str, tag) => [...str.matchAll(new RegExp(`<${tag} [^>]*>`, "g"))].map(m => m[0]);
 
 const tests = {
   async tex_tree_basic() {
@@ -209,6 +221,117 @@ const tests = {
     const gate = (M.errors || []).filter(e => /format を "ugoku-zukai\/5" と書く/.test(e));
     assert.strictEqual(gate.length, 1, JSON.stringify(M.errors));
     assert.ok(/custom の部品/.test(gate[0]), gate[0]);
+  },
+  async geo_axes_maps() {
+    const { geo, g } = newGeo();
+    const Ax = geo.axes(g, { x: [0, 10], y: [0, 5], box: { x: 0, y: 0, w: 500, h: 250 } });
+    assert.deepStrictEqual(Ax.toPx([10, 5]), [500, 0]);
+    assert.deepStrictEqual(Ax.toNum([0, 250]), [0, 0]);
+    assert.deepStrictEqual(Ax.toNum(Ax.toPx([3, 2])), [3, 2]);
+    assert.ok(/<path /.test(ser(g)), "軸の線がない");
+  },
+  async geo_axes_show_grows() {   // show = 0 で軸の線が描かれず、0.5 で半分まで
+    const box = { x: 0, y: 0, w: 400, h: 200 };
+    const a = newGeo(); a.geo.axes(a.g, { x: [0, 4], y: [0, 2], box, show: 0 });
+    const b = newGeo(); b.geo.axes(b.g, { x: [0, 4], y: [0, 2], box, show: 1, grid: true, labels: { x: "x", y: "$y$" } });
+    assert.ok(ser(a.g).length < ser(b.g).length);
+    assert.ok(!/NaN/.test(ser(b.g)));
+  },
+  async geo_deriv() {
+    const { geo } = newGeo();
+    assert.ok(Math.abs(geo.deriv(x => x * x, 3) - 6) < 1e-6);
+  },
+  async geo_plot_breaks_on_nan() {
+    const { geo, g } = newGeo();
+    const Ax = geo.axes(g, { x: [-1, 1], y: [-5, 5], box: { x: 0, y: 0, w: 400, h: 300 } });
+    const pg = geo.plot(g, Ax, x => 1 / x);
+    const str = ser(pg), paths = attrsOf(str, "path");
+    assert.ok(paths.length >= 2, `パスの数: ${paths.length}`);
+    assert.ok(!/NaN|Infinity/.test(str), str.slice(0, 300));
+    for (const d of str.matchAll(/ d="([^"]+)"/g)) for (const n of d[1].match(/-?[0-9.]+/g)) assert.ok(+n >= -0.01 && +n <= 400.01, `枠の外の座標 ${n}`);
+  },
+  async geo_plot_upto() {   // upto = 0.5 で x の半分まで
+    const { geo, g } = newGeo();
+    const Ax = geo.axes(g, { x: [0, 10], y: [0, 10], box: { x: 0, y: 0, w: 500, h: 500 } });
+    const d = ser(geo.plot(g, Ax, x => x, { upto: 0.5 })).match(/ d="([^"]+)"/)[1];
+    const xs = d.match(/[ML]([-0-9.]+),/g).map(s => +s.slice(1, -1));
+    assert.ok(Math.abs(Math.max(...xs) - 250) < 0.01, `最後の x: ${Math.max(...xs)}`);
+  },
+  async geo_riemann_count() {
+    const { geo, g } = newGeo();
+    const Ax = geo.axes(g, { x: [0, 2], y: [0, 4], box: { x: 0, y: 0, w: 400, h: 300 } });
+    const rg = geo.riemann(g, Ax, x => x * x, 0, 2, 8, { rule: "mid" });
+    assert.strictEqual(attrsOf(ser(rg), "rect").length, 8);
+  },
+  async geo_shapes_draw() {   // 描く関数はどれも要素を返し、NaN を書かない
+    const { geo, g } = newGeo();
+    const Ax = geo.axes(g, { x: [-3, 3], y: [-2, 9], box: { x: 50, y: 20, w: 600, h: 400 }, grid: true, ticks: { x: 1, y: 2 } });
+    const f = x => x * x;
+    const made = [geo.plot(g, Ax, f, { color: "accent" }), geo.point(g, Ax, [1, 1], { label: "P" }), geo.label(g, [10, 10], "ラベル"),
+      geo.number(g, [10, 40], 2.345, { decimals: 1, prefix: "a=", unit: "m" }), geo.tangent(g, Ax, f, 1), geo.secant(g, Ax, f, 0, 2, { color: "good" }),
+      geo.area(g, Ax, f, 0, 2), geo.vector(g, Ax, [0, 0], [2, 3], { label: "$\\vec v$", color: "#8c5e0a" }), geo.arc(g, [100, 100], 30, 0, Math.PI / 2),
+      geo.circle(g, [100, 100], 20), geo.polygon(g, [[0, 0], [10, 0], [0, 10]], { fill: true }), geo.bar(g, Ax, 2, 5, { color: "store" })];
+    for (const e of made) assert.ok(e && e.tagName, "要素を返さない");
+    const str = ser(g);
+    assert.ok(!/NaN|undefined/.test(str), str.match(/.{60}(NaN|undefined).{20}/)?.[0]);
+    assert.ok(/>a=2\.3m</.test(str), "number の文字");
+  },
+  async geo_col_resolves() {
+    const { geo } = newGeo(), S = UZ.styleOf(TH);
+    assert.strictEqual(geo.col("accent"), S.accent);
+    assert.strictEqual(geo.col("store"), S.role("store"));
+    assert.strictEqual(geo.col("#123456"), "#123456");
+  },
+  async geo_tex_size() {
+    const { geo, g } = newGeo();
+    const r = geo.tex(g, "x^2", { x: 0, y: 0, size: 40 });
+    assert.ok(r.w > 20 && r.h > 20, `${r.w} ${r.h}`);
+    const str = ser(g);
+    assert.ok(!/currentColor/.test(str) && /<path /.test(str), "数式の色か形がない");
+    assert.deepStrictEqual(geo.errors, []);
+  },
+  async geo_tex_is_upright() {   // 上端を y に置く。外側は正の倍率（木の中の scale(1,-1) で上下がそろう）
+    const { geo, g } = newGeo();
+    const r = geo.tex(g, "x^2", { x: 100, y: 50, size: 40, anchor: "middle" });
+    const tr = ser(g).match(/transform="translate\(([-0-9.]+),([-0-9.]+)\) scale\(([-0-9.]+)\)"/);
+    assert.ok(tr, ser(g).slice(0, 200));
+    const vb = UZMJ.tex2tree("x^2").vb;
+    assert.ok(+tr[3] > 0);
+    assert.ok(Math.abs(+tr[2] + vb[1] * +tr[3] - 50) < 0.01, "上端が y にない");
+    assert.ok(Math.abs(+tr[1] + vb[0] * +tr[3] - (100 - r.w / 2)) < 0.01, "真ん中が x にない");
+  },
+  async tex_error_is_reported() {
+    const { geo, g } = newGeo();
+    geo.tex(g, "\\frac{1}{", {});
+    assert.strictEqual(geo.errors.length, 1);
+    assert.ok(/\\frac\{1\}\{/.test(ser(g)), "TeX がそのまま出ない");
+  },
+  async geo_texmorph_ends() {
+    const from = "f(x)=\\cssId{a}{x^2}", to = "f'(x)=\\cssId{a}{2x}", o = { x: 40, y: 30, size: 36 };
+    const pair = (fn) => { const { geo, g } = newGeo(); fn(geo, g); return ser(g); };
+    assert.strictEqual(pair((geo, g) => geo.texMorph(g, from, to, 0, o)), pair((geo, g) => geo.tex(g, from, o)));
+    assert.strictEqual(pair((geo, g) => geo.texMorph(g, from, to, 1, o)), pair((geo, g) => geo.tex(g, to, o)));
+    const mid = pair((geo, g) => geo.texMorph(g, from, to, 0.5, o));
+    assert.ok(/matrix\(/.test(mid) && /opacity="0\.5"/.test(mid) && !/NaN/.test(mid), mid.slice(0, 300));
+  },
+  async geo_texmorph_moves_shared() {   // 同じ id の部分は、両端の位置の間を動く
+    const from = "\\cssId{k}{x}", to = "a+b+\\cssId{k}{x}", o = { x: 0, y: 0, size: 40 };
+    const { geo, g } = newGeo();
+    geo.texMorph(g, from, to, 0.5, o);
+    const m = ser(g).match(/matrix\(([-0-9.]+),[-0-9.]+,[-0-9.]+,[-0-9.]+,([-0-9.]+),/);
+    assert.ok(m, "共有の部分に matrix がない");
+    assert.ok(+m[2] > 5, `x が動いていない: ${m[2]}`);
+  },
+  async custom_part_gets_geo() {   // custom の部品に geo が渡り、TeX の誤りはそのコマの geo.errors に出る
+    const draw = "({ g, geo, w, h }) => { const Ax = geo.axes(g, { x: [0, 1], y: [0, 1], box: { x: 0, y: 0, w, h } }); geo.plot(g, Ax, x => x); geo.tex(g, '\\\\frac{1}{', {}); if (geo.errors.length !== 1) throw new Error('errors=' + geo.errors.length); }";
+    const M = await build(customDeck(CPART, null, { custom: { dot: draw } }));
+    assert.deepStrictEqual(M.errors, []);
+    const err = console.error, msgs = []; console.error = (...a) => msgs.push(a.join(" "));
+    let str;
+    try { const s = M.acts.find(x => x.verb === "set"); str = renderSvg(M, s.end + 0.05); renderSvg(M, s.end + 0.2); } finally { console.error = err; }
+    assert.ok(/<path /.test(str), "geo で描かれていない");
+    assert.ok(!msgs.some(m => /errors=/.test(m)), msgs.join("\n"));   // コマごとに空にしている
+    assert.ok(msgs.some(m => /TeX/.test(m)), "TeX の誤りが知らされない");
   },
   async custom_part_error_does_not_stop() {   // 関数が例外を投げても、その部品だけ描かない
     const M = await build(customDeck(CPART, null, { custom: { dot: "({ g, el }) => { el('circle', { r: 6 }, g); throw new Error('x'); }" } }));

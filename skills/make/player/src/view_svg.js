@@ -234,6 +234,7 @@
           E.g = el("g", null, L.box);
           E.inner = el("g", null, E.g);
           E.S = S;
+          E.geo = UZ.makeGeo(el, S);   // 部品ごとに 1 つ（地の色ごとの S を持つ）。geo.errors は描くたびに空にする
           try { E.fn = new Function("return (" + this.M.sb.custom[it.fn] + ")")(); } catch (e) { E.fn = null; console.error("custom の読み込みに失敗", it.fn, e); }
         } else if (it.kind === "mark") {
           E.g = el("g", null, L.fx);
@@ -455,8 +456,14 @@
           while (E.inner.firstChild) E.inner.removeChild(E.inner.firstChild);
           const fo = fr.figs[it.fig];
           if (o > 0.002 && fo && fo.opacity > 0.002 && E.fn) {
-            try { E.fn({ g: E.inner, v: fr.values || {}, t: fr.t, el, S: E.S, UZ, geo: null, w: it.w, h: it.h }); }
-            catch (e) {
+            E.geo.errors.length = 0;
+            try {
+              E.fn({ g: E.inner, v: fr.values || {}, t: fr.t, el, S: E.S, UZ, geo: E.geo, w: it.w, h: it.h });
+              if (E.geo.errors.length) {   // TeX の誤りは描いたまま（赤い文字）知らせる。同じ誤りは 1 回だけ
+                const msg = E.geo.errors.join(" / ");
+                if (E._err !== msg) { E._err = msg; console.error("custom の部品の数式に誤り", it.key, msg); }
+              }
+            } catch (e) {
               while (E.inner.firstChild) E.inner.removeChild(E.inner.firstChild);
               const msg = String(e && e.message || e);
               if (E._err !== msg) { E._err = msg; console.error("custom の部品の描画に失敗", it.key, e); }

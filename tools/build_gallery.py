@@ -102,6 +102,7 @@ PAGE = r"""<title>ugoku-zukai 見本帳</title>
   </div>
 </div>
 <script>/*UZ:ELK*/</script>
+<script>/*UZ:MATH*/</script>
 <script>/*UZ:CORE*/</script>
 <script>
 const G = /*UZ:DATA*/null;
@@ -241,8 +242,10 @@ def main():
         th = json.load(open(path, encoding="utf-8"))
         note = "架空の会社の Web ページ（デザインシステムではない入力）から、extract_design.py で色と文字を拾って作ったテーマ" if tid == "kumo" else ""
         themes.append({"id": tid, "label": th.get("label", tid), "theme": th, "note": note})
-    html = PAGE.replace("/*UZ:ELK*/", "\n" + BP.elk_js().replace("</script", "<\\/script") + "\n")
-    html = html.replace("/*UZ:CORE*/", "\n" + BP.core_js() + "\n")
+    elk, math, core = BP.engine_scripts()   # 再生ページと同じ束（ELK・数式の組版・プレーヤーのコード）
+    html = PAGE.replace("/*UZ:ELK*/", "\n" + elk + "\n")
+    html = html.replace("/*UZ:MATH*/", "\n" + math + "\n")
+    html = html.replace("/*UZ:CORE*/", "\n" + core + "\n")
     html = html.replace("/*UZ:DATA*/null", BP.safe_json({"samples": samples, "themes": themes}))
     os.makedirs(os.path.dirname(a.out), exist_ok=True)
     open(a.out, "w", encoding="utf-8").write(html)
