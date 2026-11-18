@@ -54,6 +54,14 @@
     return out;
   }
   UZ.platesOf = sb => platesIn(UZ.figuresOf(sb));
+  // 子の図の宣言の列 [{ id: 子の図の id, parent: { fig: 親の図の id, kind, item: 親の中の要素の id }, spec: 図の宣言 }]。
+  // 子の図は、親の部品が自分の描き場に描く図（engine.js が場面に加え、view_svg.js が親の描画の中で描く）。
+  // 今は space の板（kind "plate"。子の図の id は板の id）。別の種類の子（inside など）はここに足す
+  UZ.childDecls = function (sb) {
+    const FIGS = UZ.figuresOf(sb);
+    return UZ.platesOf(sb).map(({ space, plate }) => ({ id: plate.id, parent: { fig: space, kind: "plate", item: plate.id },
+      spec: typeof plate.figure === "string" ? FIGS[plate.figure] : FIGS[plate.id] }));
+  };
 
   // 場面の図の列と区画。figure を指す場面は今までと同じ（図 1 つは全面、2 つは左右）
   UZ.sceneParts = function (sb, sc) {

@@ -124,14 +124,18 @@
     return { O, u, vd, W, H, at, pts: [at(0, 0), at(W, 0), at(W, H), at(0, H)] };
   }
   const plateOf = (o, v) => { const K = mk(v); K.v = v || {}; return plateGeom(o, K); };
-  // 板の中の図（自然な大きさで配置した図の外接矩形 figBox = {x, y, w, h}）を、縦横比を保って板の長方形に収め（中央寄せ）、
-  // 投影まで含めた写像を SVG の行列 [a, b, c, d, e, f]（図のローカル座標 → 部品の座標）にする。平行投影なので写像は 1 次（アフィン）
-  UZ.plateMatrix = function (plate, v, cam, figBox) {
-    const P = plateOf(plate, v), fw = Math.max(1e-9, figBox.w), fh = Math.max(1e-9, figBox.h);
-    const k = Math.min(P.W / fw, P.H / fh), ou = (P.W - fw * k) / 2, ov = (P.H - fh * k) / 2;
-    const S0 = cam.project(P.at(ou, ov)), S1 = cam.project(P.at(ou + fw * k, ov)), S2 = cam.project(P.at(ou, ov + fh * k));
-    const a = (S1[0] - S0[0]) / fw, b = (S1[1] - S0[1]) / fw, c = (S2[0] - S0[0]) / fh, d = (S2[1] - S0[1]) / fh;
-    return [a, b, c, d, S0[0] - a * figBox.x - c * figBox.y, S0[1] - b * figBox.x - d * figBox.y];
+  // 板の中の図（自然な大きさで配置した図の外接矩形 figBox = {x, y, w, h}）を板に写す、投影まで含めた写像を
+  // SVG の行列 [a, b, c, d, e, f]（図のローカル座標 → 部品の座標）にする。平行投影なので写像は 1 次（アフィン）。
+  // fit = { s, ox, oy, w, h } は、板全体を表す w × h の px の矩形の中での図の置き方（普通の部品の place と同じ: 点 x → ox + x·s）。
+  // その矩形を、縦横比を保って板に収める（中央寄せ）。fit を省くと、図の外接矩形をそのまま板に収める
+  UZ.plateMatrix = function (plate, v, cam, figBox, fit) {
+    const P = plateOf(plate, v);
+    fit = fit || { s: 1, ox: -figBox.x, oy: -figBox.y, w: Math.max(1e-9, figBox.w), h: Math.max(1e-9, figBox.h) };
+    const g = Math.min(P.W / fit.w, P.H / fit.h), cu = (P.W - fit.w * g) / 2, cv = (P.H - fit.h * g) / 2;
+    const at = (x, y) => cam.project(P.at(cu + (fit.ox + x * fit.s) * g, cv + (fit.oy + y * fit.s) * g));
+    const S0 = at(0, 0), S1 = at(1, 0), S2 = at(0, 1);
+    const a = S1[0] - S0[0], b = S1[1] - S0[1], c = S2[0] - S0[0], d = S2[1] - S0[1];
+    return [a, b, c, d, S0[0], S0[1]];
   };
   // 板の面と視線のなす角（度）。0 = 正面、90 = 真横から（読めない）
   UZ.plateAngle = function (plate, v, cam) {

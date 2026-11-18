@@ -143,20 +143,21 @@
     // 子の図の id は板の id。図の配置は自然な大きさで 1 回だけ（大きさは、初めの値で区画に写した板の px）。
     // 場面ごとの状態（show・focus など）は普通の図と同じに持ち、描くときは親の部品が、奥から塗る順の位置に行列 1 つで描く。
     // 図の記録の parent = { fig: 親の図の id, kind: "plate", item: 板の id }（コマの figs にも同じ形で載る）
-    const kidsOf = {};   // 親の図の id → [{ id: 子の図の id, parent, spec, plate }]
-    for (const { space, plate } of UZ.platesOf(sb)) {
-      (kidsOf[space] || (kidsOf[space] = [])).push({ id: plate.id, parent: { fig: space, kind: "plate", item: plate.id }, plate,
-        spec: typeof plate.figure === "string" ? FIGS[plate.figure] : FIGS[plate.id] });
-    }
-    const kidById = {};
-    for (const list of Object.values(kidsOf)) for (const k of list) kidById[k.id] = k;
+    const kidsOf = {}, kidById = {};   // 親の図の id → 子の宣言の列（UZ.childDecls）、子の図の id → 子の宣言
+    for (const k of UZ.childDecls(sb)) { (kidsOf[k.parent.fig] || (kidsOf[k.parent.fig] = [])).push(k); kidById[k.id] = k; }
+    // 子の図を配置する区画（px）。板は、初めの値で親の区画に写した板の大きさ
+    const kidArea = (k, A) => {
+      if (k.parent.kind !== "plate") return null;   // 子の種類ごとの区画はここで分ける（null なら親の区画）
+      const plate = FIGS[k.parent.fig].items.find(o => o && o.id === k.parent.item);
+      return UZ.plateArea(FIGS[k.parent.fig], plate, sb.values || {}, A.w, A.h);
+    };
     for (const sc of scenes) {
       const add = [];
       sc.figs.forEach((fid, i) => {
         for (const k of kidsOf[fid] || []) {
           const A = sc.areas[i];
           let a = null;
-          try { a = UZ.plateArea(FIGS[fid], k.plate, sb.values || {}, A.w, A.h); } catch (e) { a = null; }   // 式の誤りは space の検査が知らせる
+          try { a = kidArea(k, A); } catch (e) { a = null; }   // 式の誤りは space の検査が知らせる
           if (!a || !(a.w > 0) || !(a.h > 0) || !Number.isFinite(a.w) || !Number.isFinite(a.h)) a = { w: A.w, h: A.h };
           add.push({ id: k.id, area: { x: 0, y: 0, w: Math.max(40, a.w), h: Math.max(40, a.h) } });
         }
@@ -301,7 +302,7 @@
     // 親の space とその子の図（板の図）の組。子でも親でもない図はそれだけ
     const familyOf = fid => {
       const top = figs[fid] && figs[fid].parent ? figs[fid].parent.fig : fid;
-      return [top, ...(kidsOf[top] || []).map(k => k.id).filter(id => figs[id])];
+      return [top, ...UZ.childFigs({ figs }, top)];
     };
     // ---- 動作の列 ----
     const acts = [], extras = { marks: {}, notes: {}, dots: {}, replies: [], customs: [] };
@@ -564,8 +565,6 @@
     }
     const place = (fid, area, over = {}) => {
       const F = figs[fid], w = F.x1 - F.x0, h = F.y1 - F.y0;
-      // 子の図（板の図）は親の部品が行列で描く。置き場所は持たない（恒等にしておく。コマでは place: null）
-      if (F.parent) return { s: 1, ox: 0, oy: 0 };
       // custom と space の部品は伸び縮みさせず、場面ごとの区画の大きさで描き直す（関数に渡す w・h = 区画の px。文字の大きさが保たれる）
       if (F.type === "custom" || F.type === "space") return { s: 1, ox: area.x, oy: area.y, w: area.w, h: area.h };
       // 拡大の上限: 図が決めていればそれ（テキストは 1 = 文字の大きさを保つ）
@@ -578,6 +577,9 @@
       return { s, ox, oy };
     };
     for (const sc of scenes) sc.place = Object.fromEntries(sc.figs.map((fid, i) => [fid, place(fid, sc.areas[i], sc.over[i])]));
+    // 子の図（板の図）は、配置した区画（板の px）の中に普通の部品と同じに置いた形を F.fit に持ち、親がその区画ごと行列で写す
+    // （正面の板が、同じ区画の普通の部品と同じ絵になる）。コマでは place: null
+    for (const sc of scenes) sc.figs.forEach((fid, i) => { const F = figs[fid]; if (F.parent && !F.fit) F.fit = { ...sc.place[fid], w: sc.areas[i].w, h: sc.areas[i].h }; });
     // 時刻 T の場面 sc で見えている箱・グループの枠・テキストの部品の、画面上の矩形（カメラの前）。
     // show・hide をたどる。Morph の v2 の要素は、同じ id の v1 の要素が出ていれば出ているとみなす
     const visibleRects = (sc, T) => {
@@ -664,8 +666,7 @@
     const plateBoxAt = (K, b, T, pl) => {
       try {
         const P = figs[K.parent.fig], v = valuesAtT(T), cam = UZ.spaceView(P.spec, v, pl.w, pl.h, P.v0);
-        const plate = P.items[K.parent.item].el;
-        const m = UZ.plateMatrix(plate, v, cam, { x: K.x0, y: K.y0, w: K.x1 - K.x0, h: K.y1 - K.y0 });
+        const m = UZ.childMatrix(K, P.items[K.parent.item].el, v, cam);
         const ps = [[b.x, b.y], [b.x + b.w, b.y], [b.x, b.y + b.h], [b.x + b.w, b.y + b.h]].map(([x, y]) => [m[0] * x + m[2] * y + m[4], m[1] * x + m[3] * y + m[5]]);
         if (!ps.every(q => q.every(Number.isFinite))) return null;
         const xs = ps.map(q => q[0]), ys = ps.map(q => q[1]);
@@ -802,6 +803,14 @@
     const credit = sb.credit || (sb.voice && sb.voice.credit) || timeline.credit || `VOICEVOX:${UZ.SPEAKER_NAMES[sp] || "話者 " + sp}`;
     return { errors, warnings, sb, theme, S, timeline, TL, scenes, figs, series, slides, assets, credits, acts, itemByKey, values0, duration, endCard, credit, title: sb.title || "" };
   };
+
+  // ---- 子の図（parent を持つ図。親の部品が自分の描き場に描く。宣言は UZ.childDecls）----
+  // 親の図 fid の子の図の id の列（配置した順）。M は figs を持つもの（build の途中なら { figs }）
+  UZ.childFigs = (M, fid) => Object.values(M.figs).filter(F => F.parent && F.parent.fig === fid).map(F => F.id);
+  // 子の図 fid の要素が、コマ fr でどれか出ているか（親は、自分の要素が出ていなくても、これが真なら子を描く）
+  UZ.childShown = (M, fr, fid) => Object.values(M.figs[fid].items).some(it => fr.st[it.key] && fr.st[it.key].show > 0.002);
+  // 子の図 K（板の図）の行列（図のローカル座標 → 親の部品の座標）。plate = 板の宣言、v = 値、cam = 親のカメラ（UZ.spaceView）
+  UZ.childMatrix = (K, plate, v, cam) => UZ.plateMatrix(plate, v, cam, { x: K.x0, y: K.y0, w: K.x1 - K.x0, h: K.y1 - K.y0 }, K.fit);
 
   // ---- 名前付きの値 ----
   // set 1 つの、時刻 t での値（始まる前は from、終わった後は to）
@@ -1106,8 +1115,7 @@
     const st = {}, figsF = {};
     for (const fid of Object.keys(M.figs)) figsF[fid] = { opacity: 0, place: null };
     // 子の図（板の図）は親の部品と一緒に出す
-    const kids = fid => Object.values(M.figs).filter(F => F.parent && F.parent.fig === fid).map(F => F.id);
-    for (const fid of sl.figs.flatMap(f => (sl.transient.includes(f) ? [] : [f, ...kids(f)]))) {
+    for (const fid of sl.figs.flatMap(f => (sl.transient.includes(f) ? [] : [f, ...UZ.childFigs(M, f)]))) {
       const F = M.figs[fid];
       figsF[fid] = F.parent ? { opacity: 1, place: null, parent: { ...F.parent } } : { opacity: 1, place: sc.place[fid] };
       for (const it of Object.values(M.figs[fid].items)) {

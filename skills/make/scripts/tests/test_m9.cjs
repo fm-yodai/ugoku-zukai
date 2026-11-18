@@ -490,12 +490,20 @@ const tests = {
     assert.deepStrictEqual(M.errors || [], []);
     const K = M.figs.layer1, it = K.items.api, P = M.figs.sp, pl = M.scenes[0].place.sp, v = {};
     const cam = UZ.spaceView(P.spec, v, pl.w, pl.h, P.v0);
-    const m = UZ.plateMatrix(P.spec.items[0], v, cam, { x: K.x0, y: K.y0, w: K.x1 - K.x0, h: K.y1 - K.y0 });
+    const m = UZ.childMatrix(K, P.spec.items[0], v, cam);
     assert.ok(Math.abs(m[1]) < 1e-9 && Math.abs(m[2]) < 1e-9, `正面の板の行列に回転か傾きが入る: ${m}`);
     const map = (x, y) => [m[0] * x + m[2] * y + m[4], m[1] * x + m[3] * y + m[5]];
     const p0 = map(it.x, it.y), p1 = map(it.x + it.w, it.y + it.h);
     const r = (p1[0] - p0[0]) / (p1[1] - p0[1]), r2 = it2.w / it2.h;
     assert.ok(Math.abs(r / r2 - 1) <= 0.01, `箱の縦横比 ${r} が普通の部品 ${r2} と違う`);
+    // 部品の座標（区画の左上が原点）で、普通の部品の箱と同じ矩形（±1px）
+    const pl2 = M2.scenes[0].place.g1, q0 = [pl2.ox - A.x + it2.x * pl2.s, pl2.oy - A.y + it2.y * pl2.s], q1 = [q0[0] + it2.w * pl2.s, q0[1] + it2.h * pl2.s];
+    for (const [a, b, what] of [[p0[0], q0[0], "左"], [p0[1], q0[1], "上"], [p1[0], q1[0], "右"], [p1[1], q1[1], "下"]])
+      assert.ok(Math.abs(a - b) <= 1, `箱の${what}の端 ${a.toFixed(1)} が普通の部品 ${b.toFixed(1)} と違う`);
+    // 検査: 板の文字の小ささの警告は出ない
+    const rc = await checkSpace(plateDeck([{ id: "layer1", kind: "plate", figure: "g1", origin: [0, 0, 0], size: [W, H] }],
+      [{ id: "l1", text: "{a}出します。", do: [{ show: "sp", at: "a" }] }, { id: "l2", text: "そのままです。" }], { camera: { yaw: 0, pitch: 0, scale: 100, target: [W / 2, 0, -H / 2] }, values: {} }));
+    assert.ok(!rc.warnings.some(w => /小さすぎて読めない/.test(w)), JSON.stringify(rc.warnings));
     const svg = renderSvg(M, lastEnd(M));
     assert.ok(/<g\b[^>]*data-plate="layer1"[^>]*transform="matrix\(/.test(svg) || /<g\b[^>]*transform="matrix\([^"]*\)"[^>]*data-plate="layer1"/.test(svg), "板の図が matrix で描かれていない");
     assert.ok(svg.includes("API"), "板の中の箱の文字が描かれていない");
@@ -567,7 +575,7 @@ const tests = {
       { id: "l2", text: "ここで{a}この箱に寄ります。", do: [{ zoom: "layer1/api", at: "a" }] }]));
     assert.deepStrictEqual(M.errors || [], []);
     const z = M.acts.find(a => a.verb === "zoom"), K = M.figs.layer1, P = M.figs.sp, pl = M.scenes[0].place.sp, v = UZ.valuesAt(M, z.start);
-    const m = UZ.plateMatrix(P.spec.items[0], v, UZ.spaceView(P.spec, v, pl.w, pl.h, P.v0), { x: K.x0, y: K.y0, w: K.x1 - K.x0, h: K.y1 - K.y0 });
+    const m = UZ.childMatrix(K, P.spec.items[0], v, UZ.spaceView(P.spec, v, pl.w, pl.h, P.v0));
     const b = K.items.api, cx = m[0] * (b.x + b.w / 2) + m[2] * (b.y + b.h / 2) + m[4] + pl.ox, cy = m[1] * (b.x + b.w / 2) + m[3] * (b.y + b.h / 2) + m[5] + pl.oy;
     assert.ok(Math.abs(z.target.x + z.target.w / 2 - cx) < 1 && Math.abs(z.target.y + z.target.h / 2 - cy) < 1, `寄せ先の中心 ${z.target.x + z.target.w / 2},${z.target.y + z.target.h / 2} 期待 ${cx},${cy}`);
     assert.ok(z.target.w < pl.w / 3, "寄せ先が区画全体になっている");
@@ -580,6 +588,18 @@ const tests = {
     const r = await checkSpace(plateDeck(items, [{ id: "l1", text: "{a}出して{b}倒します。", do: [{ show: "sp", at: "a" }, { set: "th", to: 60, at: "b", dur: 1 }, { set: "pt", to: 40, at: "b", dur: 1 }] }, { id: "l2", text: "そのままです。" }]));
     assert.deepStrictEqual(r.errors, []);
     assert.ok(!r.warnings.some(w => /部品「sp」/.test(w)), JSON.stringify(r.warnings));
+  },
+  async plate_small_text_warn() {   // 写した文字が MIN_FONT 未満なら警告（落ち着いた時刻）。板の中の図も配置の検査を通る
+    const r = await checkSpace(plateDeck([{ id: "layer1", kind: "plate", figure: "g1", origin: [0, 0, 0], size: [0.6, 0.1] }],
+      [{ id: "l1", text: "{a}出します。", do: [{ show: "sp", at: "a" }] }, { id: "l2", text: "そのままです。" }],
+      { camera: { yaw: 0, pitch: 0, scale: 100, target: [0.3, 0, -0.05] }, values: {} }));
+    assert.deepStrictEqual(r.errors, []);
+    assert.ok(r.warnings.some(w => /部品「sp」: 板「layer1」の文字が小さすぎて読めない（\d+\.\dpx）/.test(w)), JSON.stringify(r.warnings));
+    // 板の中の図の文字の重なりも、自然な大きさで調べる
+    const C = { type: "canvas", shapes: [{ id: "t1", shape: "text", x: 200, y: 50, text: "重なる文字です" }, { id: "t2", shape: "text", x: 205, y: 55, text: "重なる文字です" }] };
+    const M = await build(plateDeck([PL("layer1", "c1", 1)], [{ id: "l1", text: "{a}出します。", do: [{ show: "sp", at: "a" }] }], { figures: { c1: C } }));
+    assert.deepStrictEqual(M.errors || [], []);
+    assert.ok(UZ.checkLayout(M).some(x => /layer1\/t1 と layer1\/t2 の文字が重なる/.test(x.msg)), JSON.stringify(UZ.checkLayout(M)));
   },
   space_project_front() {
     const cam = UZ.spaceCamera({ yaw: 0, pitch: 0, scale: 10, target: [0, 0, 0] }, 200, 100, { min: [0, 0, 0], max: [1, 1, 1] });

@@ -244,7 +244,7 @@
           E.g = el("g", null, L.box);
           E.inner = el("g", null, E.g);
           E.S = S; E.F = F;
-          E.kids = Object.values(this.M.figs).filter(K => K.parent && K.parent.fig === F.id && K.parent.kind === "plate").map(K => K.id);
+          E.kids = UZ.childFigs(this.M, F.id);
         } else if (it.kind === "mark") {
           E.g = el("g", null, L.fx);
           E.bgc = el("circle", { cx: 0, cy: 0, r: 15, fill: S.bg, stroke: S.good, "stroke-width": 2.4 }, E.g);
@@ -504,7 +504,7 @@
           if (fo && fo.opacity > 0.002) {
             const states = UZ.spaceStates(E.F, fr.st);
             // 板の中の図は、その要素がどれか出ていれば描く（板の要素自身を出していなくても）
-            const kidOn = E.kids.some(k => Object.values(this.M.figs[k].items).some(x => fr.st[x.key] && fr.st[x.key].show > 0.002));
+            const kidOn = E.kids.some(k => UZ.childShown(this.M, fr, k));
             if (kidOn || Object.values(states).some(x => x.show > 0.002)) {
               const pw = fo.place && fo.place.w != null ? fo.place.w : it.w, ph = fo.place && fo.place.w != null ? fo.place.h : it.h;
               const v = fr.values || {};
@@ -512,7 +512,7 @@
               const plate = (p, g, cam) => {
                 const K = this.M.figs[p.id], kg = this.figG[p.id];
                 if (!K || !kg || !K.parent) return;
-                const m = UZ.plateMatrix(p.plate, v, cam, { x: K.x0, y: K.y0, w: K.x1 - K.x0, h: K.y1 - K.y0 });
+                const m = UZ.childMatrix(K, p.plate, v, cam);
                 if (!m.every(Number.isFinite)) return;
                 kg.setAttribute("transform", `matrix(${m.slice(0, 4).map(x => x.toFixed(5)).join(",")},${m[4].toFixed(2)},${m[5].toFixed(2)})`);
                 g.appendChild(kg);

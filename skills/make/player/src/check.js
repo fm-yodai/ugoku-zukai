@@ -36,20 +36,29 @@
     for (const t of [...times].sort((a, b) => a - b)) {
       if (t >= M.endCard) continue;
       const fr = UZ.frame(M, t);
-      const vis = [];
       // 寄せている間は body の clip の外が見えない。はみ出しは調べず、clip の外にある部品は重なりも調べない
       const clip = fr.camera && fr.camera.on ? fr.camera.clip : null;
-      const outside = b => clip && (b.x + b.w <= clip.x || b.y + b.h <= clip.y || b.x >= clip.x + clip.w || b.y >= clip.y + clip.h);
+      const main = [], kids = {};
       for (const [fid, F] of Object.entries(M.figs)) {
         const ff = fr.figs[fid];
-        if (!ff || ff.opacity < 0.9 || !ff.place) continue;
+        // 子の図（板の図など）は置き場所を持たない（親が行列で写す）。配置した区画の中の置き方（F.fit）で、その図の中だけを調べる。
+        // 写したときの文字の小ささは、親の検査（checkSpaces の「文字が小さすぎて読めない」）が見る
+        if (!ff || ff.opacity < 0.9 || (!ff.place && !ff.parent)) continue;
+        const pl = ff.parent ? F.fit : ff.place, list = ff.parent ? (kids[fid] = []) : main;
         for (const it of Object.values(F.items)) {
           if (it.kind === "group" || it.kind === "dot") continue;
           const s = fr.st[it.key];
           if (!s || s.show < 0.95 || s.dim < 0.5 || s.blur > 0.5) continue;
-          vis.push({ it, pl: ff.place, s });
+          list.push({ it, pl, s });
         }
       }
+      inspect(main, clip, bounds, t);
+      for (const vis of Object.values(kids)) inspect(vis, null, null, t);
+    }
+    return issues;
+    // 見えている部品の列 vis を、時刻 t のコマで調べる。bounds = はみ出しを調べる範囲（null なら調べない）、clip = カメラの clip
+    function inspect(vis, clip, bounds, t) {
+      const outside = b => clip && (b.x + b.w <= clip.x || b.y + b.h <= clip.y || b.x >= clip.x + clip.w || b.y >= clip.y + clip.h);
       const texts = [], boxes = [];
       for (const v of vis) {
         const off = v.s.off || [0, 0];
@@ -59,14 +68,14 @@
         const rz = v.s.rect || null, tOff = (rz && v.s.textOff) || [0, 0];
         const bbox = rz || ((v.it.kind === "custom" || v.it.kind === "space" || v.it.kind === "s3") && v.pl.w != null ? { x: 0, y: 0, w: v.pl.w, h: v.pl.h } : v.it.bbox);
         if (bbox && outside(tf(bbox, pl))) continue;
-        if (bbox && v.it.kind !== "band" && !clip) {
+        if (bbox && bounds && v.it.kind !== "band" && !clip) {
           const b = tf(bbox, pl);
           if (b.x < bounds.x || b.y < bounds.y || b.x + b.w > bounds.x + bounds.w || b.y + b.h > bounds.y + bounds.h) add("はみ出し", `${name} が図の区画からはみ出す`, t);
         }
         for (const tb of textBoxes(v.it)) {
           const b = tf(tb.what === "text" ? { ...tb.box, x: tb.box.x + tOff[0], y: tb.box.y + tOff[1] } : tb.box, pl);
           if (tb.size * pl.s < UZ.MIN_FONT - 0.01) add("小さい", `${name} の文字が ${(tb.size * pl.s).toFixed(1)}px（${UZ.MIN_FONT}px 未満）`, t);
-          if (!clip && (b.x < bounds.x || b.y < bounds.y || b.x + b.w > bounds.x + bounds.w || b.y + b.h > bounds.y + bounds.h)) add("はみ出し", `${name} の文字が図の区画からはみ出す`, t);
+          if (!clip && bounds && (b.x < bounds.x || b.y < bounds.y || b.x + b.w > bounds.x + bounds.w || b.y + b.h > bounds.y + bounds.h)) add("はみ出し", `${name} の文字が図の区画からはみ出す`, t);
           texts.push({ name, b, it: v.it, what: tb.what });
         }
         if ((v.it.kind === "box" || v.it.kind === "frame") && bbox) boxes.push({ name, b: tf(bbox, pl), it: v.it, resized: !!rz });
@@ -105,7 +114,6 @@
         }
       }
     }
-    return issues;
   };
   // ---- custom の部品を描いて見る（DOM には触らない。受け取った el で描き、要素の木を読んで調べる） ----
   const mul = (A, B) => [A[0] * B[0] + A[2] * B[1], A[1] * B[0] + A[3] * B[1], A[0] * B[2] + A[2] * B[3], A[1] * B[2] + A[3] * B[3], A[0] * B[4] + A[2] * B[5] + A[4], A[1] * B[4] + A[3] * B[5] + A[5]];
@@ -184,8 +192,7 @@
         if (!fo || fo.opacity <= 0.002) continue;
         const states = UZ.spaceStates(F, fr.st), vis = new Set(Object.keys(states).filter(k => states[k].show > 0.002));
         // 板は、中の図の要素がどれか出ていれば見えている
-        for (const o of F.spec.items || []) if (o && o.kind === "plate" && M.figs[o.id] && M.figs[o.id].parent
-          && Object.values(M.figs[o.id].items).some(x => fr.st[x.key] && fr.st[x.key].show > 0.002)) vis.add(o.id);
+        for (const k of UZ.childFigs(M, F.id)) if (M.figs[k].parent.kind === "plate" && UZ.childShown(M, fr, k)) vis.add(M.figs[k].parent.item);
         if (!vis.size) continue;
         const add = (list, body, kind) => note(list, lineId, F.id, body, kind);
         const S = F.dark ? UZ.darkStyleOf(M.S) : M.S, v = fr.values || {}, decl = F.spec;
@@ -211,6 +218,15 @@
             let ang;
             try { ang = UZ.plateAngle(o, v, cam); } catch (e) { continue; }
             if (ang > UZ.SPACE.plateMaxAngle) add(warnings, `板「${o.id}」が傾きすぎて読めない（${Math.round(ang)}°）。板の面が視線に対して ${UZ.SPACE.plateMaxAngle}° を超えると、中の文字が潰れる。tilt かカメラの pitch を見直す`, `angle:${o.id}`);
+            // 写した文字の大きさ: 行列の 2 つの列の長さ（図の x・y 方向の倍率）の小さいほう × 図の一番小さい文字
+            const K = M.figs[o.id];
+            if (!K || !K.parent) continue;
+            const sizes = Object.values(K.items).flatMap(it => (it.kind === "mark" ? [] : textBoxes(it).map(b => b.size))).filter(x => x > 0);
+            if (!sizes.length) continue;
+            let m;
+            try { m = UZ.childMatrix(K, o, v, cam); } catch (e) { continue; }
+            const px = Math.min(Math.hypot(m[0], m[1]), Math.hypot(m[2], m[3])) * Math.min(...sizes);
+            if (px < UZ.MIN_FONT - 0.01) add(warnings, `板「${o.id}」の文字が小さすぎて読めない（${px.toFixed(1)}px）。${UZ.MIN_FONT}px 未満になる。板の size かカメラの scale を大きくするか、図の文字を減らす`, `small:${o.id}`);
           }
         }
         if (!texDone.has(F.id) && (decl.items || []).some(o => o && o.kind === "text" && o.tex)) {
