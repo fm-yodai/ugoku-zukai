@@ -57,7 +57,9 @@
     const sl = sb.slides[sc.slide];
     const statement = UZ.statementLines(sl.statement).lines;
     const body = UZ.slideBody(statement.length);
-    const parts = sl.parts.map(p => ({ id: partId(p), transient: !!p.transient, frame: FIGS[partId(p)].type === "frame", area: p.area }));
+    const parts = sl.parts.map(p => ({ id: partId(p), transient: !!p.transient, frame: FIGS[partId(p)].type === "frame", area: p.area,
+      // 部品に書いた fit・valign・halign は、図の宣言の値より優先する
+      over: Object.fromEntries(["fit", "valign", "halign"].filter(k => p[k] != null).map(k => [k, p[k]])) }));
     // フレームの区画の中に入る部品は、枠の内側に余白を取る（枠に題があれば、その下から）
     const frames = parts.filter(p => p.frame);
     const within = (a, b) => !a || !b ? !b : a.col[0] >= b.col[0] && a.col[1] <= b.col[1] && a.row[0] >= b.row[0] && a.row[1] <= b.row[1];

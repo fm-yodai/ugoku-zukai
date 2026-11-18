@@ -76,6 +76,25 @@ const tests = {
     hasWarn(M, /行 l1（zoom）: .*倍率を [0-9.]+ に下げた/);
     assert.ok(!(await build(mk("all")).then(m => m.warnings || [])).some(w => /倍率を [0-9.]+ に下げた/.test(w)), "zoom all で下げた警告が出た");
   },
+  async figure_part_align() {   // figure を指す部品に書いた fit・valign・halign が効く（M7 の制限 3）
+    const area = { col: [1, 12], row: [1, 6] };
+    const mk = (part, fig = {}) => build(deck6({ a: { title: "A", parts: [{ figure: "f1", area, ...part }] } }, [SC("s1", "a")], { f1: { ...L1, ...fig } }));
+    const bottom = async (part, fig) => { const M = await mk(part, fig); assert.deepStrictEqual(M.errors || [], []); const sc = M.scenes[0], F = M.figs.f1, pl = sc.place.f1, A = sc.areas[0]; return { M, F, pl, A, gap: A.y + A.h - (pl.oy + F.y1 * pl.s) }; };
+    const b = await bottom({ valign: "bottom", fit: "content" });
+    assert.ok(Math.abs(b.gap) <= 1, `部品の valign: bottom が効かない（下端の差 ${b.gap}）`);
+    const t = await bottom({ fit: "content" });   // 図の既定（テキストは上）
+    assert.ok(t.gap > 5, "valign を書かないと上に寄る");
+    const d = await bottom({ valign: "top", fit: "content" }, {});   // 宣言が bottom、部品が top なら部品が勝つ
+    const w = await bottom({ valign: "top" }, { valign: "bottom", fit: "content" });
+    assert.ok(w.gap > 5, "部品の valign が図の宣言に負けた");
+    const o = await bottom({}, { valign: "bottom", fit: "content" });
+    assert.ok(Math.abs(o.gap) <= 1, "図の宣言だけの valign が効かなくなった");
+    // fit: content を部品に書くと、区画に合わせて組まない（文字が既定の大きさのまま）
+    const fitK = async part => (await bottom(part)).F.extra.fillK;
+    assert.ok((await fitK({})) > 1, "fit を書かない部品は区画に合わせて組む");
+    assert.strictEqual(await fitK({ fit: "content" }), undefined, "部品の fit: content が効かない");
+    assert.strictEqual(d.F.spec.fit, "content");
+  },
   async pan_noop_warns() {   // 倍率 1 のままの pan は動かない
     const G = { type: "graph", nodes: [{ id: "app", label: "アプリ" }, { id: "api", label: "API" }, { id: "db", label: "DB" }], edges: [{ from: "app", to: "api" }, { from: "api", to: "db" }] };
     const M = await build(deck6({ a: { title: "A", parts: [{ figure: "g1" }] } }, [SC("s1", "a", [{ id: "l1", text: "{a}出して{b}移ります。", do: [{ show: "g1", at: "a" }, { pan: "db", at: "b" }] }])], { g1: G }));

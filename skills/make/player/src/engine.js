@@ -133,7 +133,7 @@
       const slideDark = P.slide && sb.slides[P.slide].tone === "dark" && theme.chapter;
       // カメラをかける領域（スライドなら見出しと言いたいことの下、図だけの場面なら body 全体）
       const body = P.slide ? UZ.slideBody(P.statement.length) : { ...UZ.AREA.body };
-      return { id: sc.id, chapter: sc.chapter, figs, header, areas, captions, lines: sc.lines, tone: slideDark ? "dark" : figs.length === 1 ? tones[0] : "light", slideDark: !!slideDark, slide: P.slide, statement: P.statement, body };
+      return { id: sc.id, chapter: sc.chapter, figs, header, areas, captions, lines: sc.lines, tone: slideDark ? "dark" : figs.length === 1 ? tones[0] : "light", slideDark: !!slideDark, slide: P.slide, statement: P.statement, body, over: P.parts.map(p => p.over || {}) };
     });
     // カメラの run: 同じスライドが続く場面の通し番号（図だけの場面は 1 場面で 1 run）。run が変わるとカメラは戻る
     scenes.forEach((sc, si) => { const pv = scenes[si - 1]; sc.run = pv && sc.slide != null && pv.slide === sc.slide ? pv.run : (pv ? pv.run + 1 : 0); });
@@ -196,7 +196,8 @@
       for (let i = 0; i < sc.figs.length; i++) {
         const fid = sc.figs[i];
         if (figs[fid]) continue;
-        const f = FIGS[fid];
+        const over = sc.slide ? sc.over[i] : null;
+        const f = over && Object.keys(over).length ? { ...FIGS[fid], ...over } : FIGS[fid];
         const S = sc.slideDark ? SD : S0;
         const A = sc.areas[i];
         let L = null;
@@ -514,20 +515,20 @@
       }
       Object.assign(F, { x0, y0, x1, y1 });
     }
-    const place = (fid, area) => {
+    const place = (fid, area, over = {}) => {
       const F = figs[fid], w = F.x1 - F.x0, h = F.y1 - F.y0;
       // custom の部品は伸び縮みさせず、場面ごとの区画の大きさで描き直す（関数に渡す w・h = 区画の px。文字の大きさが保たれる）
       if (F.type === "custom") return { s: 1, ox: area.x, oy: area.y, w: area.w, h: area.h };
       // 拡大の上限: 図が決めていればそれ（テキストは 1 = 文字の大きさを保つ）
       const s = Math.min(area.w / w, area.h / h, F.extra.maxScale ?? (F.fixed ? 10 : (F.type === "title" ? 1 : 1.3)));
       // 区画の中の揃え: 部品の valign・halign。なければ図の既定（テキストは上）、それもなければ中央
-      const va = F.spec.valign || F.extra.valign || "middle", ha = F.spec.halign || "center";
+      const va = over.valign || F.spec.valign || F.extra.valign || "middle", ha = over.halign || F.spec.halign || "center";
       const dx = area.w - w * s, dy = area.h - h * s;
       const ox = area.x + (ha === "start" ? 0 : ha === "end" ? dx : dx / 2) - F.x0 * s;
       const oy = area.y + (va === "top" ? 0 : va === "bottom" ? dy : dy / 2) - F.y0 * s;
       return { s, ox, oy };
     };
-    for (const sc of scenes) sc.place = Object.fromEntries(sc.figs.map((fid, i) => [fid, place(fid, sc.areas[i])]));
+    for (const sc of scenes) sc.place = Object.fromEntries(sc.figs.map((fid, i) => [fid, place(fid, sc.areas[i], sc.over[i])]));
     // 時刻 T の場面 sc で見えている箱・グループの枠・テキストの部品の、画面上の矩形（カメラの前）。
     // show・hide をたどる。Morph の v2 の要素は、同じ id の v1 の要素が出ていれば出ているとみなす
     const visibleRects = (sc, T) => {
