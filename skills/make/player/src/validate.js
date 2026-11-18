@@ -7,7 +7,7 @@
     sequence: ["participants", "messages"], graph: ["nodes", "edges"], canvas: ["shapes"],
     swimlane: ["lanes", "steps"], beforeafter: ["before", "after"], roadmap: ["periods", "items"], tree: ["root"],
     chart: ["categories", "series"], kpi: ["items"], matrix: ["x", "y"], pyramid: ["levels"], cycle: ["steps"], venn: ["sets"],
-    text: ["blocks"], image: ["src"], frame: [],
+    text: ["blocks"], image: ["src"], frame: [], custom: ["draw"],
   };
   const ROLES = ["actor", "process", "store", "external", "muted", "added", "removed", "good", "bad", "warn", "accent"];
 
@@ -31,12 +31,16 @@
         if (h) need(what, `行「${h[0]}」`);
       }
     }
-    // /5 の機能（最上位の values・動作の set）は、/4 以前の format では使えない。種類ごとに 1 件ずつ出す
+    // /5 の機能（最上位の values・動作の set・custom の部品）は、/4 以前の format では使えない。種類ごとに 1 件ずつ出す
     if (UZ.FORMATS.includes(sb.format) && sb.format !== "ugoku-zukai/5") {
       const need = (what, where) => E(`${where}で ${what} を使っている。使うには format を "ugoku-zukai/5" と書く（今は ${JSON.stringify(sb.format)}）`);
       if (sb.values != null) need("values", "台本の最上位");
       const h = allActs.find(([, a]) => a && typeof a === "object" && Object.prototype.hasOwnProperty.call(a, "set"));
       if (h) need("set", `行「${h[0]}」`);
+      const figs = [...Object.entries(sb.figures && typeof sb.figures === "object" ? sb.figures : {}).map(([fid, f]) => [`図「${fid}」`, f]),
+        ...Object.entries(sb.slides && typeof sb.slides === "object" ? sb.slides : {}).flatMap(([sid, sl]) => sl && Array.isArray(sl.parts) ? sl.parts.map(p => [`スライド「${sid}」`, p]) : [])];
+      const c = figs.find(([, f]) => f && typeof f === "object" && f.type === "custom");
+      if (c) need("custom の部品", c[0]);
     }
     // 名前付きの値: { 名前: 数 }
     const values = sb.values == null ? {} : sb.values;
@@ -245,6 +249,11 @@
         if (f.src != null && typeof f.src !== "string") E(`${where}: src は、台本のあるフォルダからの相対パスを文字列で書く`);
         if (!f.source) W(`${where}: 画像の出どころ（source）がない（利用者から渡されたものなら、そう書く）`);
         addId("img", "画像");
+      }
+      if (f.type === "custom") {
+        if (f.draw != null && (typeof f.draw !== "string" || !sb.custom || typeof sb.custom !== "object" || !Object.prototype.hasOwnProperty.call(sb.custom, f.draw)))
+          E(`${where}: draw「${f.draw}」が台本の custom にない（台本の最上位の custom に、関数を文字列で書く）`);
+        addId("draw", "描き場");
       }
       if (f.type === "canvas") {
         for (const s of f.shapes || []) {

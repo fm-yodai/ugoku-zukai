@@ -20,6 +20,32 @@ const valDeck = (scenesLines, values = { a: 1 }, format) => {
   return sb;
 };
 
+// custom の部品: 値 a を 2 → 8 に動かし、点を w * a / 10 に描く
+const DOT = "({ g, v, el, w, h }) => el('circle', { cx: w * v.a / 10, cy: h / 2, r: 6 }, g)";
+const CPART = { id: "c1", type: "custom", draw: "dot" };
+const customDeck = (part = CPART, lines, extra = {}) => deck5({ a: { title: "A", parts: [part] } },
+  [SC("s1", "a", lines || [{ id: "l1", text: "{a}出して{b}動かします。", do: [{ show: "c1", at: "a" }, { set: "a", to: 8, at: "b", dur: 1 }] }])], {},
+  { values: { a: 2 }, custom: { dot: DOT }, ...extra });
+// view_svg.js を node の最小の DOM で読む（frames.cjs と同じ）
+let viewLoaded = false;
+function loadView() {
+  if (viewLoaded) return;
+  const fs = require("fs"), path = require("path"), vm = require("vm");
+  globalThis.document = require("../svg_dom.cjs").makeDocument();
+  vm.runInThisContext(fs.readFileSync(path.join(__dirname, "../../player/src/view_svg.js"), "utf8"), { filename: "view_svg.js" });
+  viewLoaded = true;
+}
+const renderSvg = (M, t, frameOverride) => {
+  loadView();
+  const { serialize } = require("../svg_dom.cjs");
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  const orig = UZ.frame;
+  if (frameOverride) UZ.frame = () => frameOverride;
+  try { new UZ.View(svg, M).render(t); } finally { UZ.frame = orig; }
+  return serialize(svg);
+};
+const circleCx = str => [...str.matchAll(/<circle [^>]*cx="([0-9.]+)"[^>]*r="6"/g)].map(m => +m[1]);
+
 const tests = {
   async tex_tree_basic() {
     const r = UZMJ.tex2tree("f'(a)=\\cssId{k1}{2.35}", { display: true });
@@ -114,6 +140,84 @@ const tests = {
     const M = await build(deck5({ a: { title: "A", parts: [{ figure: "g1" }] } },
       [SC("s1", "a", [{ id: "l1", text: "{a}出して{b}寄ります。", do: [{ show: "g1", draw: true }, { zoom: "x", at: "b" }] }])], { g1: G }));
     assert.deepStrictEqual(M.errors, []);
+  },
+  async custom_part_renders_in_frames() {
+    const M = await build(customDeck());
+    assert.deepStrictEqual(M.errors, []);
+    const s = M.acts.find(x => x.verb === "set"), w = M.figs.c1.w;
+    assert.ok(Math.abs(w - M.scenes[0].areas[0].w) < 1e-6, `部品の幅が区画の幅でない: ${w}`);
+    const cx = circleCx(renderSvg(M, s.end + 0.05));
+    assert.strictEqual(cx.length, 1, `circle の数: ${cx.length}`);
+    assert.ok(Math.abs(cx[0] - w * 0.8) < 0.5, `cx=${cx[0]} w*0.8=${w * 0.8}`);
+    const cx0 = circleCx(renderSvg(M, s.start - 0.01));   // set の前は a = 2
+    assert.ok(Math.abs(cx0[0] - w * 0.2) < 0.5, `cx0=${cx0[0]}`);
+  },
+  async custom_part_in_complete_frame() {
+    const M = await build(customDeck());
+    assert.deepStrictEqual(M.errors, []);
+    assert.deepStrictEqual(UZ.completeValues(M, "a"), { a: 8 });
+    const fr = UZ.finalFrame(M, "a");
+    assert.deepStrictEqual(fr.values, { a: 8 });
+    const cx = circleCx(renderSvg(M, fr.t, fr));
+    assert.ok(cx.length === 1 && Math.abs(cx[0] - M.figs.c1.w * 0.8) < 0.5, `完成形のコマの cx=${cx}`);
+  },
+  async custom_part_zoomable() {
+    const part = { ...CPART, area: { col: [1, 4], row: [1, 2] } };
+    const M = await build(customDeck(part, [{ id: "l1", text: "{a}出して{b}寄ります。", do: [{ show: "c1", at: "a" }, { zoom: "c1", at: "b" }] }]));
+    assert.deepStrictEqual(M.errors, []);
+    const z = M.acts.find(a => a.verb === "zoom");
+    const fr = UZ.frame(M, z.end + 0.01);
+    assert.ok(fr.camera.s > 1, `倍率が 1 のまま（${fr.camera.s}）`);
+    const P = M.scenes[0].place.c1, pl = fr.figs.c1.place, c = fr.camera;
+    assert.ok(Math.abs(pl.s - P.s * c.s) < 1e-9, "place にカメラが合成されていない");
+    assert.strictEqual(circleCx(renderSvg(M, z.end + 0.01)).length, 1);
+  },
+  async custom_draw_missing_is_error() {
+    hasErr(await build(customDeck({ ...CPART, draw: "nope" })), /draw「nope」が台本の custom にない/);
+    hasErr(await build(customDeck({ id: "c1", type: "custom" })), /draw がない/);
+  },
+  async custom_part_persists_across_slides() {
+    const area = { col: [1, 6], row: [1, 6] };
+    const sb = deck5({ a: { title: "A", parts: [{ figure: "c1", area }, { figure: "f1", area: { col: [7, 12], row: [1, 6] } }] },
+      b: { title: "B", parts: [{ figure: "c1", area }] } },
+      [SC("s1", "a", [{ id: "l1", text: "{a}出します。", do: [{ show: "c1", at: "a" }, { show: "f1" }] }]), SC("s2", "b")],
+      { c1: { type: "custom", draw: "dot" }, f1: L1 }, { values: { a: 2 }, custom: { dot: DOT } });
+    const M = await build(sb);
+    assert.deepStrictEqual(M.errors, []);
+    const s2 = M.scenes[1];
+    for (const t of [s2.start, s2.start + 0.2, s2.start + 0.5, s2.start + 1]) {
+      const fr = UZ.frame(M, t);
+      assert.strictEqual(fr.figs.c1.opacity, 1, `t=${t} で opacity=${fr.figs.c1.opacity}`);
+      assert.strictEqual(fr.st["c1/draw"].show, 1);
+    }
+  },
+  async custom_verb_still_works() {
+    const RING = "({ g, p, el, area }) => el('circle', { cx: area.x + 50, cy: area.y + 50, r: 40 * p }, g)";
+    for (const format of ["ugoku-zukai/5", "ugoku-zukai/4"]) {
+      const sb = deck5({ a: { title: "A", parts: [{ figure: "f1" }] } }, [SC("s1", "a", [{ id: "l1", text: "{a}描きます。", do: [{ show: "f1" }, { custom: "ring", at: "a" }] }])], { f1: L1 }, { custom: { ring: RING } });
+      sb.format = format;
+      const M = await build(sb);
+      assert.deepStrictEqual(M.errors, [], format);
+      const a = M.acts.find(x => x.verb === "custom");
+      assert.ok(/<circle /.test(renderSvg(M, a.end - 0.1)), `${format}: ring が描かれない`);
+    }
+  },
+  async format4_rejects_custom_part() {   // /4 で custom の部品を書く → 1 件
+    const sb = customDeck(CPART, [{ id: "l1", text: "出します。", do: [{ show: "c1" }] }]);
+    sb.format = "ugoku-zukai/4"; delete sb.values;
+    const M = await build(sb);
+    const gate = (M.errors || []).filter(e => /format を "ugoku-zukai\/5" と書く/.test(e));
+    assert.strictEqual(gate.length, 1, JSON.stringify(M.errors));
+    assert.ok(/custom の部品/.test(gate[0]), gate[0]);
+  },
+  async custom_part_error_does_not_stop() {   // 関数が例外を投げても、その部品だけ描かない
+    const M = await build(customDeck(CPART, null, { custom: { dot: "({ g, el }) => { el('circle', { r: 6 }, g); throw new Error('x'); }" } }));
+    assert.deepStrictEqual(M.errors, []);
+    const err = console.error; let n = 0; console.error = () => { n++; };
+    let str;
+    try { str = renderSvg(M, M.acts.find(x => x.verb === "set").end + 0.05); } finally { console.error = err; }
+    assert.ok(n >= 1, "console.error に出ていない");
+    assert.strictEqual(circleCx(str).length, 0);
   },
 };
 

@@ -975,7 +975,6 @@
     const sl = M.slides && M.slides[slideId];
     if (!sl) return null;
     const sc = M.scenes.find(s => s.id === sl.scenes[0]);
-    const lastSc = M.scenes.find(s => s.id === sl.scenes[sl.scenes.length - 1]);   // 値は、このスライドを使う最後の場面の終わりのもの
     const st = {}, figsF = {};
     for (const fid of Object.keys(M.figs)) figsF[fid] = { opacity: 0, place: null };
     for (const fid of sl.figs) {
@@ -989,7 +988,14 @@
     // 大きさを変えた箱（resize）は、変えた後の形で出す（中に入れた部品と重ならないように）
     for (const a of M.acts) if (a.verb === "resize" && sl.scenes.includes(a.scene) && st[a.key]) { st[a.key].rect = { ...a.to }; st[a.key].textOff = a.textTo.slice(); }
     return { t: sc.start, st, figs: figsF, camera: { ...CAM0, clip: { ...sc.body }, on: false }, scene: sc, statement: { lines: sc.statement, opacity: 1, prev: null }, captions: [],
-      header: { text: sc.header, opacity: 1, prev: null }, sub: null, badge: { text: "", show: 0, from: "" }, customs: {}, values: UZ.valuesAt(M, lastSc.end - 0.001), end: 0, dark: sc.tone === "dark" ? 1 : 0 };
+      header: { text: sc.header, opacity: 1, prev: null }, sub: null, badge: { text: "", show: 0, from: "" }, customs: {}, values: UZ.completeValues(M, slideId), end: 0, dark: sc.tone === "dark" ? 1 : 0 };
+  };
+  // スライドの完成形の値 = そのスライドを使う最後の場面の終わりの値（完成形のコマで custom の部品に渡す）
+  UZ.completeValues = function (M, slideId) {
+    const sl = M.slides && M.slides[slideId];
+    if (!sl) return { ...(M.values0 || {}) };
+    const lastSc = M.scenes.find(s => s.id === sl.scenes[sl.scenes.length - 1]);
+    return UZ.valuesAt(M, lastSc.end - 0.001);
   };
   const lineCache = new WeakMap();
   function findLine(sb, id) {
