@@ -59,7 +59,113 @@ const between = (v, a, b, msg) => assert.ok(v > Math.min(a, b) + 1e-6 && v < Mat
 // 線分が矩形（内側）を横切るか
 const segHitsRect = (p, q, r) => Math.min(p[0], q[0]) < r.x + r.w - 0.5 && Math.max(p[0], q[0]) > r.x + 0.5 && Math.min(p[1], q[1]) < r.y + r.h - 0.5 && Math.max(p[1], q[1]) > r.y + 0.5;
 
+// 部品 space の検査用: 値 th（yaw）を 0 → 90 に set する台本。lines を渡せば、その行で
+const SPACE_PART = () => ({ id: "sp", type: "space", camera: { yaw: "th", pitch: 20 }, axes: { x: [-2, 2], y: [-2, 2], z: [0, 2] },
+  items: [{ id: "P", kind: "point", at: [1, 0, 1], label: "P" }, { id: "L", kind: "line", from: [0, 0, 0], to: [1, 1, 1] },
+    { id: "F", kind: "polygon", points: [[0, 0, 0], [1, 0, 0], [1, 1, 0], [0, 1, 0]] }] });
+const spaceDeck = (lines, part = SPACE_PART(), format) => {
+  const sb = deck6({ a: { title: "A", parts: [part] } },
+    [SC("s1", "a", lines || [{ id: "l1", text: "{a}出して{b}回します。", do: [{ show: "sp", at: "a" }, { set: "th", to: 90, at: "b", dur: 1 }] }])], {}, { values: { th: 0 } });
+  if (format) sb.format = format;
+  return sb;
+};
+// 要素 id の SVG 要素（data-s3 の付いたタグ）を拾う
+const s3Tags = (svg, id, tag) => [...svg.matchAll(new RegExp(`<${tag || "[a-z]+"}\\b[^>]*data-s3="${id}"[^>]*>`, "g"))].map(m => m[0]);
+const attrOf = (tag, k) => { const m = new RegExp(`\\s${k}="([^"]*)"`).exec(tag); return m ? m[1] : null; };
+const rgbOf = c => { const m = /^#([0-9a-f]{6})$/i.exec(c); assert.ok(m, `色が #rrggbb でない: ${c}`); return [0, 2, 4].map(i => parseInt(m[1].slice(i, i + 2), 16)); };
+// 同じ View で続けて描いたときの SVG
+const renderSeq = (M, ts) => {
+  loadView();
+  const { serialize } = require("../svg_dom.cjs");
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  const V = new UZ.View(svg, M);
+  for (const t of ts) V.render(t);
+  return serialize(svg);
+};
+
 const tests = {
+  async space_validate() {
+    const one = (part, extra = {}) => build(deck6({ a: { title: "A", parts: [part] } }, [SC("s1", "a")], {}, { values: { th: 0 }, ...extra }));
+    const P = SPACE_PART();
+    hasErr(await one({ id: "sp", type: "space" }), /items がない/);
+    hasErr(await one({ ...P, items: [{ id: "q", kind: "cone", at: [0, 0, 0] }] }), /kind は/);
+    hasErr(await one({ ...P, items: [{ id: "q", kind: "point" }] }), /q.*at/);
+    hasErr(await one({ ...P, items: [{ id: "q", kind: "point", at: [0, "zz", 0] }] }), /名前「zz」が分からない/);
+    hasErr(await one({ ...P, camera: { yaw: "zz2", pitch: 0 } }), /名前「zz2」が分からない/);
+    hasErr(await one({ ...P, items: [{ id: "q", kind: "point", at: [0, 0] }] }), /\[x, y, z\]/);
+    hasErr(await one({ ...P, items: [{ id: "q", kind: "point", at: [0, 0, 0] }, { id: "q", kind: "point", at: [1, 0, 0] }] }), /重複/);
+    hasErr(await one({ ...P, items: [{ id: "$axes", kind: "point", at: [0, 0, 0] }] }), /\$axes/);
+    hasErr(await one({ ...P, items: [{ id: "s", kind: "surface", f: "x*q", x: [0, 1], y: [0, 1] }] }), /名前「q」が分からない/);
+    const ok = await one(P);
+    assert.deepStrictEqual(ok.errors || [], []);
+    // /5 では 1 件だけ
+    const M5 = await build(spaceDeck(null, SPACE_PART(), "ugoku-zukai/5"));
+    const hits = (M5.errors || []).filter(e => /space の部品 を使っている。使うには format を "ugoku-zukai\/6" と書く/.test(e));
+    assert.strictEqual(hits.length, 1, JSON.stringify(M5.errors));
+  },
+  async space_render_values() {
+    const M = await build(spaceDeck());
+    assert.deepStrictEqual(M.errors || [], []);
+    const s = M.acts.find(a => a.verb === "set"), part = M.figs.sp.spec;
+    const cxAt = t => { const c = s3Tags(renderSvg(M, t), "P", "circle"); assert.strictEqual(c.length, 1, `点の circle の数: ${c.length}`); return +attrOf(c[0], "cx"); };
+    const before = cxAt(s.start - 0.01), after = cxAt(s.end + 0.05);
+    assert.ok(Math.abs(before - after) > 5, `set の前後で cx が同じ: ${before} ${after}`);
+    const fr = UZ.frame(M, s.end + 0.05), pl = fr.figs.sp.place;
+    const v = { th: 90 }, cam = UZ.spaceCamera({ yaw: 90, pitch: 20 }, pl.w, pl.h, UZ.spaceBounds(part, v));
+    const want = cam.project([1, 0, 1])[0];
+    assert.ok(Math.abs(after - want) < 0.5, `cx=${after} 期待=${want}`);
+  },
+  async space_show_focus() {
+    const M = await build(spaceDeck([
+      { id: "l1", text: "{a}点を出し、{b}線を描きます。", do: [{ show: "sp/P", at: "a" }, { show: "L", at: "b", draw: true }] },
+      { id: "l2", text: "{a}点に注目します。", do: [{ focus: "P", at: "a" }] }]));
+    assert.deepStrictEqual(M.errors || [], []);
+    const [shP, shL] = M.acts.filter(a => a.verb === "show"), fo = M.acts.find(a => a.verb === "focus");
+    const mid = renderSvg(M, (shP.end + shL.start) / 2);
+    assert.strictEqual(s3Tags(mid, "P", "circle").length, 1, "点が出ていない");
+    assert.strictEqual(s3Tags(mid, "L").length, 0, "show の前に線が描かれている");
+    assert.strictEqual(s3Tags(mid, "F").length, 0, "出していない面が描かれている");
+    const drawing = renderSvg(M, shL.start + shL.each * 0.3);
+    const lp = s3Tags(drawing, "L", "path");
+    assert.ok(lp.length && lp.some(p => /stroke-dasharray=/.test(p)), `draw の途中で線が伸びていない: ${lp}`);
+    const opL = t => +attrOf(s3Tags(renderSvg(M, t), "L", "path")[0], "opacity");
+    const a = opL(fo.start - 0.01), b = opL(fo.end + 0.05);
+    assert.ok(b < a - 0.3, `focus で他の要素が薄くならない: ${a} → ${b}`);
+    const pO = +attrOf(s3Tags(renderSvg(M, fo.end + 0.05), "P", "circle")[0], "opacity");
+    assert.ok(pO > 0.95, `focus の対象が薄い: ${pO}`);
+  },
+  async space_seek_same() {
+    const M = await build(spaceDeck());
+    assert.deepStrictEqual(M.errors || [], []);
+    const s = M.acts.find(a => a.verb === "set"), tMid = (s.start + s.end) / 2, tEnd = M.duration - 0.5;
+    const a = renderSeq(M, [tEnd, tMid]), b = renderSeq(M, [tMid]);
+    assert.ok(s3Tags(b, "P", "circle").length === 1, "真ん中の時刻で点がない");
+    assert.strictEqual(a, b);
+  },
+  async space_shade_themes() {
+    const part = { id: "sp", type: "space", camera: { yaw: 30, pitch: 30 }, items: [{ id: "F", kind: "polygon", points: [[0, 0, 0], [1, 0, 0], [1, 1, 0], [0, 1, 0]], color: "accent" }] };
+    for (const name of ["koo", "kuro"]) {
+      const th = theme(name), S = UZ.styleOf(th);
+      const M = await UZ.build(spaceDeck([{ id: "l1", text: "{a}出します。", do: [{ show: "sp", at: "a" }] }], part), th, null);
+      assert.deepStrictEqual(M.errors || [], []);
+      const fr = UZ.finalFrame(M, "a"), f = s3Tags(renderSvg(M, fr.t, fr), "F", "path");
+      assert.strictEqual(f.length, 1, `${name}: 面の数 ${f.length}`);
+      const fill = attrOf(f[0], "fill"), c = rgbOf(fill), o = rgbOf(UZ.colorOf(S, "accent")), bg = rgbOf(S.bg);
+      assert.notStrictEqual(fill.toLowerCase(), UZ.colorOf(S, "accent").toLowerCase(), `${name}: 陰影が付いていない`);
+      for (let i = 0; i < 3; i++) assert.ok(c[i] >= Math.min(o[i], bg[i]) - 1 && c[i] <= Math.max(o[i], bg[i]) + 1, `${name}: ${fill} が ${S.bg} と元の色の間にない`);
+    }
+  },
+  async space_complete_frame() {
+    const M = await build(spaceDeck());
+    assert.deepStrictEqual(M.errors || [], []);
+    const fr = UZ.finalFrame(M, "a");
+    assert.deepStrictEqual(fr.values, { th: 90 });
+    const svg = renderSvg(M, fr.t, fr), pl = fr.figs.sp.place;
+    for (const id of ["P", "L", "F"]) assert.ok(s3Tags(svg, id).length, `完成形に ${id} がない`);
+    const cam = UZ.spaceCamera({ yaw: 90, pitch: 20 }, pl.w, pl.h, UZ.spaceBounds(M.figs.sp.spec, { th: 90 }));
+    const cx = +attrOf(s3Tags(svg, "P", "circle")[0], "cx");
+    assert.ok(Math.abs(cx - cam.project([1, 0, 1])[0]) < 0.5, `完成形の cx=${cx}`);
+  },
   async format6_accepted() {
     assert.strictEqual(UZ.FORMAT, "ugoku-zukai/6");
     const M = build(deck6({ a: { title: "A", parts: [{ figure: "f1" }] } }, [SC("s1", "a")], { f1: L1 }));

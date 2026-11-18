@@ -7,9 +7,73 @@
     sequence: ["participants", "messages"], graph: ["nodes", "edges"], canvas: ["shapes"],
     swimlane: ["lanes", "steps"], beforeafter: ["before", "after"], roadmap: ["periods", "items"], tree: ["root"],
     chart: ["categories", "series"], kpi: ["items"], matrix: ["x", "y"], pyramid: ["levels"], cycle: ["steps"], venn: ["sets"],
-    text: ["blocks"], image: ["src"], frame: [], custom: ["draw"],
+    text: ["blocks"], image: ["src"], frame: [], custom: ["draw"], space: ["items"],
   };
+  // 部品 space の要素の種類と、種類ごとに数（式）を書く項目。plate は Task 10 で中身を足す
+  const S3_KINDS = ["point", "line", "arrow", "polygon", "box", "surface", "curve", "text", "plate"];
   const ROLES = ["actor", "process", "store", "external", "muted", "added", "removed", "good", "bad", "warn", "accent"];
+
+  // 部品 space: 要素の種類・必須の項目・点の形・式（値の名前）を見る。式はコンパイルだけする（値で評価するのは描くとき）
+  function validateSpace(f, where, E, addId, names) {
+    const expr = (x, what, extra) => {
+      if (typeof x === "number") { if (!Number.isFinite(x)) E(`${where}: ${what} が数でない`); return; }
+      try { UZ.spaceExpr(x, extra ? names.concat(extra) : names); } catch (e) { E(`${where}: ${what}: ${e.message}`); }
+    };
+    const point = (p, what) => {
+      if (!Array.isArray(p) || p.length !== 3) { E(`${where}: ${what} は 3 次元の点 [x, y, z] で書く（今は ${JSON.stringify(p)}）`); return; }
+      p.forEach((x, i) => expr(x, `${what}[${i}]`));
+    };
+    const range = (r, what) => {
+      if (!Array.isArray(r) || r.length !== 2) { E(`${where}: ${what} は範囲 [最小, 最大] で書く（今は ${JSON.stringify(r)}）`); return; }
+      r.forEach((x, i) => expr(x, `${what}[${i}]`));
+    };
+    const cam = f.camera;
+    if (cam != null) {
+      if (typeof cam !== "object" || Array.isArray(cam)) E(`${where}: camera は { yaw, pitch, scale?, target? } で書く`);
+      else {
+        for (const k of ["yaw", "pitch", "scale"]) if (cam[k] != null) expr(cam[k], `camera の ${k}`);
+        if (cam.target != null) point(cam.target, "camera の target");
+      }
+    }
+    if (f.axes != null) {
+      if (typeof f.axes !== "object" || Array.isArray(f.axes)) E(`${where}: axes は { x: [最小, 最大], y, z, labels? } で書く`);
+      else for (const k of ["x", "y", "z"]) if (f.axes[k] != null) range(f.axes[k], `axes の ${k}`);
+    }
+    if (f.bounds != null) {
+      if (!f.bounds || typeof f.bounds !== "object") E(`${where}: bounds は { min: [x, y, z], max: [x, y, z] } で書く`);
+      else { point(f.bounds.min, "bounds の min"); point(f.bounds.max, "bounds の max"); }
+    }
+    if (f.items == null) return;
+    if (!Array.isArray(f.items) || !f.items.length) { E(`${where}: items（要素の列）は 1 つ以上の要素の配列で書く`); return; }
+    for (const o of f.items) {
+      if (!o || typeof o !== "object") { E(`${where}: 要素はオブジェクトで書く`); continue; }
+      if (o.id === "$axes") { E(`${where}: 要素の id「$axes」は軸のために取ってある。別の id にする`); continue; }
+      addId(o.id, "要素");
+      const w = `要素 ${o.id}`;
+      if (!S3_KINDS.includes(o.kind)) { E(`${where}: ${w} の kind は ${S3_KINDS.join(" / ")} のどれか（今は ${o.kind}）`); continue; }
+      const need = (...ks) => { for (const k of ks) if (o[k] == null) E(`${where}: ${w}（${o.kind}）に ${k} がない`); return ks.every(k => o[k] != null); };
+      const pts = (k, min) => {
+        if (!Array.isArray(o[k]) || o[k].length < min) { E(`${where}: ${w} の ${k} は ${min} つ以上の点 [[x, y, z], …] で書く`); return; }
+        o[k].forEach((p, i) => point(p, `${w} の ${k}[${i}]`));
+      };
+      if (o.kind === "point" || o.kind === "text") { if (need("at")) point(o.at, `${w} の at`); if (o.kind === "text" && o.text == null) E(`${where}: ${w}（text）に text がない`); }
+      else if (o.kind === "line") { if (o.points != null) pts("points", 2); else if (need("from", "to")) { point(o.from, `${w} の from`); point(o.to, `${w} の to`); } }
+      else if (o.kind === "arrow") { if (need("from", "to")) { point(o.from, `${w} の from`); point(o.to, `${w} の to`); } }
+      else if (o.kind === "polygon") { if (need("points")) pts("points", 3); }
+      else if (o.kind === "box") { if (need("min", "max")) { point(o.min, `${w} の min`); point(o.max, `${w} の max`); } }
+      else if (o.kind === "surface") {
+        if (need("f", "x", "y")) { expr(o.f, `${w} の f`, ["x", "y"]); range(o.x, `${w} の x`); range(o.y, `${w} の y`); }
+        if (o.grid != null && !(typeof o.grid === "number" && o.grid >= 1)) E(`${where}: ${w} の grid は 1 以上の数で書く`);
+      } else if (o.kind === "curve") {
+        if (need("fn", "t")) {
+          if (!Array.isArray(o.fn) || o.fn.length !== 3) E(`${where}: ${w} の fn は [x(t), y(t), z(t)] で書く`);
+          else o.fn.forEach((x, i) => expr(x, `${w} の fn[${i}]`, ["t"]));
+          range(o.t, `${w} の t`);
+        }
+      }
+      if (o.opacity != null && !(typeof o.opacity === "number" && o.opacity >= 0 && o.opacity <= 1)) E(`${where}: ${w} の opacity は 0〜1 の数で書く`);
+    }
+  }
 
   UZ.validate = function (sb) {
     const errors = [], warnings = [];
@@ -41,6 +105,14 @@
         ...Object.entries(sb.slides && typeof sb.slides === "object" ? sb.slides : {}).flatMap(([sid, sl]) => sl && Array.isArray(sl.parts) ? sl.parts.map(p => [`スライド「${sid}」`, p]) : [])];
       const c = figs.find(([, f]) => f && typeof f === "object" && f.type === "custom");
       if (c) need("custom の部品", c[0]);
+    }
+    // /6 の機能（space の部品）は、/5 以前の format では使えない。種類ごとに 1 件ずつ出す
+    if (UZ.FORMATS.includes(sb.format) && sb.format !== "ugoku-zukai/6") {
+      const need = (what, where) => E(`${where}で ${what} を使っている。使うには format を "ugoku-zukai/6" と書く（今は ${JSON.stringify(sb.format)}）`);
+      const figs = [...Object.entries(sb.figures && typeof sb.figures === "object" ? sb.figures : {}).map(([fid, f]) => [`図「${fid}」`, f]),
+        ...Object.entries(sb.slides && typeof sb.slides === "object" ? sb.slides : {}).flatMap(([sid, sl]) => sl && Array.isArray(sl.parts) ? sl.parts.map(p => [`スライド「${sid}」`, p]) : [])];
+      const c = figs.find(([, f]) => f && typeof f === "object" && f.type === "space");
+      if (c) need("space の部品", c[0]);
     }
     // 名前付きの値: { 名前: 数 }
     const values = sb.values == null ? {} : sb.values;
@@ -256,6 +328,10 @@
         else if (f.draw != null && typeof sb.custom[f.draw] !== "string")
           E(`${where}: custom「${f.draw}」の値が文字列でない（関数は "({ g, v, geo, w, h }) => { … }" のように文字列で書く）`);
         addId("draw", "描き場");
+      }
+      if (f.type === "space") {
+        addId("draw", "描き場");
+        validateSpace(f, where, E, addId, Object.keys(sb.values && typeof sb.values === "object" ? sb.values : {}));
       }
       if (f.type === "canvas") {
         for (const s of f.shapes || []) {

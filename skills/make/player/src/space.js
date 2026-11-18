@@ -251,4 +251,104 @@
     out.forEach(p => { delete p._i; });
     return out;
   };
+
+  // ---- 宣言の部品 space の描画 ----
+  // 要素の既定の色（spacePrims と同じ。tint で混ぜる元の色を決めるのに使う）
+  UZ.spaceDefaultColor = kind => (kind === "line" || kind === "text" ? "ink" : "accent");
+  const DRAW = { line: 0.7, fill: [0.65, 0.35] };   // draw の区間（view_svg の箱と同じ: 線が 0〜0.7 で伸び、面と文字は 0.65 から）
+  const smooth = UZ.smooth, n2 = x => (Math.round(x * 100) / 100).toFixed(2);
+  // コマの状態（UZ.frame の st）から、要素ごとの見え方を作る。F = engine の図（items に s3 と draw）。
+  // 返す形: { [要素の id]: { opacity（面・点・文字）, line（線）, draw（線の伸び 0〜1）, dim, pulse, tint, tintP, tintFrom } }。
+  // 軸（$axes）は描き場（draw）の状態に従い、要素がどれか出ていれば一緒に出る
+  UZ.spaceStates = function (F, st) {
+    const out = {}, one = s => {
+      const show = s ? s.show || 0 : 0, drawing = !!(s && s.draw) && show < 1;
+      return { opacity: drawing ? smooth((show - DRAW.fill[0]) / DRAW.fill[1]) : smooth(show), line: drawing ? (show > 0 ? 1 : 0) : smooth(show),
+        draw: drawing ? smooth(clamp(show / DRAW.line)) : 1, dim: s && s.dim != null ? s.dim : 1, pulse: s && s.pulse || 0,
+        tint: s && s.tint || null, tintP: s && s.tint ? (s.tintP ?? 1) : 0, tintFrom: s && s.tintFrom || null, show };
+    };
+    let maxShow = 0;
+    for (const it of Object.values(F.items)) if (it.kind === "s3") { const o = out[it.id] = one(st[it.key || `${F.id}/${it.id}`]); maxShow = Math.max(maxShow, o.show); }
+    const d = st[`${F.id}/draw`];
+    out.$axes = one({ ...(d || {}), show: Math.max(d ? d.show || 0 : 0, maxShow) });
+    return out;
+  };
+
+  // 部品を、描き場 g（部品のローカル座標。w × h は区画の px）に描く。el は要素を作る関数（ブラウザは view_svg の el、node は svg_dom）。
+  // decl = 部品の宣言、v = 今の値、states = UZ.spaceStates の結果（なければ全部出ている）。式の誤りは例外。TeX の誤りは { errors } で返す
+  UZ.spaceRender = function (el, g, decl, v, w, h, states, S) {
+    v = v || {};
+    const names = Object.keys(v), ev = x => UZ.spaceExpr(x, names)(v), c = decl.camera || {};
+    const camO = { yaw: c.yaw != null ? ev(c.yaw) : 0, pitch: c.pitch != null ? ev(c.pitch) : 0 };
+    if (c.scale != null) camO.scale = ev(c.scale);
+    if (c.target != null) camO.target = c.target.map(ev);
+    const cam = UZ.spaceCamera(camO, w, h, UZ.spaceBounds(decl, v));
+    const ALL = { opacity: 1, line: 1, draw: 1, dim: 1, pulse: 0, tint: null, tintP: 0 };
+    const stOf = id => (states && states[id]) || (states ? null : ALL);
+    // tint: 宣言の色を、混ぜた色に置き換えてから投影する（面の明るさは混ぜた色に掛かる）
+    const items = (decl.items || []).map(o => {
+      const s = stOf(o.id);
+      if (!s || !s.tint || !(s.tintP > 0)) return o;
+      const from = s.tintFrom || colorOf(S, o.color, UZ.spaceDefaultColor(o.kind));
+      const o2 = { ...o, color: C.mix(from, s.tint, clamp(s.tintP)) };
+      if (o.color2) o2.color2 = C.mix(s.tintFrom || colorOf(S, o.color2), s.tint, clamp(s.tintP));
+      return o2;
+    });
+    const prims = UZ.spacePrims({ ...decl, items }, v, cam, S);
+    // 線の伸び（draw）は要素の線分を順に伸ばす。要素ごとの線分の数
+    const segN = {};
+    for (const p of prims) if (p.kind === "seg") segN[p.id] = (segN[p.id] || 0) + 1;
+    let geo = null;
+    const errors = [];
+    for (const p of prims) {
+      const s = stOf(p.id);
+      if (!s) continue;
+      const k = p.opacity != null ? p.opacity : 1, dim = s.dim, pulse = s.pulse || 0;
+      const fillO = s.opacity * dim * k, lineO = s.line * dim * k;
+      const tag = { "data-s3": p.id };
+      if (p.kind === "seg") {
+        if (!(lineO > 0.002)) continue;
+        // 点列の線分（key が「id:番号」）は番号の順に伸ばし、軸や矢の軸のような 1 本の線分はそのまま伸ばす
+        const m = /:(\d+)$/.exec(p.key), n = segN[p.id] || 1;
+        const q = s.draw >= 1 ? 1 : m ? clamp(s.draw * n - Math.min(+m[1], n - 1)) : s.draw;
+        if (!(q > 0)) continue;
+        const [a, b] = p.pts, L = Math.hypot(b[0] - a[0], b[1] - a[1]);
+        const attrs = { ...tag, d: `M${n2(a[0])},${n2(a[1])}L${n2(b[0])},${n2(b[1])}`, fill: "none", stroke: p.color, "stroke-width": n2((p.width || 2.5) * (1 + 0.6 * pulse)),
+          "stroke-linecap": "round", opacity: n2(lineO) };
+        if (q < 1) { attrs["stroke-dasharray"] = `${n2(L)} ${n2(L)}`; attrs["stroke-dashoffset"] = n2((1 - q) * L); }
+        el("path", attrs, g);
+      } else if (p.kind === "face") {
+        const drawing = s.draw < 1 || s.line > s.opacity + 1e-6;
+        if (!(fillO > 0.002) && !(drawing && lineO > 0.002 && s.draw > 0)) continue;
+        const d = "M" + p.pts.map(q => `${n2(q[0])},${n2(q[1])}`).join("L") + "Z";
+        const attrs = { ...tag, d, fill: p.color, "fill-opacity": n2(fillO), "stroke-linejoin": "round" };
+        if (drawing) {
+          const L = p.pts.reduce((a, q, i) => a + Math.hypot(q[0] - p.pts[(i + 1) % p.pts.length][0], q[1] - p.pts[(i + 1) % p.pts.length][1]), 0);
+          Object.assign(attrs, { stroke: p.color, "stroke-width": "1.50", "stroke-opacity": n2(lineO) });
+          if (s.draw < 1) { attrs["stroke-dasharray"] = `${n2(L)} ${n2(L)}`; attrs["stroke-dashoffset"] = n2((1 - s.draw) * L); }
+        } else if (pulse > 0) Object.assign(attrs, { stroke: p.color, "stroke-width": n2(0.6 + 3 * pulse), "stroke-opacity": n2(fillO) });
+        else if (k >= 1) Object.assign(attrs, { stroke: p.color, "stroke-width": "0.60", "stroke-opacity": n2(fillO) });   // 曲面の網目の継ぎ目を隠す
+        el("path", attrs, g);
+      } else if (p.kind === "dot") {
+        if (!(fillO > 0.002)) continue;
+        el("circle", { ...tag, cx: n2(p.pts[0][0]), cy: n2(p.pts[0][1]), r: n2((p.r || 6) * (1 + 0.4 * pulse)), fill: p.color, stroke: S.bg, "stroke-width": "1.50", opacity: n2(fillO) }, g);
+      } else if (p.kind === "text") {
+        if (!(fillO > 0.002)) continue;
+        const tick = /:tick:/.test(p.key), lab = /:label$/.test(p.key), size = tick ? 13 : 18;
+        const x = p.pts[0][0] + (lab ? 10 : 0), y = p.pts[0][1] + (lab ? -14 : 0), anchor = lab ? "start" : "middle";
+        if (p.tex) {
+          geo = geo || UZ.makeGeo(el, S);
+          const wrap = el("g", { ...tag, opacity: n2(fillO) }, g);
+          const r = geo.tex(wrap, p.text, { x, y, size, color: p.color, anchor });
+          wrap.setAttribute("transform", `translate(0,${n2(-r.h / 2)})`);
+          errors.push(...geo.errors); geo.errors.length = 0;
+        } else {
+          const t = el("text", { ...tag, x: n2(x), y: n2(y), "font-size": size, "font-family": S.font, "font-weight": tick ? 400 : 500, fill: p.color,
+            "text-anchor": anchor, "dominant-baseline": "central", stroke: S.bg, "stroke-width": 4, "stroke-linejoin": "round", "paint-order": "stroke", opacity: n2(fillO) }, g);
+          t.textContent = p.text;
+        }
+      }
+    }
+    return { errors };
+  };
 })(globalThis.UZ = globalThis.UZ || {});

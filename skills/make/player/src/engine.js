@@ -86,6 +86,7 @@
   };
   const camAt = (a, t) => (t >= a.end ? a.to : camMix(a.from, a.to, ease((t - a.start) / Math.max(0.001, a.dur))));
 
+  const S3_LINED = ["line", "arrow", "polygon", "box", "surface", "curve"];   // space の要素のうち、draw で線が伸びるもの
   const verbOf = a => UZ.VERBS.find(v => Object.prototype.hasOwnProperty.call(a, v));
   const asList = v => (v == null ? [] : Array.isArray(v) ? v : [v]);
 
@@ -323,7 +324,7 @@
               act.each = a.dur ?? (verb === "show" && a.draw ? 1.4 : DUR[verb]);   // draw は線が伸びる分だけ、既定でゆっくり出す
               if (verb === "show" && a.draw) {
                 act.draw = true;
-                const lined = keys.some(k => { const [f, ...r] = k.split("/"); const it = figs[f] && figs[f].items[r.join("/")]; return it && (it.kind === "box" || it.kind === "edge" || it.kind === "frame"); });
+                const lined = keys.some(k => { const [f, ...r] = k.split("/"); const it = figs[f] && figs[f].items[r.join("/")]; return it && (it.kind === "box" || it.kind === "edge" || it.kind === "frame" || it.kind === "space" || (it.kind === "s3" && S3_LINED.includes(it.el.kind))); });
                 if (keys.length && !lined) warn(`${where}: draw は線のない要素には効かない（枠・辺・グループの枠に使う）`);
               }
               dur = act.each + act.stagger * Math.max(0, keys.length - 1);
@@ -521,8 +522,8 @@
     }
     const place = (fid, area, over = {}) => {
       const F = figs[fid], w = F.x1 - F.x0, h = F.y1 - F.y0;
-      // custom の部品は伸び縮みさせず、場面ごとの区画の大きさで描き直す（関数に渡す w・h = 区画の px。文字の大きさが保たれる）
-      if (F.type === "custom") return { s: 1, ox: area.x, oy: area.y, w: area.w, h: area.h };
+      // custom と space の部品は伸び縮みさせず、場面ごとの区画の大きさで描き直す（関数に渡す w・h = 区画の px。文字の大きさが保たれる）
+      if (F.type === "custom" || F.type === "space") return { s: 1, ox: area.x, oy: area.y, w: area.w, h: area.h };
       // 拡大の上限: 図が決めていればそれ（テキストは 1 = 文字の大きさを保つ）
       const s = Math.min(area.w / w, area.h / h, F.extra.maxScale ?? (F.fixed ? 10 : (F.type === "title" ? 1 : 1.3)));
       // 区画の中の揃え: 部品の valign・halign。なければ図の既定（テキストは上）、それもなければ中央
@@ -610,7 +611,7 @@
             let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
             for (const t of a.target) {
               const F = figs[t.fig], pl = sc.place[t.fig];
-              const b = t.whole || F.type === "custom" ? figBox(F, pl) : F.items[t.id].bbox;
+              const b = t.whole || F.type === "custom" || F.type === "space" ? figBox(F, pl) : F.items[t.id].bbox;
               x0 = Math.min(x0, pl.ox + b.x * pl.s); y0 = Math.min(y0, pl.oy + b.y * pl.s);
               x1 = Math.max(x1, pl.ox + (b.x + b.w) * pl.s); y1 = Math.max(y1, pl.oy + (b.y + b.h) * pl.s);
             }

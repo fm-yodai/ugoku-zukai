@@ -57,7 +57,7 @@
         const name = `${v.it.fig}/${v.it.id}`;
         // 大きさを変えた箱（resize）は、変えた後の形と、付いていった文字の位置で調べる
         const rz = v.s.rect || null, tOff = (rz && v.s.textOff) || [0, 0];
-        const bbox = rz || (v.it.kind === "custom" && v.pl.w != null ? { x: 0, y: 0, w: v.pl.w, h: v.pl.h } : v.it.bbox);
+        const bbox = rz || ((v.it.kind === "custom" || v.it.kind === "space" || v.it.kind === "s3") && v.pl.w != null ? { x: 0, y: 0, w: v.pl.w, h: v.pl.h } : v.it.bbox);
         if (bbox && outside(tf(bbox, pl))) continue;
         if (bbox && v.it.kind !== "band" && !clip) {
           const b = tf(bbox, pl);

@@ -238,6 +238,11 @@
           E.S = S;
           E.geo = UZ.makeGeo(el, S);   // 部品ごとに 1 つ（地の色ごとの S を持つ）。geo.errors は描くたびに空にする
           try { E.fn = new Function("return (" + this.M.sb.custom[it.fn] + ")")(); } catch (e) { E.fn = null; console.error("custom の読み込みに失敗", it.fn, e); }
+        } else if (it.kind === "space") {
+          // 立体の部品: 描き場を毎コマ空にして UZ.spaceRender で描く。要素（s3）ごとの見え方は、描くときに各要素の状態から作る
+          E.g = el("g", null, L.box);
+          E.inner = el("g", null, E.g);
+          E.S = S; E.F = F;
         } else if (it.kind === "mark") {
           E.g = el("g", null, L.fx);
           E.bgc = el("circle", { cx: 0, cy: 0, r: 15, fill: S.bg, stroke: S.good, "stroke-width": 2.4 }, E.g);
@@ -334,8 +339,8 @@
             for (const g of blurEls) g.setAttribute("filter", `url(#${E.blurId})`);
           } else for (const g of blurEls) g.removeAttribute("filter");
         }
-        // custom の部品は、描き場の大きさが場面ごとに変わるので、ぼかす範囲もそのコマの区画にする
-        const bfo = bl && it.kind === "custom" && E.blurBox && fr.figs[it.fig] && fr.figs[it.fig].place;
+        // custom と space の部品は、描き場の大きさが場面ごとに変わるので、ぼかす範囲もそのコマの区画にする
+        const bfo = bl && (it.kind === "custom" || it.kind === "space") && E.blurBox && fr.figs[it.fig] && fr.figs[it.fig].place;
         if (bfo && bfo.w != null) for (const [k, v] of [["x", -28], ["y", -28], ["width", bfo.w + 56], ["height", bfo.h + 56]]) E.blurBox.setAttribute(k, v.toFixed(1));
         const op = (x) => (x * dim).toFixed(3);
         const off = s.off || [0, 0];
@@ -487,6 +492,24 @@
               while (E.inner.firstChild) E.inner.removeChild(E.inner.firstChild);
               const msg = String(e && e.message || e);
               if (E._err !== msg) { E._err = msg; console.error("custom の部品の描画に失敗", it.key, e); }
+            }
+          }
+        } else if (it.kind === "space") {
+          // 要素ごとの出し方・薄くする・強調は spaceRender の中で掛ける（描き場の g には掛けない。掛けるのはぼかしだけ）
+          while (E.inner.firstChild) E.inner.removeChild(E.inner.firstChild);
+          const fo = fr.figs[it.fig];
+          if (fo && fo.opacity > 0.002) {
+            const states = UZ.spaceStates(E.F, fr.st);
+            if (Object.values(states).some(x => x.show > 0.002)) {
+              const pw = fo.place && fo.place.w != null ? fo.place.w : it.w, ph = fo.place && fo.place.w != null ? fo.place.h : it.h;
+              try {
+                const r = UZ.spaceRender(el, E.inner, E.F.spec, fr.values || {}, pw, ph, states, E.S);
+                if (r.errors.length) { const msg = r.errors.join(" / "); if (E._err !== msg) { E._err = msg; console.error("space の部品の数式に誤り", it.key, msg); } }
+              } catch (e) {   // 式の誤りなどは、その部品だけ描かずに知らせる（プレーヤーは止めない。同じ誤りは 1 回だけ出す）
+                while (E.inner.firstChild) E.inner.removeChild(E.inner.firstChild);
+                const msg = String(e && e.message || e);
+                if (E._err !== msg) { E._err = msg; console.error("space の部品の描画に失敗", it.key, e); }
+              }
             }
           }
         } else if (it.kind === "mark") {
