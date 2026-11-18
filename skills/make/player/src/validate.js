@@ -128,6 +128,8 @@
         ...Object.entries(sb.slides && typeof sb.slides === "object" ? sb.slides : {}).flatMap(([sid, sl]) => sl && Array.isArray(sl.parts) ? sl.parts.map(p => [`スライド「${sid}」`, p]) : [])];
       const c = figs.find(([, f]) => f && typeof f === "object" && f.type === "space");
       if (c) need("space の部品", c[0]);
+      const g = figs.find(([, f]) => f && typeof f === "object" && f.type === "graph" && Array.isArray(f.nodes) && f.nodes.some(n => n && n.inside != null));
+      if (g) need("inside", g[0]);
     }
     // 名前付きの値: { 名前: 数 }
     const values = sb.values == null ? {} : sb.values;
@@ -372,6 +374,52 @@
         const ids = new Set((sl && Array.isArray(sl.parts) ? sl.parts : []).map(UZ.partId).filter(x => x != null));
         for (const { space, plate } of plates) if (ids.has(space) && typeof plate.figure === "string" && ids.has(plate.figure))
           E(`スライド「${sid}」: 板「${plate.id}」の図「${plate.figure}」は、同じスライドに部品としても置いている（板に置く図は、部品としては置かない）`);
+      }
+    }
+
+    // 意味のズーム（inside）: graph の箱にだけ書ける。中身の図は figures か部品の図。1 つの図を中身にできる箱は 1 つ。
+    // 入れ子は 3 段まで、循環しない。中身の図は部品や場面の図としては置かない（箱の中に描く）。板に置いた図のノードには効かない
+    {
+      const isObj = o => o && typeof o === "object" && !Array.isArray(o);
+      for (const [fid, f] of Object.entries(FIGS)) {
+        if (!isObj(f)) continue;
+        if (f.type === "venn") continue;   // venn の集合の inside は別の意味（集合の包含）。venn の検査が見る
+        if (f.type !== "graph") {
+          // graph 以外の図の項目（items・rows など、配列の中のオブジェクト）に inside があれば誤り
+          const hit = Object.values(f).some(v => Array.isArray(v) && v.some(o => isObj(o) && Object.prototype.hasOwnProperty.call(o, "inside")));
+          if (hit) E(`図「${fid}」: inside は graph のノードにだけ書ける（${f.type} の項目には書けない）`);
+          continue;
+        }
+        for (const n of Array.isArray(f.nodes) ? f.nodes : []) {
+          if (!isObj(n) || n.inside == null) continue;
+          if (typeof n.inside !== "string" || !Object.prototype.hasOwnProperty.call(FIGS, n.inside)) E(`図「${fid}」: ノード ${n.id} の inside「${n.inside}」が図にない（figures の図の id を書く）`);
+          else if (["space", "custom", "title", "frame", "toc"].includes(FIGS[n.inside] && FIGS[n.inside].type)) E(`図「${fid}」: ノード ${n.id} の inside「${n.inside}」は ${FIGS[n.inside].type}。箱の中身にできない`);
+        }
+      }
+      const ins = UZ.insidesOf(sb).filter(x => Object.prototype.hasOwnProperty.call(FIGS, x.inside));
+      const owner = {};
+      for (const x of ins) {
+        if (owner[x.inside]) E(`図「${x.fig}」: 中身の図「${x.inside}」を、別の箱（${owner[x.inside].fig}/${owner[x.inside].node}）の inside にも使っている（中身の図は 1 つの箱にだけ置く）`);
+        else owner[x.inside] = x;
+      }
+      // 循環と深さ: 中身の図から親をたどる
+      const bad = new Set();
+      for (const x of ins) {
+        const seen = [x.inside];
+        let cur = x.fig, depth = 1;
+        while (owner[cur] && !seen.includes(cur)) { seen.push(cur); cur = owner[cur].fig; depth++; }
+        if (owner[cur] && seen.includes(cur)) { if (!bad.has("cycle")) E(`図「${x.fig}」: inside が循環している（${seen.join(" → ")}）`); bad.add("cycle"); }
+        else if (depth > 3 && !bad.has("depth")) { E(`図「${x.inside}」: inside の入れ子が 3 段を超える（${depth} 段。${[...seen].reverse().join(" → ")}）`); bad.add("depth"); }
+      }
+      // 中身の図を、部品や場面の図としても置く
+      const used = new Set();
+      for (const sl of Object.values(sb.slides && typeof sb.slides === "object" ? sb.slides : {})) for (const p of (sl && Array.isArray(sl.parts) ? sl.parts : [])) used.add(UZ.partId(p));
+      for (const sc of sb.scenes) if (sc && sc.slide == null) for (const f of Array.isArray(sc.figure) ? sc.figure : [sc.figure]) used.add(f);
+      for (const id of Object.keys(owner)) if (used.has(id)) E(`中身の図「${id}」は、部品や場面の図としては置けない（箱「${owner[id].fig}/${owner[id].node}」に寄ると現れる）`);
+      // 板に置いた図
+      for (const { plate } of UZ.platesOf(sb)) {
+        const pf = typeof plate.figure === "string" ? FIGS[plate.figure] : plate.figure;
+        if (isObj(pf) && pf.type === "graph" && Array.isArray(pf.nodes) && pf.nodes.some(n => isObj(n) && n.inside != null)) E(`板「${plate.id}」: 板に置いた図のノードには inside が効かない（inside は普通のスライドの graph の箱だけ）`);
       }
     }
 

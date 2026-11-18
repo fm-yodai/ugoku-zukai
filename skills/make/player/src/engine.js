@@ -66,7 +66,26 @@
   const STAGGER = 0.22;
   // カメラ（zoom・pan）: 倍率の上限と、寄せたときの既定の余白（画面の px）
   // 上限は 2.0。箱 1 つに寄せたとき、2.5 では文字が 40px を超えて隣の箱が画面から外れ、どこを見ているかが分からなくなった（M7 の見本で確認）
-  UZ.CAMERA = { maxZoom: 2.0, pad: 40 };
+  // insideMaxZoom: 中身（inside）のある箱に寄るときの、段ごとの倍率の上限（入れ子では掛け合わせ。3 段で 216 倍）
+  UZ.CAMERA = { maxZoom: 2.0, pad: 40, insideMaxZoom: 6.0 };
+  // ---- 意味のズーム（inside）: 箱に寄ると、箱の名前が薄れて中身の図が現れる ----
+  // 中身の図は自然な大きさで組み、親の箱の内側（四辺 8% の余白）に縦横比を保って収める（箱の中に縮めて持つ。カメラは 1 枚のキャンバスのまま倍率を掛ける）
+  const INSIDE_PAD = 0.08;
+  const insideRect = it => ({ x: it.x + it.w * INSIDE_PAD, y: it.y + it.h * INSIDE_PAD, w: it.w * (1 - 2 * INSIDE_PAD), h: it.h * (1 - 2 * INSIDE_PAD) });
+  // 中身の図を組む区画（px）: 箱を本文（余白 pad）いっぱいに寄せたときの、箱の内側の画面の大きさ（箱の形と本文だけで決まる）
+  const insideArea = (it, B) => {
+    const k = Math.min((B.w - 2 * UZ.CAMERA.pad) / Math.max(1, it.w), (B.h - 2 * UZ.CAMERA.pad) / Math.max(1, it.h)), r = insideRect(it);
+    return { x: 0, y: 0, w: r.w * k, h: r.h * k };
+  };
+  // 中身の図 K の写し方（図のローカル → 画面）。it = 親の箱、pp = 親の図の写し方。K.fit = 区画の中の置き方 { s, ox, oy, w, h }。
+  // a = 中身の区画の画面上の倍率（1 で区画が組んだときの大きさ＝中身が自然な大きさ。中身が区画より大きくて縮めたときも、寄り切れば 1）
+  UZ.insidePlace = function (K, it, pp) {
+    const r = insideRect(it), A = K.fit, k = Math.min(r.w / A.w, r.h / A.h);
+    const ax = r.x + (r.w - A.w * k) / 2, ay = r.y + (r.h - A.h * k) / 2;
+    return { s: pp.s * k * A.s, ox: pp.ox + pp.s * (ax + k * A.ox), oy: pp.oy + pp.s * (ay + k * A.oy), a: pp.s * k };
+  };
+  // クロスフェード: r = 中身の画面上の倍率（カメラの倍率 × 寄る前の倍率 a。1 で自然な大きさ）。中身の不透明度、箱の名前は 1 − これ
+  UZ.insideFade = r => smooth((r - 0.55) / 0.35);
   const CAM0 = { s: 1, tx: 0, ty: 0 };
   // カメラ cam（画面座標 p → p * s + t）を、図の写し方 pl に重ねる
   // 写し方 pl にカメラを合成する。custom の部品の描き場の大きさ（w・h。カメラの前の画面の px）は、そのまま持っていく
@@ -139,10 +158,12 @@
     // カメラの run: 同じスライドが続く場面の通し番号（図だけの場面は 1 場面で 1 run）。run が変わるとカメラは戻る
     scenes.forEach((sc, si) => { const pv = scenes[si - 1]; sc.run = pv && sc.slide != null && pv.slide === sc.slide ? pv.run : (pv ? pv.run + 1 : 0); });
 
-    // ---- 子の図: space の板（plate）の図は、その space の部品を置いた場面に、子の図として加える ----
+    // ---- 子の図: space の板（plate）の図と、graph の箱の中身（inside）の図は、親の部品を置いた場面に、子の図として加える ----
     // 子の図の id は板の id。図の配置は自然な大きさで 1 回だけ（大きさは、初めの値で区画に写した板の px）。
     // 場面ごとの状態（show・focus など）は普通の図と同じに持ち、描くときは親の部品が、奥から塗る順の位置に行列 1 つで描く。
-    // 図の記録の parent = { fig: 親の図の id, kind: "plate", item: 板の id }（コマの figs にも同じ形で載る）
+    // 図の記録の parent = { fig: 親の図の id, kind: "plate", item: 板の id }（コマの figs にも同じ形で載る）。
+    // inside の子（id は中身の図の id）は parent = { fig: graph の図の id, kind: "inside", item: 箱の id }。配置は親の箱の形から決め（下の insideArea）、
+    // コマでは画面の写し方（place）を持ち、普通の図と同じ層に描く。入れ子の中身も、親の子として続けて加える
     const kidsOf = {}, kidById = {};   // 親の図の id → 子の宣言の列（UZ.childDecls）、子の図の id → 子の宣言
     for (const k of UZ.childDecls(sb)) { (kidsOf[k.parent.fig] || (kidsOf[k.parent.fig] = [])).push(k); kidById[k.id] = k; }
     // 子の図を配置する区画（px）。板は、初めの値で親の区画に写した板の大きさ
@@ -153,15 +174,17 @@
     };
     for (const sc of scenes) {
       const add = [];
-      sc.figs.forEach((fid, i) => {
+      const visit = (fid, A) => {
         for (const k of kidsOf[fid] || []) {
-          const A = sc.areas[i];
           let a = null;
           try { a = kidArea(k, A); } catch (e) { a = null; }   // 式の誤りは space の検査が知らせる
           if (!a || !(a.w > 0) || !(a.h > 0) || !Number.isFinite(a.w) || !Number.isFinite(a.h)) a = { w: A.w, h: A.h };
-          add.push({ id: k.id, area: { x: 0, y: 0, w: Math.max(40, a.w), h: Math.max(40, a.h) } });
+          const area = { x: 0, y: 0, w: Math.max(40, a.w), h: Math.max(40, a.h) };
+          add.push({ id: k.id, area });
+          visit(k.id, area);   // 入れ子の中身（inside の中の inside）
         }
-      });
+      };
+      sc.figs.forEach((fid, i) => visit(fid, sc.areas[i]));
       if (!add.length) continue;
       sc.figs = sc.figs.concat(add.map(x => x.id)); sc.areas = sc.areas.concat(add.map(x => x.area)); sc.over = sc.over.concat(add.map(() => ({})));
     }
@@ -232,12 +255,15 @@
         }
         const f = over && Object.keys(over).length ? { ...specOf(fid), ...over } : specOf(fid);
         const S = sc.slideDark ? SD : S0;
+        const kin = kidById[fid] && kidById[fid].parent.kind === "inside" ? kidById[fid] : null;
+        // inside の中身: 親の箱を本文いっぱいに寄せたときの、箱の内側（四辺 8% の余白）の画面の大きさを区画にする
+        if (kin) sc.areas[i] = insideArea(figs[kin.parent.fig].items[kin.parent.item], sc.body);
         const A = sc.areas[i];
         let L = null;
         // スライドの部品は、区画に合わせて組む（図が fill に対応していれば。fit: "content" で止める）。
         // 文字の倍率 k の候補（FILL_K）のうち、区画に収まり、折り返しの総数（図が返す lineCount）が k = 1 のときより増えない、一番大きい k を採る。
         // k = 1 でも収まらなければ、今までどおり組んで縮める
-        if (sc.slide && UZ.FIG[f.type].fill && f.fit !== "content") {
+        if (sc.slide && !kin && UZ.FIG[f.type].fill && f.fit !== "content") {
           const fits = [];
           for (const k of UZ.FILL_K) {
             const T = await UZ.FIG[f.type].layout(f, S, { area: A, fill: { w: A.w, h: A.h, k }, assets });
@@ -253,8 +279,11 @@
         for (const it of L.items) { it.fig = fid; it.key = `${fid}/${it.id}`; items[it.id] = it; }
         figs[fid] = { id: fid, type: f.type, spec: specOf(fid), layoutFit: f.fit, w: L.w, h: L.h, items, order: L.order, autoShow: !!L.autoShow, fixed: !!L.fixed, extra: L, dark: !!sc.slideDark };
         if (kidById[fid]) figs[fid].parent = { ...kidById[fid].parent };
+        if (kin) { figs[kin.parent.fig].items[kin.parent.item].inside = fid; figs[fid].insideArea = A; }
       }
     }
+    // inside の中身の区画は、最初に組んだときのもの（どの場面でも同じ。箱の形だけで決まる）
+    for (const sc of scenes) sc.figs.forEach((fid, i) => { if (figs[fid].insideArea) sc.areas[i] = { ...figs[fid].insideArea }; });
     // ---- id の解決 ----
     function resolve(sc, ref, ctxv) {
       let fid = null, id = ref;
@@ -291,6 +320,8 @@
         if (it.kind !== "group") out.push(it.key);
         // 板（space の要素 plate）を出すと、板の中の図も出る
         if (it.kind === "s3" && it.el.kind === "plate" && figs[it.id] && figs[it.id].parent && figs[it.id].parent.fig === F.id) out.push(...expand({ fig: it.id, whole: true }));
+        // 中身（inside）のある箱を出すと、中身の図も出る（見えるのは寄ったときだけ）
+        if (it.inside && figs[it.inside]) out.push(...expand({ fig: it.inside, whole: true }));
         // 図ごと出すときは、順番の列に載っている中身（枠の中のノードなど）はその順番で出す
         for (const m of it.members || []) if (F.items[m] && !(whole && inOrder.has(m))) out.push(F.items[m].key);
         return out;
@@ -300,9 +331,11 @@
     }
 
     // 親の space とその子の図（板の図）の組。子でも親でもない図はそれだけ
+    // inside の中身は別の図として扱う（中身の中の focus は中身の図だけを薄くし、外の箱は薄くしない）
+    const isPlate = f => figs[f] && figs[f].parent && figs[f].parent.kind === "plate";
     const familyOf = fid => {
-      const top = figs[fid] && figs[fid].parent ? figs[fid].parent.fig : fid;
-      return [top, ...UZ.childFigs({ figs }, top)];
+      const top = isPlate(fid) ? figs[fid].parent.fig : fid;
+      return [top, ...UZ.childFigs({ figs }, top).filter(isPlate)];
     };
     // ---- 動作の列 ----
     const acts = [], extras = { marks: {}, notes: {}, dots: {}, replies: [], customs: [] };
@@ -345,7 +378,7 @@
           let dur = a.dur ?? DUR[verb];
           const val = a[verb];
           if (verb === "show" || verb === "hide" || verb === "pulse" || verb === "focus" || verb === "blur") {
-            const keys = [];
+            const keys = [], refFigs = new Set();
             let wholeRef = false;   // 図（部品）の全体を指したか
             for (const ref of asList(val)) {
               const x = extraKey(sc, ref, where);   // 点（dot:<名前>）と注記（note:<id>）
@@ -354,18 +387,22 @@
                 else if (x) { keys.push(x); delete dotState[x]; }   // 消した点は、次の trace で 1 つ目のノードにもう一度現れる
                 continue;
               }
-              const r = resolve(sc, ref, where); if (r) { keys.push(...expand(r)); if (r.whole) wholeRef = true; }
+              const r = resolve(sc, ref, where); if (r) { keys.push(...expand(r)); refFigs.add(r.fig); if (r.whole) wholeRef = true; }
             }
             act.keys = keys;
             if (verb === "show" || verb === "hide") {
-              act.stagger = a.stagger ?? (keys.length > 1 ? STAGGER : 0);
+              // 箱について出る中身（inside）の要素は、箱と同じ順番で出す（中身の数だけ間隔を延ばさない）。act.idx = 要素ごとの順番
+              const carried = k => { const f = k.split("/")[0]; return figs[f] && figs[f].parent && figs[f].parent.kind === "inside" && !refFigs.has(f); };
+              if (keys.some(carried)) { let n = -1; act.idx = keys.map(k => (carried(k) ? Math.max(0, n) : ++n)); }
+              const steps = act.idx ? Math.max(0, ...act.idx) : keys.length - 1;
+              act.stagger = a.stagger ?? (steps > 0 ? STAGGER : 0);
               act.each = a.dur ?? (verb === "show" && a.draw ? 1.4 : DUR[verb]);   // draw は線が伸びる分だけ、既定でゆっくり出す
               if (verb === "show" && a.draw) {
                 act.draw = true;
                 const lined = keys.some(k => { const [f, ...r] = k.split("/"); const it = figs[f] && figs[f].items[r.join("/")]; return it && (it.kind === "box" || it.kind === "edge" || it.kind === "frame" || it.kind === "space" || (it.kind === "s3" && S3_LINED.includes(it.el.kind))); });
                 if (keys.length && !lined) warn(`${where}: draw は線のない要素には効かない（枠・辺・グループの枠に使う）`);
               }
-              dur = act.each + act.stagger * Math.max(0, keys.length - 1);
+              dur = act.each + act.stagger * Math.max(0, steps);
             }
             // focus は同じ図の中を薄くする。部品の全体を指したときは、同じ場面のほかの部品を薄くする（指した部品は薄くしない）
             // 板の中（子の図）と親の space は 1 つの図として薄くする（板の中の箱に focus すると、ほかの板と space の要素も薄くなる）
@@ -567,8 +604,10 @@
       const F = figs[fid], w = F.x1 - F.x0, h = F.y1 - F.y0;
       // custom と space の部品は伸び縮みさせず、場面ごとの区画の大きさで描き直す（関数に渡す w・h = 区画の px。文字の大きさが保たれる）
       if (F.type === "custom" || F.type === "space") return { s: 1, ox: area.x, oy: area.y, w: area.w, h: area.h };
+      // inside の中身は自然な大きさ（拡大しない）。寄り切ったとき、文字が普通の大きさになる
+      if (F.parent && F.parent.kind === "inside") over = { ...over, maxScale: 1 };
       // 拡大の上限: 図が決めていればそれ（テキストは 1 = 文字の大きさを保つ）
-      const s = Math.min(area.w / w, area.h / h, F.extra.maxScale ?? (F.fixed ? 10 : (F.type === "title" ? 1 : 1.3)));
+      const s = Math.min(area.w / w, area.h / h, over.maxScale ?? F.extra.maxScale ?? (F.fixed ? 10 : (F.type === "title" ? 1 : 1.3)));
       // 区画の中の揃え: 部品の valign・halign。なければ図の既定（テキストは上）、それもなければ中央
       const va = over.valign || F.spec.valign || F.extra.valign || "middle", ha = over.halign || F.spec.halign || "center";
       const dx = area.w - w * s, dy = area.h - h * s;
@@ -673,6 +712,21 @@
         return { x: Math.min(...xs), y: Math.min(...ys), w: Math.max(...xs) - Math.min(...xs), h: Math.max(...ys) - Math.min(...ys) };
       } catch (e) { return null; }
     };
+    // 図の、場面 sc での写し方（カメラの前）。inside の中身は、親の写し方から箱の中へ写す
+    const placeAt = (sc, fid) => {
+      const F = figs[fid];
+      if (!F.parent || F.parent.kind !== "inside") return sc.place[fid];
+      return UZ.insidePlace(F, figs[F.parent.fig].items[F.parent.item], placeAt(sc, F.parent.fig));
+    };
+    const depthOf = fid => (figs[fid].parent && figs[fid].parent.kind === "inside" ? 1 + depthOf(figs[fid].parent.fig) : 0);
+    // zoom の倍率の上限。inside の箱へは、中身がちょうど自然な大きさになる倍率（その段までの insideMaxZoom の積まで）。
+    // 中身の図の中の要素へは、中身の図にとっての maxZoom。それ以外は maxZoom。対象が数個なら一番小さいもの
+    const zoomCap = (sc, targets) => Math.min(...targets.map(t => {
+      const d = depthOf(t.fig), it = !t.whole && figs[t.fig].items[t.id], CA = UZ.CAMERA;
+      if (it && it.inside) return Math.min(1 / placeAt(sc, it.inside).a, CA.insideMaxZoom ** (d + 1));
+      if (d > 0) return Math.min(CA.maxZoom / placeAt(sc, t.fig).s, CA.insideMaxZoom ** d * CA.maxZoom);
+      return CA.maxZoom;
+    }));
     // ---- カメラ: run ごとに状態を追い、zoom・pan の from・to を決める。場面の終わりのカメラは sc.camEnd ----
     {
       const CA = UZ.CAMERA;
@@ -690,7 +744,7 @@
           if (a.target) {   // 対象が数個なら、画面上の外接矩形
             let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
             for (const t of a.target) {
-              if (figs[t.fig].parent) {   // 板の中の要素（か板の中の図の全体）は、寄り始めの値で写した外接矩形（親の部品の座標）
+              if (figs[t.fig].parent && figs[t.fig].parent.kind === "plate") {   // 板の中の要素（か板の中の図の全体）は、寄り始めの値で写した外接矩形（親の部品の座標）
                 const K = figs[t.fig], P = figs[K.parent.fig], pl = sc.place[P.id];
                 const kb = t.whole ? { x: K.x0, y: K.y0, w: K.x1 - K.x0, h: K.y1 - K.y0 } : K.items[t.id].bbox;
                 const b = plateBoxAt(K, kb, a.start, pl) || figBox(P, pl);
@@ -698,7 +752,7 @@
                 x1 = Math.max(x1, pl.ox + (b.x + b.w) * pl.s); y1 = Math.max(y1, pl.oy + (b.y + b.h) * pl.s);
                 continue;
               }
-              const F = figs[t.fig], pl = sc.place[t.fig];
+              const F = figs[t.fig], pl = placeAt(sc, t.fig);
               // space の要素は、寄り始めの値で投影した外接矩形（寄っている間に yaw などが動いても追わない）
               const b = t.whole || F.type === "custom" ? figBox(F, pl)
                 : F.type === "space" ? (F.items[t.id].kind === "s3" ? spaceBoxAt(F, t.id, a.start, pl) : figBox(F, pl)) : F.items[t.id].bbox;
@@ -720,22 +774,34 @@
           }
           else if (R) {
             const pad = a.a.pad ?? CA.pad;
-            s = Math.min((B.w - 2 * pad) / Math.max(1, R.w), (B.h - 2 * pad) / Math.max(1, R.h), CA.maxZoom);
+            s = Math.min((B.w - 2 * pad) / Math.max(1, R.w), (B.h - 2 * pad) / Math.max(1, R.h), zoomCap(sc, a.target));
             if (!(s >= 1)) { warn(`${where}: 寄せる倍率が 1 未満になる（pad ${pad} が大きい）。倍率 1 で止める`); s = 1; }
           }
+          // inside の箱（か中身の図の中）に寄るときは、隣の部品が端で切れても倍率を下げない（下げると中身が読めなくなる）
+          const deep = a.verb === "zoom" && a.target && a.target.some(t => depthOf(t.fig) > 0 || (!t.whole && figs[t.fig].items[t.id].inside));
           // 対象の中心を body の中心へ。拡大した body が body の枠を覆い続ける範囲に収める
           let tx = 0, ty = 0;
           if (R && s > 1) {
             tx = clamp(B.x + B.w / 2 - s * (R.x + R.w / 2), (B.x + B.w) * (1 - s), B.x * (1 - s));
             ty = clamp(B.y + B.h / 2 - s * (R.y + R.h / 2), (B.y + B.h) * (1 - s), B.y * (1 - s));
             // 隣の箱が body の端で半分だけ写らないように、写す範囲をずらすか、倍率を下げる
-            const fit = fitCamera(sc, R, s, a.verb === "pan", a.end, a.a.pad ?? CA.pad);
+            const fit = deep ? null : fitCamera(sc, R, s, a.verb === "pan", a.end, a.a.pad ?? CA.pad);
             if (fit) {
               if (fit.s < s - 0.01) warn(`${where}: 寄せ先の隣の部品が body の端で切れるため、倍率を ${fit.s.toFixed(2)} に下げた（${s.toFixed(2)} では収まらない。pad を小さくするか、寄せ先を変える）`);
               ({ s, tx, ty } = fit);
             }
           }
           a.to = { s, tx, ty };
+          // 寄った後の中身の倍率（文字が普通の大きさか）
+          if (deep) for (const t of a.target) {
+            const it = !t.whole && figs[t.fig].items[t.id];
+            if (!it || !it.inside) continue;
+            const kp = placeAt(sc, it.inside), K = figs[it.inside], r = s * kp.s;
+            // 寄った後の中身の図の画面上の矩形が、本文に収まるか
+            const kx = (kp.ox + K.x0 * kp.s) * s + tx, ky = (kp.oy + K.y0 * kp.s) * s + ty, kw = (K.x1 - K.x0) * kp.s * s, kh = (K.y1 - K.y0) * kp.s * s;
+            if (kx < B.x - 1 || ky < B.y - 1 || kx + kw > B.x + B.w + 1 || ky + kh > B.y + B.h + 1) warn(`${where}: 寄った後の中身の図「${it.inside}」が本文に収まらない`);
+            if (r < 0.9) warn(`${where}: 寄った後も中身の図「${it.inside}」が小さい（自然な大きさの ${r.toFixed(2)} 倍。中の文字が読みにくい）。箱を大きくするか、中身の図を小さくする`);
+          }
           a.target = R;
           if (R) {
             const V = { x: R.x * s + tx, y: R.y * s + ty, w: R.w * s, h: R.h * s };
@@ -942,8 +1008,8 @@
       if (t < a.start) break;
       const p = clamp((t - a.start) / Math.max(0.001, a.dur));
       switch (a.verb) {
-        case "show": a.keys.forEach((k, i) => { const s = get(k); s.show = Math.max(s.show, clamp((t - a.start - i * a.stagger) / a.each)); if (a.draw) s.draw = true; }); break;
-        case "hide": a.keys.forEach((k, i) => { const s = get(k); delete s.draw; s.show = Math.min(s.show, 1 - clamp((t - a.start - i * a.stagger) / a.each)); }); break;
+        case "show": a.keys.forEach((k, i) => { const s = get(k); s.show = Math.max(s.show, clamp((t - a.start - (a.idx ? a.idx[i] : i) * a.stagger) / a.each)); if (a.draw) s.draw = true; }); break;
+        case "hide": a.keys.forEach((k, i) => { const s = get(k); delete s.draw; s.show = Math.min(s.show, 1 - clamp((t - a.start - (a.idx ? a.idx[i] : i) * a.stagger) / a.each)); }); break;
         case "pulse": for (const k of a.keys) { if (p < 1) get(k).pulse = Math.sin(Math.PI * p); } break;
         case "focus": {
           const set = new Set(a.keys);
@@ -1079,7 +1145,8 @@
       figsF[fid] = { opacity: backTo[fid] ? 0 : 1 - k, place: mo && mo.series && figsF[mo.to] ? figsF[mo.to].place : prevPl(fid) };
     }
     // 子の図（板の図）: 親の部品と一緒に出入りする。置き場所は持たず、親が行列で描く
-    for (const [fid, F] of Object.entries(M.figs)) if (F.parent) figsF[fid] = { opacity: figsF[F.parent.fig] ? figsF[F.parent.fig].opacity : 0, place: null, parent: { ...F.parent } };
+    for (const [fid, F] of Object.entries(M.figs)) if (F.parent && F.parent.kind === "plate") figsF[fid] = { opacity: figsF[F.parent.fig] ? figsF[F.parent.fig].opacity : 0, place: null, parent: { ...F.parent } };
+    insideFrame(M, figsF, get);
     // body の clip: 寄せている間と、寄せたスライドから次のスライドへ移る 0.8 秒の間（前後の body を合わせた範囲）
     const leaving = newRun && prev.camEnd.s > 1.001 && t < sc.start + 0.8;
     const U = leaving ? unionRect(prev.body, sc.body) : sc.body;
@@ -1114,8 +1181,9 @@
     const sc = M.scenes.find(s => s.id === sl.scenes[0]);
     const st = {}, figsF = {};
     for (const fid of Object.keys(M.figs)) figsF[fid] = { opacity: 0, place: null };
-    // 子の図（板の図）は親の部品と一緒に出す
-    for (const fid of sl.figs.flatMap(f => (sl.transient.includes(f) ? [] : [f, ...UZ.childFigs(M, f)]))) {
+    // 子の図（板の図・inside の中身。入れ子も）は親の部品と一緒に出す（inside の中身は寄らない姿なので、見えるかは insideFrame が倍率で決める）
+    const desc = f => UZ.childFigs(M, f).flatMap(k => [k, ...desc(k)]);
+    for (const fid of sl.figs.flatMap(f => (sl.transient.includes(f) ? [] : [f, ...desc(f)]))) {
       const F = M.figs[fid];
       figsF[fid] = F.parent ? { opacity: 1, place: null, parent: { ...F.parent } } : { opacity: 1, place: sc.place[fid] };
       for (const it of Object.values(M.figs[fid].items)) {
@@ -1123,11 +1191,30 @@
         st[it.key] = { show: 1, dim: 1, blur: 0, pulse: 0, tint: null, tintP: 0, text: null, textFrom: null, textP: 1, mark: null, pos: null, off: [0, 0], labelText: null };
       }
     }
+    insideFrame(M, figsF, k => st[k]);
     // 大きさを変えた箱（resize）は、変えた後の形で出す（中に入れた部品と重ならないように）
     for (const a of M.acts) if (a.verb === "resize" && sl.scenes.includes(a.scene) && st[a.key]) { st[a.key].rect = { ...a.to }; st[a.key].textOff = a.textTo.slice(); }
     return { t: sc.start, st, figs: figsF, camera: { ...CAM0, clip: { ...sc.body }, on: false }, scene: sc, statement: { lines: sc.statement, opacity: 1, prev: null }, captions: [],
       header: { text: sc.header, opacity: 1, prev: null }, sub: null, badge: { text: "", show: 0, from: "" }, customs: {}, values: UZ.completeValues(M, slideId), end: 0, dark: sc.tone === "dark" ? 1 : 0 };
   };
+  // inside の中身のコマ: 親の写し方（カメラ込み）から箱の中へ写し、画面上の倍率でクロスフェードする。
+  // 親の箱の状態に inside（中身の不透明度。箱の名前は 1 − これ）を書く。stateOf(key) = 状態（なければ作るか、undefined）
+  function insideFrame(M, figsF, stateOf) {
+    const done = {};
+    const one = fid => {
+      if (done[fid]) return;
+      done[fid] = true;
+      const F = M.figs[fid], P = F.parent;
+      if (M.figs[P.fig].parent && M.figs[P.fig].parent.kind === "inside") one(P.fig);   // 親も中身なら、親を先に
+      const pf = figsF[P.fig];
+      if (!pf || !pf.place) { figsF[fid] = { opacity: 0, place: null, parent: { ...P } }; return; }
+      const place = UZ.insidePlace(F, M.figs[P.fig].items[P.item], pf.place), cf = UZ.insideFade(place.a);
+      figsF[fid] = { opacity: pf.opacity * cf, place, parent: { ...P } };
+      const s = stateOf(`${P.fig}/${P.item}`);
+      if (s) s.inside = cf;
+    };
+    for (const [fid, F] of Object.entries(M.figs)) if (F.parent && F.parent.kind === "inside") one(fid);
+  }
   // スライドの完成形の値 = そのスライドを使う最後の場面の終わりの値（完成形のコマで custom の部品に渡す）
   UZ.completeValues = function (M, slideId) {
     const sl = M.slides && M.slides[slideId];

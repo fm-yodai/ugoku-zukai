@@ -153,8 +153,10 @@
     }
 
     buildFig(F) {
-      // 暗い地のスライドで組んだ部品は、暗い地の色。子の図（板の図）の g は層に置かず、親の space が描くときに自分の描き場へ入れる
-      const S = F.dark ? (this.SD || (this.SD = UZ.darkStyleOf(this.S))) : this.S, g = F.parent ? el("g", { "data-plate": F.id }) : el("g", null, this.figLayer);
+      // 暗い地のスライドで組んだ部品は、暗い地の色。子の図（板の図）の g は層に置かず、親の space が描くときに自分の描き場へ入れる。
+      // inside の中身は普通の図と同じ層に置く（親より後に組むので、親の箱の上に重なる）
+      const plateKid = F.parent && F.parent.kind === "plate";
+      const S = F.dark ? (this.SD || (this.SD = UZ.darkStyleOf(this.S))) : this.S, g = plateKid ? el("g", { "data-plate": F.id }) : el("g", F.parent ? { "data-inside": F.id } : null, this.figLayer);
       const L = { back: el("g", null, g), edge: el("g", null, g), box: el("g", null, g), fx: el("g", null, g) };
       this.figG[F.id] = g;
       const glow = this.M.theme.shape.glow, shadow = this.M.theme.shape.shadow;
@@ -164,10 +166,18 @@
           E.g = el("g", null, L.box);
           // 点がいる箱の強調（trace）: 外側に、点の色の薄い輪（四角と楕円。ひし形などは枠だけ）
           if (it.dotAt && !["diamond", "poly", "store"].includes(it.shape)) {
-            E.hereR = it.shape === "ellipse" ? el("ellipse", { cx: it.x + it.w / 2, cy: it.y + it.h / 2, rx: it.w / 2 + 6, ry: it.h / 2 + 6, fill: "none", "stroke-width": 5, opacity: 0 }, E.g)
-              : el("rect", { x: it.x - 6, y: it.y - 6, width: it.w + 12, height: it.h + 12, rx: it.r + 6, fill: "none", "stroke-width": 5, opacity: 0 }, E.g);
+            E.hereR = it.shape === "ellipse" ? el("ellipse", { cx: it.x + it.w / 2, cy: it.y + it.h / 2, rx: it.w / 2 + 6, ry: it.h / 2 + 6, fill: "none", "stroke-width": 5 }, E.g)
+              : el("rect", { x: it.x - 6, y: it.y - 6, width: it.w + 12, height: it.h + 12, rx: it.r + 6, fill: "none", "stroke-width": 5 }, E.g);
+            // 不透明度は style で持つ（0 のとき SVG の書き出しから省かれる。属性の opacity="0" を深く寄せた座標で残すと、resvg が止まることがある）
+            E.hereR.style.opacity = 0;
           }
           const sw = S.stroke;
+          // 中身（inside）のある箱: 寄る前は、箱の後ろにもう 1 枚の縁を重ねて「中がある」とだけ示す（縮めた中身の文字は描かない）
+          if (it.inside && !["diamond", "poly", "store"].includes(it.shape)) {
+            const o = 5;
+            E.stack = it.shape === "ellipse" ? el("ellipse", { cx: it.x + it.w / 2 + o, cy: it.y + it.h / 2 + o, rx: it.w / 2, ry: it.h / 2, fill: S.bg, stroke: it.stroke, "stroke-width": 1.2 }, E.g)
+              : el("rect", { x: it.x + o, y: it.y + o, width: it.w, height: it.h, rx: it.r, fill: S.bg, stroke: it.stroke, "stroke-width": 1.2 }, E.g);
+          }
           const mk = (fill, stroke, extra) => {
             if (it.shape === "diamond") return el("path", { d: `M${it.x + it.w / 2},${it.y} L${it.x + it.w},${it.y + it.h / 2} L${it.x + it.w / 2},${it.y + it.h} L${it.x},${it.y + it.h / 2} Z`, fill, stroke, "stroke-width": sw, "stroke-linejoin": "round", ...extra }, E.g);
             if (it.shape === "poly") return el("path", { d: ptsD(it.poly) + "Z", fill, stroke, "stroke-width": sw, "stroke-linejoin": "round", ...extra }, E.g);
@@ -316,13 +326,28 @@
       if (this._camTf !== ct) { this._camTf = ct; for (const g of [this.capG, this.customG]) { if (ct) g.setAttribute("transform", ct); else g.removeAttribute("transform"); } }
       for (const [fid, g] of Object.entries(this.figG)) {
         const f = fr.figs[fid];
-        if (f.parent) continue;   // 子の図（板の図）は親の space が描く（親の g の中にあるので、出入りの不透明度も親に掛かる）
+        if (f.parent && f.parent.kind === "plate") continue;   // 子の図（板の図）は親の space が描く（親の g の中にあるので、出入りの不透明度も親に掛かる）
         g.style.opacity = f.opacity;
         g.style.display = f.opacity < 0.002 ? "none" : "";
         if (f.place) g.setAttribute("transform", `translate(${f.place.ox.toFixed(2)},${f.place.oy.toFixed(2)}) scale(${f.place.s.toFixed(4)})`);
       }
       for (const [key, E] of Object.entries(this.els)) {
         const it = E.it, s = fr.st[key] || { show: 0, dim: 1, pulse: 0, off: [0, 0] };
+        // 寄せている間、画面（clip）から遠く外れた要素は描かない（深く寄ると、外れた要素の座標が数千 px になる。resvg はそれで止まることがある）
+        if (E.g && cam && cam.on && c && it.bbox && !["custom", "space", "s3", "dot"].includes(it.kind)) {
+          const fp = fr.figs[it.fig] && fr.figs[it.fig].place;
+          let far = false;
+          if (fp) {
+            const o = s.off || [0, 0], bs = [it.bbox, s.rect, it.label && it.label.bbox].filter(Boolean), m = 200;
+            far = bs.every(b => {
+              const x0 = fp.ox + (b.x + o[0]) * fp.s, y0 = fp.oy + (b.y + o[1]) * fp.s, x1 = x0 + b.w * fp.s, y1 = y0 + b.h * fp.s;
+              return x1 < c.x - m || y1 < c.y - m || x0 > c.x + c.w + m || y0 > c.y + c.h + m;
+            });
+          }
+          const d = far ? "none" : "";
+          if (E._far !== d) { E._far = d; E.g.style.display = d; if (E.label && E.label.parentNode !== E.g) E.label.style.display = d; }
+          if (far) continue;
+        } else if (E._far) { E._far = ""; E.g.style.display = ""; if (E.label && E.label.parentNode !== E.g) E.label.style.display = ""; }
         const show = s.show, blur = s.blur || 0, dim = s.dim * (1 - 0.35 * blur);
         // ぼかし（blur）: 部品ごとのフィルタを、初めてぼかすときに作る。範囲は部品の外枠から座標で決める
         // （外枠の割合で取ると、水平な線は高さ 0 で消える。広く取りすぎると PNG にするのが遅い）
@@ -354,8 +379,11 @@
           E.stroke.style.opacity = op(show > 0 ? 1 : 0);
           const fillO = smooth((show - dr.fill[0]) / dr.fill[1]);
           E.fill.style.opacity = op(fillO); if (E.head) E.head.style.opacity = op(fillO);
-          for (const tx of E.texts) tx.style.opacity = op(smooth((show - dr.text[0]) / dr.text[1]));
-          if (E.label) E.label.style.opacity = op(smooth((show - dr.label[0]) / dr.label[1]));
+          // 中身（inside）が現れるほど、箱の名前と重ねた縁は薄れる（s.inside = 中身の不透明度）
+          const kin = 1 - (s.inside || 0);
+          for (const tx of E.texts) tx.style.opacity = op(smooth((show - dr.text[0]) / dr.text[1]) * kin);
+          if (E.label) E.label.style.opacity = op(smooth((show - dr.label[0]) / dr.label[1]) * kin);
+          if (E.stack) E.stack.style.opacity = op(s.rect ? 0 : fillO * kin);   // 大きさを変えた箱には付いていかないので消す
           if (E.smark) E.smark.style.opacity = op(smooth((show - dr.smark[0]) / dr.smark[1]));
           if (it.count && E.texts[it.count.index]) {
             const c = it.count, v = c.to * ease(clamp((show - 0.3) / 0.7));
@@ -390,7 +418,7 @@
           const here = s.here || 0;
           E.stroke.setAttribute("stroke", here > 0.01 ? C.mix(col, s.hereColor || S.warn, here) : col);
           E.stroke.setAttribute("stroke-width", S.stroke + 1.6 * (s.pulse || 0) + 2.4 * here);
-          if (E.hereR) { E.hereR.setAttribute("stroke", s.hereColor || S.warn); E.hereR.setAttribute("opacity", (0.3 * here).toFixed(3)); }
+          if (E.hereR) { E.hereR.setAttribute("stroke", s.hereColor || S.warn); E.hereR.style.opacity = (0.3 * here).toFixed(3); }
           if (s.text != null && E.texts[0]) this.relabel(E.texts[0], it.texts[0], s); else if (E.texts[0]) this.unlabel(E.texts[0], it.texts[0]);
         } else if (it.kind === "edge") {
           // 経路の書き換え（Morph で両端が動くとき）。矢じりも描き直す

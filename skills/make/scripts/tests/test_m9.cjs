@@ -120,6 +120,15 @@ const plateDeck = (items, lines, o = {}) => deck6({ a: { title: "A", parts: [{ i
 const plateOrder = svg => [...svg.matchAll(/data-plate="([^"]+)"/g)].map(m => m[1]);
 const lastEnd = M => Math.max(...M.timeline.lines.map(l => l.start + l.dur));
 
+// 意味のズーム（inside）の検査用: 図 g の箱 server の中身が図 srv。srv の箱 db の中身を dbf にもできる（nested）
+const SRV = (o = {}) => ({ type: "graph", nodes: [{ id: "web", label: "Web" }, { id: "cache", label: "キャッシュ" }, { id: "db", label: "DB", ...(o.db || {}) }], edges: [{ from: "web", to: "cache" }, { from: "cache", to: "db" }] });
+const IG = () => ({ type: "graph", nodes: [{ id: "client", label: "利用者" }, { id: "server", label: "サーバー", inside: "srv" }], edges: [{ from: "client", to: "server" }] });
+const DBF = { type: "graph", nodes: [{ id: "idx", label: "索引" }, { id: "tbl", label: "テーブル" }], edges: [{ from: "idx", to: "tbl" }] };
+const insideDeck = (lines, figures = {}) => deck6({ a: { title: "A", parts: [{ figure: "g" }] } }, [SC("s1", "a", lines)], { g: IG(), srv: SRV(), ...figures });
+const LN = (id, text, act) => ({ id, text, do: act ? [{ ...act, at: "a" }] : [] });
+const lineEnd = (M, id) => { const l = M.timeline.lines.find(x => x.id === id); return l.start + l.dur; };
+const zoomAct = (M, line) => M.acts.find(a => a.verb === "zoom" && a.line === line);
+
 const tests = {
   async geo_space() {
     const { geo, g } = newGeo();
@@ -726,6 +735,116 @@ const tests = {
     const stack = [];
     for (const m of before.matchAll(/<g\b[^>]*>|<\/g>/g)) { if (m[0] === "</g>") stack.pop(); else if (!m[0].endsWith("/>")) stack.push(m[0]); }   // 空の <g/> は開かない
     assert.ok(stack.some(g => /^<g\b[^>]*transform="translate\([^"]*\) scale\([\d.]+\)"/.test(g)), `題がカメラの g の子孫にない: ${stack.join(" ")}`);
+  },
+  async inside_validate() {   // inside は graph のノードだけ・図がある・3 段まで・循環なし・/6 から
+    const errs = async sb => (await build(sb)).errors || [];
+    const has = (es, re) => assert.ok(es.some(e => re.test(e)), `誤りに ${re} がない: ${JSON.stringify(es)}`);
+    has(await errs(deck6({ a: { title: "A", parts: [{ figure: "l" }] } }, [SC("s1", "a")], { l: { type: "list", items: [{ id: "i1", text: "項目", inside: "srv" }] }, srv: SRV() })), /inside は graph のノードにだけ書ける/);
+    has(await errs(insideDeck(undefined, { g: { ...IG(), nodes: [{ id: "client", label: "利用者" }, { id: "server", label: "サーバー", inside: "nope" }] } })), /inside「nope」が図にない/);
+    // 4 段: g → a1 → a2 → a3 → a4
+    const chain = n => ({ type: "graph", nodes: [{ id: "x", label: "箱", ...(n ? { inside: n } : {}) }], edges: [] });
+    has(await errs(insideDeck(undefined, { g: { ...IG(), nodes: [{ id: "server", label: "サーバー", inside: "a1" }] }, a1: chain("a2"), a2: chain("a3"), a3: chain("a4"), a4: chain(null) })), /3 段を超える/);
+    const ok3 = await errs(insideDeck(undefined, { g: { ...IG(), nodes: [{ id: "server", label: "サーバー", inside: "a1" }] }, a1: chain("a2"), a2: chain("a3"), a3: chain(null) }));
+    assert.ok(!ok3.some(e => /段を超える/.test(e)), `3 段は誤りにしない: ${JSON.stringify(ok3)}`);
+    has(await errs(insideDeck(undefined, { g: { ...IG(), nodes: [{ id: "server", label: "サーバー", inside: "a1" }] }, a1: chain("a2"), a2: chain("a1") })), /inside が循環している/);
+    const sb5 = insideDeck(); sb5.format = "ugoku-zukai/5";
+    has(await errs(sb5), /inside を使っている。使うには format を "ugoku-zukai\/6" と書く/);
+    // 中身の図を部品としても置く・板の図のノードに inside は誤り
+    has(await errs(deck6({ a: { title: "A", parts: [{ figure: "g", area: { col: [1, 6], row: [1, 6] } }, { figure: "srv", area: { col: [7, 12], row: [1, 6] } }] } }, [SC("s1", "a")], { g: IG(), srv: SRV() })), /中身の図「srv」は、部品や場面の図としては置けない/);
+    has(await errs(plateDeck([PL("layer1", "g", 1)], [{ id: "l1", text: "出します。" }], { figures: { g: IG(), srv: SRV() } })), /板に置いた図のノードには inside が効かない/);
+  },
+  async inside_crossfade() {   // 寄る前は箱の名前、寄った後は中身。途中は両方が薄い
+    const M = await build(insideDeck([LN("l1", "{a}出します。", { show: "g" }), LN("l2", "サーバーの{a}中に入ります。", { zoom: "server" }), LN("l3", "そのまま見ます。")]));
+    assert.deepStrictEqual(M.errors, []);
+    const z = zoomAct(M, "l2");
+    const at = t => { const fr = UZ.frame(M, t); return { kid: fr.figs.srv.opacity, label: 1 - ((fr.st["g/server"] || {}).inside || 0) }; };
+    const b = at(lineEnd(M, "l1"));
+    assert.strictEqual(b.kid, 0, "寄る前は中身の不透明度 0"); assert.strictEqual(b.label, 1, "寄る前は箱の名前 1");
+    const e = at(z.end + 0.05);
+    assert.ok(e.kid > 0.999, `寄った後は中身 1: ${e.kid}`); assert.ok(e.label < 0.001, `寄った後は箱の名前 0: ${e.label}`);
+    let mid = false;
+    for (let t = z.start; t <= z.end; t += 0.02) { const m = at(t); if (m.kid > 0.01 && m.kid < 0.99 && m.label > 0.01 && m.label < 0.99) mid = true; }
+    assert.ok(mid, "途中で両方が 0〜1 の間になる時刻がない");
+    assert.deepStrictEqual(UZ.frame(M, z.end + 0.05).figs.srv.parent, { fig: "g", kind: "inside", item: "server" });
+    // show g は中身の要素も出すが、中身の数だけ間隔を延ばさない（箱と同じ順番で出る）
+    const sh = M.acts.find(a => a.verb === "show");
+    assert.ok(sh.keys.includes("srv/cache"), "show g で中身の要素も出る");
+    const plain = await build(deck6({ a: { title: "A", parts: [{ figure: "g" }] } }, [SC("s1", "a", [LN("l1", "{a}出します。", { show: "g" })])], { g: { ...IG(), nodes: IG().nodes.map(n => ({ id: n.id, label: n.label })) } }));
+    assert.ok(Math.abs(sh.dur - plain.acts.find(a => a.verb === "show").dur) < 1e-9, `show の長さが中身の分だけ延びる: ${sh.dur}`);
+    // シークで同じ絵（時刻だけで決まる）
+    assert.strictEqual(UZ.frame(M, z.start + 0.4).figs.srv.opacity, UZ.frame(M, z.start + 0.4).figs.srv.opacity);
+    // SVG: 寄った後に中身の文字が描かれ、寄る前は中身の g が出ていない
+    const svgA = renderSvg(M, z.end + 0.05);
+    assert.ok(svgA.includes("キャッシュ"), "寄った後の SVG に中身の文字がない");
+  },
+  async inside_readable() {   // 寄った後の中身は、ほぼ自然な大きさ（文字が普通の大きさ）
+    const M = await build(insideDeck([LN("l1", "{a}出します。", { show: "g" }), LN("l2", "サーバーの{a}中に入ります。", { zoom: "server" })]));
+    assert.deepStrictEqual(M.errors, []);
+    const z = zoomAct(M, "l2"), fr = UZ.frame(M, z.end + 0.05);
+    assert.ok(fr.figs.srv.place.s >= 0.9, `中身の画面上の倍率が 0.9 未満: ${fr.figs.srv.place.s}`);
+    assert.ok(z.to.s > UZ.CAMERA.maxZoom, `inside の箱への倍率が maxZoom を超えない: ${z.to.s}`);
+    assert.ok(z.to.s <= UZ.CAMERA.insideMaxZoom + 1e-9, `1 段の上限を超える: ${z.to.s}`);
+    // 中身の図は寄った後に本文に収まる
+    const K = M.figs.srv, p = fr.figs.srv.place, B = fr.scene.body;
+    const r = { x: p.ox + K.x0 * p.s, y: p.oy + K.y0 * p.s, w: (K.x1 - K.x0) * p.s, h: (K.y1 - K.y0) * p.s };
+    assert.ok(r.x >= B.x - 1 && r.y >= B.y - 1 && r.x + r.w <= B.x + B.w + 1 && r.y + r.h <= B.y + B.h + 1, `中身が本文からはみ出す: ${JSON.stringify(r)} / ${JSON.stringify(B)}`);
+    assert.ok(!(M.warnings || []).some(w => /倍率を .* に下げた|小さい/.test(w)), JSON.stringify(M.warnings));
+  },
+  async inside_nested() {   // 2 段: srv の箱 db にも inside。db に寄ると 2.0 を超え、server に寄ると 1 段目に戻る
+    const M = await build(insideDeck([LN("l1", "{a}出します。", { show: "g" }), LN("l2", "サーバーの{a}中に入ります。", { zoom: "server" }),
+      LN("l3", "さらに DB の{a}中へ。", { zoom: "srv/db" }), LN("l4", "一段{a}戻ります。", { zoom: "server" })], { srv: SRV({ db: { inside: "dbf" } }), dbf: DBF }));
+    assert.deepStrictEqual(M.errors, []);
+    const z2 = zoomAct(M, "l2"), z3 = zoomAct(M, "l3"), z4 = zoomAct(M, "l4");
+    assert.ok(z3.to.s > 2.0 && z3.to.s > z2.to.s, `db への倍率: ${z3.to.s}（server は ${z2.to.s}）`);
+    assert.ok(z3.to.s <= UZ.CAMERA.insideMaxZoom ** 2 + 1e-9, `2 段の上限を超える: ${z3.to.s}`);
+    assert.ok(Math.abs(z4.to.s - z2.to.s) < 0.01, `server に寄ると 1 段目に戻る: ${z4.to.s} と ${z2.to.s}`);
+    const f3 = UZ.frame(M, z3.end + 0.05), f4 = UZ.frame(M, z4.end + 0.05);
+    assert.ok(f3.figs.dbf.opacity > 0.999 && f3.figs.srv.opacity > 0.999, `db に寄った後: dbf ${f3.figs.dbf.opacity} srv ${f3.figs.srv.opacity}`);
+    assert.ok(f3.figs.dbf.place.s >= 0.9, `dbf の画面上の倍率: ${f3.figs.dbf.place.s}`);
+    assert.ok(f4.figs.dbf.opacity < 0.001 && f4.figs.srv.opacity > 0.999, `server に戻った後: dbf ${f4.figs.dbf.opacity} srv ${f4.figs.srv.opacity}`);
+    assert.ok(1 - (f3.st["srv/db"].inside || 0) < 0.001, "db に寄った後は db の名前が消える");
+  },
+  async inside_inner_actions() {   // 寄った後で、中身の図の要素に focus が効く
+    const M = await build(insideDeck([LN("l1", "{a}出します。", { show: "g" }), LN("l2", "サーバーの{a}中に入ります。", { zoom: "server" }), LN("l3", "キャッシュを{a}見ます。", { focus: "srv/cache" })]));
+    assert.deepStrictEqual(M.errors, []);
+    const fr = UZ.frame(M, lineEnd(M, "l3") + 0.5);
+    assert.ok(fr.st["srv/cache"].show > 0.999, "中身は show g で出ている");
+    assert.ok(fr.st["srv/cache"].dim > 0.999 && fr.st["srv/web"].dim < 0.3, `focus: cache ${fr.st["srv/cache"].dim} web ${fr.st["srv/web"].dim}`);
+    assert.ok(!fr.st["g/server"].dim || fr.st["g/server"].dim > 0.999, `中身の中の focus は外の箱を薄くしない: ${fr.st["g/server"].dim}`);
+    const lay = UZ.checkLayout(M);
+    assert.ok(!lay.some(x => /srv\//.test(x.msg)), `中身の図の配置の検査: ${JSON.stringify(lay)}`);
+  },
+  async inside_small_warn() {   // 中身の図が大きすぎて、寄り切っても自然な大きさにならない → 警告
+    const N = Array.from({ length: 14 }, (_, i) => ({ id: `n${i}`, label: `段階その${i + 1}` }));
+    const big = { type: "graph", direction: "right", nodes: N, edges: N.slice(1).map((n, i) => ({ from: N[i].id, to: n.id })) };
+    const M = await build(insideDeck([LN("l1", "{a}出します。", { show: "g" }), LN("l2", "サーバーの{a}中に入ります。", { zoom: "server" })], { srv: big }));
+    assert.deepStrictEqual(M.errors, []);
+    hasWarn(M, /寄った後も中身の図「srv」が小さい/);
+    assert.ok(UZ.checkLayout(M).some(x => x.kind === "小さい" && /^srv\//.test(x.msg)), "中身の図の自然な大きさでの検査（小さい文字）がない");
+  },
+  async inside_morph_series() {   // Morph でつながる系列の箱にも効く
+    const g2 = { ...G2, nodes: G2.nodes.map(n => (n.id === "api" ? { ...n, inside: "srv" } : n)) };
+    const sb = seriesDeck({ g1: G1, g2, srv: SRV() }, [["g1"], ["g2", "g1"]]);
+    sb.format = "ugoku-zukai/6";
+    sb.scenes[1].lines.push(LN("l3", "API の{a}中に入ります。", { zoom: "api" }));
+    const M = await build(sb);
+    assert.deepStrictEqual(M.errors, []);
+    const z = zoomAct(M, "l3"), fr = UZ.frame(M, z.end + 0.05);
+    assert.ok(z.to.s > UZ.CAMERA.maxZoom, `倍率: ${z.to.s}`);
+    assert.ok(fr.figs.srv.opacity > 0.999 && fr.figs.srv.place.s >= 0.9, `系列の箱の中身: ${fr.figs.srv.opacity} ${fr.figs.srv.place.s}`);
+    assert.strictEqual(UZ.frame(M, lineEnd(M, "l1")).figs.srv.opacity, 0, "前のスライドでは中身は出ない");
+  },
+  async inside_complete_unzoomed() {   // 完成形のコマは寄らない姿（中身は出さない）
+    const sb = insideDeck([LN("l1", "{a}出します。", { show: "g" }), LN("l2", "サーバーの{a}中に入ります。", { zoom: "server" })]);
+    sb.slides.a.start = "complete";
+    const M = await build(sb);
+    assert.deepStrictEqual(M.errors, []);
+    const fr = UZ.finalFrame(M, "a");
+    assert.strictEqual(fr.figs.srv.opacity, 0, "完成形で中身が出ている");
+    assert.strictEqual(fr.figs.g.opacity, 1);
+    assert.ok(!fr.st["g/server"].inside, "完成形で箱の名前が薄い");
+    const svg = renderSvg(M, 0, fr);
+    assert.ok(svg.includes("サーバー"), "完成形に箱の名前がない");
   },
 };
 

@@ -56,11 +56,20 @@
   UZ.platesOf = sb => platesIn(UZ.figuresOf(sb));
   // 子の図の宣言の列 [{ id: 子の図の id, parent: { fig: 親の図の id, kind, item: 親の中の要素の id }, spec: 図の宣言 }]。
   // 子の図は、親の部品が自分の描き場に描く図（engine.js が場面に加え、view_svg.js が親の描画の中で描く）。
-  // 今は space の板（kind "plate"。子の図の id は板の id）。別の種類の子（inside など）はここに足す
+  // space の板（kind "plate"。子の図の id は板の id）と、graph の箱の中身（kind "inside"。子の図の id は中身の図の id）
   UZ.childDecls = function (sb) {
     const FIGS = UZ.figuresOf(sb);
-    return UZ.platesOf(sb).map(({ space, plate }) => ({ id: plate.id, parent: { fig: space, kind: "plate", item: plate.id },
+    const out = UZ.platesOf(sb).map(({ space, plate }) => ({ id: plate.id, parent: { fig: space, kind: "plate", item: plate.id },
       spec: typeof plate.figure === "string" ? FIGS[plate.figure] : FIGS[plate.id] }));
+    for (const { fig, node, inside } of UZ.insidesOf(sb)) if (FIGS[inside]) out.push({ id: inside, parent: { fig, kind: "inside", item: node }, spec: FIGS[inside] });
+    return out;
+  };
+  // graph の箱の inside の列 [{ fig: graph の図の id, node: 箱の id, inside: 中身の図の id }]
+  UZ.insidesOf = function (sb) {
+    const out = [];
+    for (const [fid, f] of Object.entries(UZ.figuresOf(sb))) if (f && f.type === "graph" && Array.isArray(f.nodes))
+      for (const n of f.nodes) if (n && typeof n.inside === "string") out.push({ fig: fid, node: n.id, inside: n.inside });
+    return out;
   };
 
   // 場面の図の列と区画。figure を指す場面は今までと同じ（図 1 つは全面、2 つは左右）
