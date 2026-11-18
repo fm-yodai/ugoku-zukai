@@ -212,10 +212,32 @@ const tests = {
       { id: "cv", kind: "curve", fn: ["cos(t)", "sin(t)", "t"], t: [0, 3], n: 8 }, { id: "tx", kind: "text", at: [0, 0, 3], text: "最大" },
       { id: "pl", kind: "plate", figure: "x", origin: [0, 0, 0], size: [1, 1] }] };
     const cam = UZ.spaceCamera({ yaw: 30, pitch: 25 }, 300, 200, UZ.spaceBounds(decl, v));
-    const P = UZ.spacePrims(decl, v, cam, S), cnt = k => P.filter(p => p.el === k).length;
+    const P = UZ.spacePrims(decl, v, cam, S), cnt = k => P.filter(p => p.id === k).length;
     assert.strictEqual(cnt("bx"), 6); assert.strictEqual(cnt("cv"), 8); assert.strictEqual(cnt("p"), 2); assert.strictEqual(cnt("pl"), 0);
     assert.strictEqual(cnt("ar"), 2); assert.ok(P.some(p => p.kind === "text" && p.text === "最大"));
     for (let i = 1; i < P.length; i++) assert.ok(P[i - 1].depth >= P[i].depth, "奥から手前");
+  },
+  space_expr_digits_and_clashes() {
+    assert.strictEqual(UZ.spaceExpr("a2*3+1e2", ["a2"])({ a2: 2 }), 106);
+    assert.strictEqual(UZ.spaceExpr("th1", ["th1"])({ th1: 5 }), 5);
+    assert.throws(() => UZ.spaceExpr("max+1", ["max"]), /同じ/);
+    assert.throws(() => UZ.spaceExpr("PI", ["PI"]));
+  },
+  space_value_named_x() {   // 値の名前が x・y・t でも落ちない（extra が優先）
+    const S = UZ.styleOf(TH), v = { x: 3, t: 1 };
+    const decl = { items: [{ id: "s", kind: "surface", f: "x+y", x: [0, 1], y: [0, 1], grid: 2 }, { id: "c", kind: "curve", fn: ["t", "x", "0"], t: [0, 1], n: 2 }] };
+    const P = UZ.spacePrims(decl, v, UZ.spaceCamera({}, 200, 100, UZ.spaceBounds(decl, v)), S);
+    assert.ok(P.length > 0);
+  },
+  space_prim_ids_and_bounds() {
+    const S = UZ.styleOf(TH), v = {};
+    const decl = { bounds: { min: [0, 0, 0], max: [2, 2, 2] }, axes: null, items: [{ id: "axes", kind: "box", min: [0, 0, 0], max: [1, 1, 1] }, { id: "ar", kind: "arrow", from: [0, 0, 0], to: [1, 0, 0] }] };
+    const cam = UZ.spaceCamera({}, 200, 100, UZ.spaceBounds(decl, v));
+    assert.ok(Math.abs(cam.R - Math.sqrt(3)) < 1e-9);
+    const P = UZ.spacePrims({ ...decl, axes: { x: [0, 1] } }, v, cam, S);
+    assert.strictEqual(P.filter(p => p.id === "axes").length, 6);
+    assert.ok(P.some(p => p.id === "$axes") && P.some(p => p.id === "ar" && p.key === "ar:shaft") && P.every(p => p.el === undefined));
+    assert.throws(() => UZ.spaceBounds({ bounds: { x: [0, 1] } }, v), /bounds/);
   },
   space_shade() {
     const S = UZ.styleOf(TH), c = "#2255aa";

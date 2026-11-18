@@ -6,19 +6,9 @@
   const C = UZ.color, clamp = UZ.clamp;
   const SPACE = UZ.SPACE = { maxPrims: 6000, grid: 24, gridMax: 64, plateMaxAngle: 70, shadeMin: 0.75 };
   const RAD = Math.PI / 180;
-  const KEYS = ["accent", "ink", "muted", "good", "bad", "warn", "line", "bg", "surface"];
-  const finite = v => typeof v === "number" && Number.isFinite(v);
+    const finite = v => typeof v === "number" && Number.isFinite(v);
 
-  // 色の名前: geo.js の col() と同じ約束（テーマのキー・s1〜・役割・#rrggbb）。geo の col は makeGeo の中にあり
-  // 外から引けないので、ここに最小の写しを置く（2 か所を同じ約束に保つ）
-  function colorOf(S, c, dflt) {
-    if (c == null || c === "") return colorOf(S, dflt || "ink");
-    if (KEYS.includes(c)) return S[c];
-    const m = /^s([1-9]\d*)$/.exec(c);
-    if (m) { const sr = S.series && S.series.length ? S.series : [S.accent, S.good, S.ink]; return sr[(+m[1] - 1) % sr.length]; }
-    if (/^(#|rgb|hsl)/i.test(c)) return c;
-    return S.role(c);
-  }
+  const colorOf = UZ.colorOf;   // geo.js と共有（色の名前の解決）
 
   // ---- 式 ----
   // 数はそのまま、文字列は値の名前か式。使える関数は sin cos tan sqrt abs exp log pow min max と PI。
@@ -35,9 +25,12 @@
     let fn = EXPR_CACHE.get(key);
     if (fn) return fn;
     if (/["'`\\]/.test(src)) throw new Error(`式に使えない文字がある: ${src}`);
-    const ids = src.replace(/(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?/g, " ").match(/[A-Za-z_$][\w$]*/g) || [];
+    const ids = src.replace(/(?<![\w$])(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?/g, " ").match(/[A-Za-z_$][\w$]*/g) || [];
     for (const id of ids) if (!names.includes(id) && !MNAMES.includes(id)) throw new Error(`式の中の名前「${id}」が分からない（${src}）`);
-    const args = names.filter(n => !MNAMES.includes(n));
+    const clash = names.find(n => MNAMES.includes(n));
+    if (clash) throw new Error(`値の名前「${clash}」は式の関数・定数の名前と同じで使えない`);
+    names = names.filter((n, i) => names.indexOf(n) === i);
+    const args = names;
     const body = new Function(...MNAMES, ...args, `"use strict"; return (${src});`);
     fn = (v, extra) => {
       const vals = args.map(n => extra && n in extra ? extra[n] : v ? v[n] : undefined);
@@ -85,7 +78,7 @@
   const gridOf = o => Math.max(1, Math.min(SPACE.gridMax, Math.round(+o.grid || SPACE.grid)));
   function mk(v) {
     const names = Object.keys(v || {});
-    const ev = (x, extraNames) => UZ.spaceExpr(x, extraNames ? names.concat(extraNames) : names);
+    const ev = (x, extraNames) => UZ.spaceExpr(x, extraNames ? names.concat(extraNames.filter(n => !names.includes(n))) : names);
     const num = x => ev(x)(v);
     const pt = p => {
       if (!Array.isArray(p) || p.length !== 3) throw new Error(`3 次元の点は [x, y, z] で書く: ${JSON.stringify(p)}`);
@@ -126,8 +119,9 @@
       return { min: [x[0], y[0], z[0]], max: [x[1], y[1], z[1]] };
     }
     if (decl.bounds) {
-      const b = decl.bounds, x = rng(b.x, [0, 0]), y = rng(b.y, [0, 0]), z = rng(b.z, [0, 0]);
-      return { min: [x[0], y[0], z[0]], max: [x[1], y[1], z[1]] };
+      const b = decl.bounds;
+      if (!b || !Array.isArray(b.min) || !Array.isArray(b.max)) throw new Error("bounds は { min: [x, y, z], max: [x, y, z] } で書く");
+      return { min: K.pt(b.min), max: K.pt(b.max) };
     }
     const pts = [];
     for (const o of decl.items || []) {
@@ -163,7 +157,7 @@
     const face = (el, id, ps, color, o, normal) => {
       if (!ps.every(ok3)) return;
       const n = normal || polyNormal(ps);
-      push({ el, id, kind: "face", pts: ps.map(xy), depth: depthOf(ps), color: UZ.spaceShade(color, cam.dir(n), S), opacity: o.opacity });
+      push({ id: el, key: id, kind: "face", pts: ps.map(xy), depth: depthOf(ps), color: UZ.spaceShade(color, cam.dir(n), S), opacity: o.opacity });
     };
     const polyNormal = ps => {   // Newell の法
       let n = [0, 0, 0];
@@ -173,11 +167,11 @@
     };
     const seg = (el, id, a, b, color, o) => {
       if (!ok3(a) || !ok3(b)) return;
-      push({ el, id, kind: "seg", pts: [xy(a), xy(b)], depth: (cam.project(a)[2] + cam.project(b)[2]) / 2 - off, color, opacity: o.opacity, width: o.width });
+      push({ id: el, key: id, kind: "seg", pts: [xy(a), xy(b)], depth: (cam.project(a)[2] + cam.project(b)[2]) / 2 - off, color, opacity: o.opacity, width: o.width });
     };
     const text = (el, id, at, str, color, o) => {
       if (!ok3(at)) return;
-      push({ el, id, kind: "text", pts: [xy(at)], depth: cam.project(at)[2] - off, color, text: String(str), tex: !!o.tex, opacity: o.opacity });
+      push({ id: el, key: id, kind: "text", pts: [xy(at)], depth: cam.project(at)[2] - off, color, text: String(str), tex: !!o.tex, opacity: o.opacity });
     };
     const label = (o, at, color) => { if (o.label != null) text(o.id, o.id + ":label", at, o.label, colorOf(S, o.labelColor, "ink"), {}); };
 
@@ -190,14 +184,14 @@
         if (!A[nm]) return;
         const lo = b.min[i], hi = b.max[i], a = base.slice(), c = base.slice();
         a[i] = lo; c[i] = hi;
-        seg("axes", `axes:${nm}`, a, c, mutedC, {});
+        seg("$axes", `axes:${nm}`, a, c, mutedC, {});
         const st = niceStep(hi - lo);
         for (let t = Math.ceil(lo / st - 1e-9) * st, k = 0; t <= hi + 1e-9 && k < 40; t += st, k++) {
           const p = base.slice(); p[i] = t;
-          text("axes", `axes:${nm}:tick:${fmt(t)}`, p, fmt(t), mutedC, {});
+          text("$axes", `axes:${nm}:tick:${fmt(t)}`, p, fmt(t), mutedC, {});
         }
         const lab = A.labels && A.labels[nm];
-        if (lab != null) text("axes", `axes:${nm}:label`, c, lab, inkC, {});
+        if (lab != null) text("$axes", `axes:${nm}:label`, c, lab, inkC, {});
       });
     }
 
@@ -206,7 +200,7 @@
       const id = o.id, color = colorOf(S, o.color, o.kind === "box" || o.kind === "polygon" || o.kind === "surface" ? "accent" : "ink");
       if (o.kind === "point") {
         const p = K.pt(o.at);
-        if (ok3(p)) push({ el: id, id, kind: "dot", pts: [xy(p)], depth: cam.project(p)[2] - off, color: colorOf(S, o.color, "accent"), opacity: o.opacity, r: o.r });
+        if (ok3(p)) push({ id, key: id, kind: "dot", pts: [xy(p)], depth: cam.project(p)[2] - off, color: colorOf(S, o.color, "accent"), opacity: o.opacity, r: o.r });
         label(o, p);
       } else if (o.kind === "line") {
         const ps = o.points ? o.points.map(K.pt) : [K.pt(o.from), K.pt(o.to)], c = colorOf(S, o.color, "ink");
@@ -216,14 +210,14 @@
         for (let i = 1; i < ps.length; i++) seg(id, `${id}:${i - 1}`, ps[i - 1], ps[i], c, o);
       } else if (o.kind === "arrow") {
         const a = K.pt(o.from), b = K.pt(o.to), c = colorOf(S, o.color, "accent");
-        seg(id, `${id}:shaft`, a, b, c, o);
-        if (ok3(a) && ok3(b)) {   // 矢じりは画面上の 2D
+        if (ok3(a) && ok3(b)) {   // 矢じりは画面上の 2D。軸は矢じりの根元まで
           const pa = xy(a), pb = xy(b), dx = pb[0] - pa[0], dy = pb[1] - pa[1], len = Math.hypot(dx, dy);
           if (len > 1e-6) {
-            const ux = dx / len, uy = dy / len, hl = Math.min(12, len * 0.6), hw = hl * 0.5;
-            push({ el: id, id: `${id}:head`, kind: "face", pts: [pb, [pb[0] - ux * hl - uy * hw, pb[1] - uy * hl + ux * hw], [pb[0] - ux * hl + uy * hw, pb[1] - uy * hl - ux * hw]],
+            const ux = dx / len, uy = dy / len, hl = Math.min(12, len * 0.6), hw = hl * 0.5, f = (len - hl) / len;
+            push({ id, key: `${id}:shaft`, kind: "seg", pts: [pa, [pa[0] + dx * f, pa[1] + dy * f]], depth: (cam.project(a)[2] + cam.project(b)[2]) / 2 - off, color: c, opacity: o.opacity, width: o.width });
+            push({ id, key: `${id}:head`, kind: "face", pts: [pb, [pb[0] - ux * hl - uy * hw, pb[1] - uy * hl + ux * hw], [pb[0] - ux * hl + uy * hw, pb[1] - uy * hl - ux * hw]],
               depth: cam.project(b)[2] - off, color: c, opacity: o.opacity });
-          }
+          } else seg(id, `${id}:shaft`, a, b, c, o);
         }
         label(o, b);
       } else if (o.kind === "polygon") {

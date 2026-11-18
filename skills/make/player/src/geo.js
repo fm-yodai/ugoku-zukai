@@ -49,21 +49,26 @@
   // 写すときに外す属性（MathJax の内部の印と id。id はページの中で重なりうるので書かない）
   const skipAttr = k => k === "id" || k.startsWith("data-");
 
+  // 色の名前の解決（geo と space が共有する）: テーマのキー、線の並び（s1〜。数が並びを超えると回る）、役割の名前、#rrggbb などの色
+  const seriesOf = S => S.series && S.series.length ? S.series : [S.accent, S.good, S.ink];
+  const seriesColor = (S, c) => { const m = /^s([1-9]\d*)$/.exec(c); if (!m) return null; const sr = seriesOf(S); return sr[(+m[1] - 1) % sr.length]; };
+  UZ.colorOf = function colorOf(S, c, dflt) {
+    if (c == null || c === "") return dflt == null ? S.ink : colorOf(S, dflt);
+    if (KEYS.includes(c)) return S[c];
+    const sc = seriesColor(S, c);
+    if (sc) return sc;
+    if (/^(#|rgb|hsl)/i.test(c) || c === "none") return c;
+    return S.role(c);
+  };
+
   UZ.makeGeo = function (el, S) {
     const geo = { errors: [], S };
 
     // 色: テーマのキー（accent・ink・muted・good・bad・warn・line・bg・surface）、線の並び（s1〜。数が並びを超えると回る）、
     // 役割の名前、#rrggbb などの色
-    const series = S.series && S.series.length ? S.series : [S.accent, S.good, S.ink];
-    const seriesCol = c => { const m = /^s([1-9]\d*)$/.exec(c); return m ? series[(+m[1] - 1) % series.length] : null; };
-    const col = (c, dflt) => {
-      if (c == null || c === "") return dflt == null ? S.ink : col(dflt);
-      if (KEYS.includes(c)) return S[c];
-      const sc = seriesCol(c);
-      if (sc) return sc;
-      if (/^(#|rgb|hsl)/i.test(c) || c === "none") return c;
-      return S.role(c);
-    };
+    const series = seriesOf(S);
+    const seriesCol = c => seriesColor(S, c);
+    const col = (c, dflt) => UZ.colorOf(S, c, dflt);
     // 面の色: fill が true なら線の色、色の名前ならその色、なければ塗らない
     const fillOf = (o, stroke) => o.fill === true ? stroke : o.fill ? col(o.fill) : "none";
     geo.col = c => col(c);
