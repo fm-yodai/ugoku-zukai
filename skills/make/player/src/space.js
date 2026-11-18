@@ -95,7 +95,9 @@
 
   // 曲面・曲線の標本を、要素ごとに 1 度だけ取る（bounds とプリミティブで共有）
   function surfaceGrid(o, K) {
-    const [x0, x1] = K.range(o.x), [y0, y1] = K.range(o.y), g = gridOf(o), f = K.ev(o.f, ["x", "y"]), P = [];
+    const [x0, x1] = K.range(o.x), [y0, y1] = K.range(o.y), g = gridOf(o), P = [];
+    // fn = JS の関数（下の層 geo.space だけが付ける。台本の f は式の文字列で、validate が関数を断る）
+    const f = typeof o.fn === "function" ? (v, e) => +o.fn(e.x, e.y) : K.ev(o.f, ["x", "y"]);
     for (let i = 0; i <= g; i++) {
       const row = [];
       for (let j = 0; j <= g; j++) { const x = x0 + (x1 - x0) * i / g, y = y0 + (y1 - y0) * j / g; row.push([x, y, f(K.v, { x, y })]); }

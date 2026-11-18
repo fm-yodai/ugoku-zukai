@@ -407,6 +407,46 @@
       }
       return { w: geo.lerp(PA.w, PB.w, p), h: geo.lerp(PA.h, PB.h, p), el: root };
     };
+    // ---- 3D（宣言の部品 space と同じ核 UZ.space* を使う）----
+    // 積んで render() で描く。camera = { yaw, pitch, scale?, target?, bounds? }（数）。
+    // bounds を省くと、最初の project() か render() の時点で、積んだ要素の外接箱を求めて凍結する（以後に足した要素でカメラは動かない。
+    // 値で要素が動くときは bounds を渡すと、コマごとに寄ったり縮んだりしない）
+    geo.space = function (g, box, camera) {
+      const cam0 = camera || {}, items = [];
+      const decl = { items, camera: { yaw: cam0.yaw || 0, pitch: cam0.pitch || 0 } };
+      if (cam0.scale != null) decl.camera.scale = cam0.scale;
+      if (cam0.target != null) decl.camera.target = cam0.target;
+      if (cam0.bounds) decl.bounds = cam0.bounds;
+      const freeze = () => { if (!decl.bounds) decl.bounds = UZ.spaceBounds(decl, {}); };
+      const add = (kind, o, props) => {
+        o = o || {};
+        const it = { id: o.id || `g${items.length + 1}`, kind, ...props };
+        for (const k of ["color", "color2", "opacity", "label", "width", "r", "grid", "tex"]) if (o[k] != null) it[k] = o[k];
+        items.push(it);
+        return it.id;
+      };
+      const sp = {
+        point: (p, o) => add("point", o, { at: p }),
+        line: (pts, o) => add("line", o, { points: pts }),
+        arrow: (a, b, o) => add("arrow", o, { from: a, to: b }),
+        polygon: (pts, o) => add("polygon", o, { points: pts }),
+        box: (min, max, o) => add("box", o, { min, max }),
+        surface: (f, xr, yr, o) => add("surface", o, { fn: f, x: xr, y: yr }),
+        text: (p, s, o) => add("text", o, { at: p, text: s }),
+        project: p => {
+          freeze();
+          const q = UZ.spaceView(decl, {}, box.w, box.h).project(p);
+          return [box.x + q[0], box.y + q[1]];
+        },
+        render: () => {
+          freeze();
+          const wrap = el("g", { transform: `translate(${box.x},${box.y})` }, g);
+          const r = UZ.spaceRender(el, wrap, decl, {}, box.w, box.h, null, S);
+          geo.errors.push(...r.errors);
+        },
+      };
+      return sp;
+    };
     return geo;
   };
 })(globalThis.UZ = globalThis.UZ || {});

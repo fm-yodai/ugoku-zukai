@@ -100,7 +100,85 @@ const checkSpace = async sb => {
   return { errors: cr.errors, warnings: (M.warnings || []).concat(cr.warnings), layout };
 };
 
+// geo 検査用（test_m8.cjs と同じ）: svg_dom の document で要素を作る el
+const SVGDOM = require("../svg_dom.cjs");
+const DOC = SVGDOM.makeDocument();
+const fakeEl = (tag, attrs, parent) => {
+  const e = DOC.createElementNS("http://www.w3.org/2000/svg", tag);
+  if (attrs) for (const k in attrs) if (attrs[k] != null) e.setAttribute(k, attrs[k]);
+  if (parent) parent.appendChild(e);
+  return e;
+};
+const newGeo = () => ({ geo: UZ.makeGeo(fakeEl, UZ.styleOf(TH)), g: fakeEl("g") });
+
 const tests = {
+  async geo_space() {
+    const { geo, g } = newGeo();
+    const box = { x: 40, y: 30, w: 300, h: 200 };
+    const sp = geo.space(g, box, { yaw: 30, pitch: 25, bounds: { min: [0, 0, 0], max: [2, 2, 2] } });
+    sp.box([0, 0, 0], [1, 1, 1], { color: "accent" });
+    sp.render();
+    const svg = SVGDOM.serialize(g);
+    const paths = [...svg.matchAll(/<path [^>]*>/g)].map(m => m[0]);
+    assert.strictEqual(paths.length, 6, `面は 6 枚: ${paths.length}`);
+    // 描いた順 = 奥から手前（同じ宣言を UZ.spacePrims で並べた順と同じ）
+    const S = UZ.styleOf(TH), cam = UZ.spaceCamera({ yaw: 30, pitch: 25 }, box.w, box.h, { min: [0, 0, 0], max: [2, 2, 2] });
+    const prims = UZ.spacePrims({ items: [{ id: "g1", kind: "box", min: [0, 0, 0], max: [1, 1, 1] }] }, {}, cam, S);
+    assert.strictEqual(prims.length, 6);
+    const dOf = p => "M" + p.pts.map(q => `${(Math.round(q[0] * 100) / 100).toFixed(2)},${(Math.round(q[1] * 100) / 100).toFixed(2)}`).join("L") + "Z";
+    paths.forEach((tag, i) => assert.ok(tag.includes(`d="${dOf(prims[i])}"`), `${i} 番目の面の順・形が違う: ${tag}`));
+    for (let i = 1; i < prims.length; i++) assert.ok(prims[i - 1].depth >= prims[i].depth, "奥から手前");
+    assert.ok(svg.includes(`translate(${box.x},${box.y})`), "箱の位置に動かしている");
+    // project は spaceCamera と同じ値（部品の座標 = 箱の左上を足す）
+    for (const p of [[0, 0, 0], [1, 1, 1], [2, 0.5, 1.5]]) {
+      const a = sp.project(p), b = cam.project(p);
+      assert.ok(Math.abs(a[0] - (b[0] + box.x)) < 1e-9 && Math.abs(a[1] - (b[1] + box.y)) < 1e-9, `project(${p}) = ${a}`);
+    }
+  },
+  async geo_space_items() {
+    const { geo, g } = newGeo();
+    const sp = geo.space(g, { x: 0, y: 0, w: 300, h: 200 }, { yaw: 20, pitch: 20 });
+    sp.point([1, 1, 1], { id: "p", label: "P" });
+    sp.line([[0, 0, 0], [1, 0, 0], [1, 1, 0]]);
+    sp.arrow([0, 0, 0], [0, 0, 2]);
+    sp.polygon([[0, 0, 0], [2, 0, 0], [2, 2, 1]], { opacity: 0.5 });
+    sp.text([0, 0, 2], "ラベル");
+    sp.surface((x, y) => x * y, [0, 1], [0, 1], { grid: 4 });
+    // 式の surface と同じ網目（grid 4 → 16 面）
+    const surf16 = (() => { const d = { items: [{ id: "a", kind: "surface", f: "x*y", x: [0, 1], y: [0, 1], grid: 4 }] };
+      return UZ.spacePrims(d, {}, UZ.spaceCamera({}, 300, 200, UZ.spaceBounds(d, {})), UZ.styleOf(TH)).length; })();
+    assert.strictEqual(surf16, 16);
+    sp.render();
+    const svg = SVGDOM.serialize(g);
+    assert.ok(svg.includes('data-s3="p"'), "id を渡した要素");
+    assert.ok(svg.includes('data-s3="g2"') && svg.includes('data-s3="g5"'), "自動の id");
+    assert.ok(svg.includes("ラベル") && svg.includes(">P<"));
+    assert.deepStrictEqual(geo.errors, []);
+    // 関数の曲面は 16 面 = path が 16 枚（g6）
+    assert.strictEqual([...svg.matchAll(/<path [^>]*data-s3="g6"/g)].length, 16);
+    // 描き直しても同じ（時刻だけで決まる）
+    const g2 = fakeEl("g"); const sp2 = geo.space(g2, { x: 0, y: 0, w: 300, h: 200 }, { yaw: 20, pitch: 20 });
+    sp2.point([1, 1, 1], { id: "p", label: "P" }); sp2.line([[0, 0, 0], [1, 0, 0], [1, 1, 0]]); sp2.arrow([0, 0, 0], [0, 0, 2]);
+    sp2.polygon([[0, 0, 0], [2, 0, 0], [2, 2, 1]], { opacity: 0.5 }); sp2.text([0, 0, 2], "ラベル"); sp2.surface((x, y) => x * y, [0, 1], [0, 1], { grid: 4 }); sp2.render();
+    assert.strictEqual(SVGDOM.serialize(g2), svg);
+  },
+  async geo_space_bounds_freeze() {
+    const { geo, g } = newGeo();
+    const sp = geo.space(g, { x: 10, y: 10, w: 300, h: 200 }, { yaw: 0, pitch: 0 });
+    sp.point([0, 0, 0]); sp.point([2, 2, 2]);
+    const a = sp.project([1, 1, 1]);
+    sp.point([10, 10, 10]);   // project の後に足しても、カメラは変わらない（凍結）
+    const b = sp.project([1, 1, 1]);
+    assert.deepStrictEqual(a, b);
+    sp.render();
+    const o = sp.project([0, 0, 0]);
+    assert.ok(SVGDOM.serialize(g).includes(`cx="${(Math.round((o[0] - 10) * 100) / 100).toFixed(2)}"`), "render は project と同じカメラ");
+  },
+  async geo_space_fn_rejected_in_storyboard() {
+    const M = await build(deck6({ a: { title: "A", parts: [{ figure: "sp" }] } }, [SC("s1", "a")],
+      { sp: { type: "space", items: [{ id: "s", kind: "surface", f: () => 1, x: [0, 1], y: [0, 1] }] } }));
+    assert.ok((M.errors || []).length > 0, "関数の f は台本では誤り");
+  },
   async space_validate() {
     const one = (part, extra = {}) => build(deck6({ a: { title: "A", parts: [part] } }, [SC("s1", "a")], {}, { values: { th: 0 }, ...extra }));
     const P = SPACE_PART();
