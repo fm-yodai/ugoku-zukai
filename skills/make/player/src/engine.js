@@ -139,6 +139,33 @@
     // カメラの run: 同じスライドが続く場面の通し番号（図だけの場面は 1 場面で 1 run）。run が変わるとカメラは戻る
     scenes.forEach((sc, si) => { const pv = scenes[si - 1]; sc.run = pv && sc.slide != null && pv.slide === sc.slide ? pv.run : (pv ? pv.run + 1 : 0); });
 
+    // ---- 子の図: space の板（plate）の図は、その space の部品を置いた場面に、子の図として加える ----
+    // 子の図の id は板の id。図の配置は自然な大きさで 1 回だけ（大きさは、初めの値で区画に写した板の px）。
+    // 場面ごとの状態（show・focus など）は普通の図と同じに持ち、描くときは親の部品が、奥から塗る順の位置に行列 1 つで描く。
+    // 図の記録の parent = { fig: 親の図の id, kind: "plate", item: 板の id }（コマの figs にも同じ形で載る）
+    const kidsOf = {};   // 親の図の id → [{ id: 子の図の id, parent, spec, plate }]
+    for (const { space, plate } of UZ.platesOf(sb)) {
+      (kidsOf[space] || (kidsOf[space] = [])).push({ id: plate.id, parent: { fig: space, kind: "plate", item: plate.id }, plate,
+        spec: typeof plate.figure === "string" ? FIGS[plate.figure] : FIGS[plate.id] });
+    }
+    const kidById = {};
+    for (const list of Object.values(kidsOf)) for (const k of list) kidById[k.id] = k;
+    for (const sc of scenes) {
+      const add = [];
+      sc.figs.forEach((fid, i) => {
+        for (const k of kidsOf[fid] || []) {
+          const A = sc.areas[i];
+          let a = null;
+          try { a = UZ.plateArea(FIGS[fid], k.plate, sb.values || {}, A.w, A.h); } catch (e) { a = null; }   // 式の誤りは space の検査が知らせる
+          if (!a || !(a.w > 0) || !(a.h > 0) || !Number.isFinite(a.w) || !Number.isFinite(a.h)) a = { w: A.w, h: A.h };
+          add.push({ id: k.id, area: { x: 0, y: 0, w: Math.max(40, a.w), h: Math.max(40, a.h) } });
+        }
+      });
+      if (!add.length) continue;
+      sc.figs = sc.figs.concat(add.map(x => x.id)); sc.areas = sc.areas.concat(add.map(x => x.area)); sc.over = sc.over.concat(add.map(() => ({})));
+    }
+    const specOf = fid => (kidById[fid] ? kidById[fid].spec : FIGS[fid]);
+
     // ---- Morph: morph を書いた部品を最初に使う場面の直前の場面が、v1 を置いたスライドでなければ誤り ----
     // （morph が後のスライドを指す逆向きの鎖や、a ↔ b の輪も、ここで止まる）
     const morphs = [];   // { si: 場面の添字, from: v1, to: v2 }
@@ -198,11 +225,11 @@
         const fid = sc.figs[i];
         const over = sc.slide ? sc.over[i] : null;
         if (figs[fid]) {
-          const want = (over && over.fit) ?? FIGS[fid].fit;
+          const want = (over && over.fit) ?? specOf(fid).fit;
           if (want !== figs[fid].layoutFit) warn(`スライド「${sc.slide}」: 部品「${fid}」の fit（${want ?? "指定なし"}）は効かない。図「${fid}」は最初の場面の fit（${figs[fid].layoutFit ?? "指定なし"}）で組んである。部品ごとに fit を変えられない`);
           continue;
         }
-        const f = over && Object.keys(over).length ? { ...FIGS[fid], ...over } : FIGS[fid];
+        const f = over && Object.keys(over).length ? { ...specOf(fid), ...over } : specOf(fid);
         const S = sc.slideDark ? SD : S0;
         const A = sc.areas[i];
         let L = null;
@@ -223,7 +250,8 @@
         if (L.morphWarn && L.morphWarn.length) warn(`スライド「${sc.slide}」: 部品「${fid}」: Morph の系列で矢印が箱に重なる（${L.morphWarn.join("、")}）。系列の図のノードか辺を見直す`);
         const items = {};
         for (const it of L.items) { it.fig = fid; it.key = `${fid}/${it.id}`; items[it.id] = it; }
-        figs[fid] = { id: fid, type: f.type, spec: FIGS[fid], layoutFit: f.fit, w: L.w, h: L.h, items, order: L.order, autoShow: !!L.autoShow, fixed: !!L.fixed, extra: L, dark: !!sc.slideDark };
+        figs[fid] = { id: fid, type: f.type, spec: specOf(fid), layoutFit: f.fit, w: L.w, h: L.h, items, order: L.order, autoShow: !!L.autoShow, fixed: !!L.fixed, extra: L, dark: !!sc.slideDark };
+        if (kidById[fid]) figs[fid].parent = { ...kidById[fid].parent };
       }
     }
     // ---- id の解決 ----
@@ -260,6 +288,8 @@
       const one = (id, whole) => {
         const it = F.items[id], out = [];
         if (it.kind !== "group") out.push(it.key);
+        // 板（space の要素 plate）を出すと、板の中の図も出る
+        if (it.kind === "s3" && it.el.kind === "plate" && figs[it.id] && figs[it.id].parent && figs[it.id].parent.fig === F.id) out.push(...expand({ fig: it.id, whole: true }));
         // 図ごと出すときは、順番の列に載っている中身（枠の中のノードなど）はその順番で出す
         for (const m of it.members || []) if (F.items[m] && !(whole && inOrder.has(m))) out.push(F.items[m].key);
         return out;
@@ -268,6 +298,11 @@
       return one(r.id);
     }
 
+    // 親の space とその子の図（板の図）の組。子でも親でもない図はそれだけ
+    const familyOf = fid => {
+      const top = figs[fid] && figs[fid].parent ? figs[fid].parent.fig : fid;
+      return [top, ...(kidsOf[top] || []).map(k => k.id).filter(id => figs[id])];
+    };
     // ---- 動作の列 ----
     const acts = [], extras = { marks: {}, notes: {}, dots: {}, replies: [], customs: [] };
     const values0 = { ...(sb.values || {}) };   // 名前付きの値の初め（set で動かす）
@@ -332,7 +367,8 @@
               dur = act.each + act.stagger * Math.max(0, keys.length - 1);
             }
             // focus は同じ図の中を薄くする。部品の全体を指したときは、同じ場面のほかの部品を薄くする（指した部品は薄くしない）
-            if (verb === "focus") act.figsOf = wholeRef ? sc.figs.slice() : [...new Set(keys.map(k => k.split("/")[0]))];
+            // 板の中（子の図）と親の space は 1 つの図として薄くする（板の中の箱に focus すると、ほかの板と space の要素も薄くなる）
+            if (verb === "focus") act.figsOf = wholeRef ? sc.figs.slice() : [...new Set(keys.map(k => k.split("/")[0]).flatMap(familyOf))];
             if (verb === "blur") act.figsOf = sc.figs;   // ぼかしは、対象のない図も含めて場面の全部の図に及ぶ
           } else if (verb === "unblur") {
             act.figsOf = val === true || val == null ? sc.figs : asList(val);
@@ -528,6 +564,8 @@
     }
     const place = (fid, area, over = {}) => {
       const F = figs[fid], w = F.x1 - F.x0, h = F.y1 - F.y0;
+      // 子の図（板の図）は親の部品が行列で描く。置き場所は持たない（恒等にしておく。コマでは place: null）
+      if (F.parent) return { s: 1, ox: 0, oy: 0 };
       // custom と space の部品は伸び縮みさせず、場面ごとの区画の大きさで描き直す（関数に渡す w・h = 区画の px。文字の大きさが保たれる）
       if (F.type === "custom" || F.type === "space") return { s: 1, ox: area.x, oy: area.y, w: area.w, h: area.h };
       // 拡大の上限: 図が決めていればそれ（テキストは 1 = 文字の大きさを保つ）
@@ -549,6 +587,7 @@
       }
       const si = scenes.indexOf(sc), out = [];
       for (const fid of sc.figs) {
+        if (figs[fid].parent) continue;   // 板の中は、写した形が値で変わる。数えない
         const F = figs[fid], pl = sc.place[fid], mo = morphs.find(m => m.si === si && m.to === fid);
         for (const it of Object.values(F.items)) {
           if (!["box", "frame", "text"].includes(it.kind) || !it.bbox) continue;
@@ -621,6 +660,18 @@
       try { return UZ.spaceBBox(F, id, valuesAtT(T), pl.w, pl.h, S) || figBox(F, pl); }
       catch (e) { return figBox(F, pl); }
     };
+    // 子の図（板の図）の中の矩形 b を、時刻 T の値で写した外接矩形（親の部品のローカル座標）。写せないときは null
+    const plateBoxAt = (K, b, T, pl) => {
+      try {
+        const P = figs[K.parent.fig], v = valuesAtT(T), cam = UZ.spaceView(P.spec, v, pl.w, pl.h, P.v0);
+        const plate = P.items[K.parent.item].el;
+        const m = UZ.plateMatrix(plate, v, cam, { x: K.x0, y: K.y0, w: K.x1 - K.x0, h: K.y1 - K.y0 });
+        const ps = [[b.x, b.y], [b.x + b.w, b.y], [b.x, b.y + b.h], [b.x + b.w, b.y + b.h]].map(([x, y]) => [m[0] * x + m[2] * y + m[4], m[1] * x + m[3] * y + m[5]]);
+        if (!ps.every(q => q.every(Number.isFinite))) return null;
+        const xs = ps.map(q => q[0]), ys = ps.map(q => q[1]);
+        return { x: Math.min(...xs), y: Math.min(...ys), w: Math.max(...xs) - Math.min(...xs), h: Math.max(...ys) - Math.min(...ys) };
+      } catch (e) { return null; }
+    };
     // ---- カメラ: run ごとに状態を追い、zoom・pan の from・to を決める。場面の終わりのカメラは sc.camEnd ----
     {
       const CA = UZ.CAMERA;
@@ -638,6 +689,14 @@
           if (a.target) {   // 対象が数個なら、画面上の外接矩形
             let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
             for (const t of a.target) {
+              if (figs[t.fig].parent) {   // 板の中の要素（か板の中の図の全体）は、寄り始めの値で写した外接矩形（親の部品の座標）
+                const K = figs[t.fig], P = figs[K.parent.fig], pl = sc.place[P.id];
+                const kb = t.whole ? { x: K.x0, y: K.y0, w: K.x1 - K.x0, h: K.y1 - K.y0 } : K.items[t.id].bbox;
+                const b = plateBoxAt(K, kb, a.start, pl) || figBox(P, pl);
+                x0 = Math.min(x0, pl.ox + b.x * pl.s); y0 = Math.min(y0, pl.oy + b.y * pl.s);
+                x1 = Math.max(x1, pl.ox + (b.x + b.w) * pl.s); y1 = Math.max(y1, pl.oy + (b.y + b.h) * pl.s);
+                continue;
+              }
               const F = figs[t.fig], pl = sc.place[t.fig];
               // space の要素は、寄り始めの値で投影した外接矩形（寄っている間に yaw などが動いても追わない）
               const b = t.whole || F.type === "custom" ? figBox(F, pl)
@@ -732,7 +791,7 @@
     // Morph で v1 の表示を引き継ぐ図も、出たものとみなす
     const shown = fid => acts.some(a => (a.verb === "show" && a.keys.some(k => k.startsWith(fid + "/"))) || (a.verb === "morph" && a.to === fid && a.pairs.length));
     for (const sc of scenes) for (const fid of sc.figs) {
-      if (figs[fid].autoShow || sc.slide) continue;
+      if (figs[fid].autoShow || sc.slide || figs[fid].parent) continue;
       const any = acts.some(a => a.verb === "show" && a.keys.some(k => k.startsWith(fid + "/")) && a.start < sc.end);
       if (!any) warn(`場面 ${sc.id}: 図「${fid}」を show していない（何も出ない）`);
     }
@@ -1010,6 +1069,8 @@
       const mo = morphFrom[fid];
       figsF[fid] = { opacity: backTo[fid] ? 0 : 1 - k, place: mo && mo.series && figsF[mo.to] ? figsF[mo.to].place : prevPl(fid) };
     }
+    // 子の図（板の図）: 親の部品と一緒に出入りする。置き場所は持たず、親が行列で描く
+    for (const [fid, F] of Object.entries(M.figs)) if (F.parent) figsF[fid] = { opacity: figsF[F.parent.fig] ? figsF[F.parent.fig].opacity : 0, place: null, parent: { ...F.parent } };
     // body の clip: 寄せている間と、寄せたスライドから次のスライドへ移る 0.8 秒の間（前後の body を合わせた範囲）
     const leaving = newRun && prev.camEnd.s > 1.001 && t < sc.start + 0.8;
     const U = leaving ? unionRect(prev.body, sc.body) : sc.body;
@@ -1044,9 +1105,11 @@
     const sc = M.scenes.find(s => s.id === sl.scenes[0]);
     const st = {}, figsF = {};
     for (const fid of Object.keys(M.figs)) figsF[fid] = { opacity: 0, place: null };
-    for (const fid of sl.figs) {
-      if (sl.transient.includes(fid)) continue;
-      figsF[fid] = { opacity: 1, place: sc.place[fid] };
+    // 子の図（板の図）は親の部品と一緒に出す
+    const kids = fid => Object.values(M.figs).filter(F => F.parent && F.parent.fig === fid).map(F => F.id);
+    for (const fid of sl.figs.flatMap(f => (sl.transient.includes(f) ? [] : [f, ...kids(f)]))) {
+      const F = M.figs[fid];
+      figsF[fid] = F.parent ? { opacity: 1, place: null, parent: { ...F.parent } } : { opacity: 1, place: sc.place[fid] };
       for (const it of Object.values(M.figs[fid].items)) {
         if (it.kind === "mark" || it.kind === "note" || it.kind === "dot" || it.isReply) continue;
         st[it.key] = { show: 1, dim: 1, blur: 0, pulse: 0, tint: null, tintP: 0, text: null, textFrom: null, textP: 1, mark: null, pos: null, off: [0, 0], labelText: null };

@@ -9,12 +9,13 @@
     chart: ["categories", "series"], kpi: ["items"], matrix: ["x", "y"], pyramid: ["levels"], cycle: ["steps"], venn: ["sets"],
     text: ["blocks"], image: ["src"], frame: [], custom: ["draw"], space: ["items"],
   };
-  // 部品 space の要素の種類と、種類ごとに数（式）を書く項目。plate は Task 10 で中身を足す
+  // 部品 space の要素の種類
   const S3_KINDS = ["point", "line", "arrow", "polygon", "box", "surface", "curve", "text", "plate"];
   const ROLES = ["actor", "process", "store", "external", "muted", "added", "removed", "good", "bad", "warn", "accent"];
 
   // 部品 space: 要素の種類・必須の項目・点の形・式（値の名前）を見る。式はコンパイルだけする（値で評価するのは描くとき）
-  function validateSpace(f, where, E, addId, names) {
+  // figures = 台本の figures（板の figure が図の id を指すとき）
+  function validateSpace(f, where, E, addId, names, figures) {
     const expr = (x, what, extra) => {
       if (typeof x === "number") { if (!Number.isFinite(x)) E(`${where}: ${what} が数でない`); return; }
       try { UZ.spaceExpr(x, extra ? names.concat(extra) : names); } catch (e) { E(`${where}: ${what}: ${e.message}`); }
@@ -70,6 +71,20 @@
           else o.fn.forEach((x, i) => expr(x, `${w} の fn[${i}]`, ["t"]));
           range(o.t, `${w} の t`);
         }
+      } else if (o.kind === "plate") {
+        // 板: figure = figures の図の id か、部品と同じ宣言（type を持つオブジェクト）。origin = 左上の角、size = [幅, 高さ]、tilt = 上辺を軸に手前へ倒す角度（度）
+        if (need("figure", "origin", "size")) {
+          point(o.origin, `${w} の origin`);
+          if (!Array.isArray(o.size) || o.size.length !== 2) E(`${where}: ${w} の size は [幅, 高さ]（ワールドの単位。数か式）で書く（今は ${JSON.stringify(o.size)}）`);
+          else o.size.forEach((x, i) => expr(x, `${w} の size[${i}]`));
+          const fg = o.figure;
+          if (typeof fg === "string") {
+            if (!figures || !Object.prototype.hasOwnProperty.call(figures, fg)) E(`${where}: ${w} の figure「${fg}」が figures にない`);
+            else if (figures[fg] && figures[fg].type === "space") E(`${where}: ${w} の figure に space は置けない（板の中は 2D の図）`);
+          } else if (!fg || typeof fg !== "object" || Array.isArray(fg) || fg.type == null) E(`${where}: ${w} の figure は figures の図の id か、部品と同じ宣言（type を持つオブジェクト）で書く`);
+          else if (fg.type === "space") E(`${where}: ${w} の figure に space は置けない（板の中は 2D の図）`);
+        }
+        if (o.tilt != null) expr(o.tilt, `${w} の tilt`);
       }
       if (o.opacity != null && !(typeof o.opacity === "number" && o.opacity >= 0 && o.opacity <= 1)) E(`${where}: ${w} の opacity は 0〜1 の数で書く`);
     }
@@ -331,13 +346,32 @@
       }
       if (f.type === "space") {
         addId("draw", "描き場");
-        validateSpace(f, where, E, addId, Object.keys(sb.values && typeof sb.values === "object" ? sb.values : {}));
+        validateSpace(f, where, E, addId, Object.keys(sb.values && typeof sb.values === "object" ? sb.values : {}), sb.figures);
       }
       if (f.type === "canvas") {
         for (const s of f.shapes || []) {
           addId(s.id, "図形");
           if (!["rect", "ellipse", "line", "arrow", "text"].includes(s.shape)) E(`${where}: 図形 ${s.id} の shape は rect / ellipse / line / arrow / text`);
         }
+      }
+    }
+
+    // 板（plate）の図は、その space の子の図になり、板の id で引く。板の id は台本全体で 1 つにする。
+    // 板に置いた図は、同じスライドに部品としては置けない（同じ図を 2 か所に描くことになる）
+    {
+      const plates = UZ.platesOf(sb), seenP = new Set();
+      for (const { space, plate } of plates) {
+        const pid = plate.id;
+        if (typeof pid !== "string") continue;
+        if (seenP.has(pid)) E(`図「${space}」: 板の id「${pid}」が、別の space の板と重なる（板の id は台本全体で 1 つにする）`);
+        seenP.add(pid);
+        const inline = plate.figure && typeof plate.figure === "object" && FIGS[pid] === plate.figure;
+        if (Object.prototype.hasOwnProperty.call(FIGS, pid) && !inline) E(`図「${space}」: 板の id「${pid}」が、図か部品の id と重なる（板の中の要素は「板の id/要素の id」で指すので、別の id にする）`);
+      }
+      for (const [sid, sl] of Object.entries(sb.slides && typeof sb.slides === "object" ? sb.slides : {})) {
+        const ids = new Set((sl && Array.isArray(sl.parts) ? sl.parts : []).map(UZ.partId).filter(x => x != null));
+        for (const { space, plate } of plates) if (ids.has(space) && typeof plate.figure === "string" && ids.has(plate.figure))
+          E(`スライド「${sid}」: 板「${plate.id}」の図「${plate.figure}」は、同じスライドに部品としても置いている（板に置く図は、部品としては置かない）`);
       }
     }
 

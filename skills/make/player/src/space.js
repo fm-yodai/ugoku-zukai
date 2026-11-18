@@ -112,6 +112,38 @@
     return out;
   }
 
+  // ---- 2.5D の板（plate）----
+  // θ = tilt（度、既定 0）。u = [1, 0, 0]、vdir = [0, −sinθ, −cosθ]（tilt 0 で下向き、90 で手前向き = 上辺を軸に手前へ倒れて水平になる）。
+  // 四隅は origin（左上）、origin + W·u、origin + W·u + H·vdir、origin + H·vdir（size = [W, H]）。origin・size・tilt は数か式
+  function plateGeom(o, K) {
+    const O = K.pt(o.origin);
+    if (!Array.isArray(o.size) || o.size.length !== 2) throw new Error(`板の size は [幅, 高さ] で書く: ${JSON.stringify(o.size)}`);
+    const W = K.num(o.size[0]), H = K.num(o.size[1]), th = (o.tilt != null ? K.num(o.tilt) : 0) * RAD;
+    const u = [1, 0, 0], vd = [0, -Math.sin(th), -Math.cos(th)];
+    const at = (a, b) => [O[0] + a * u[0] + b * vd[0], O[1] + a * u[1] + b * vd[1], O[2] + a * u[2] + b * vd[2]];
+    return { O, u, vd, W, H, at, pts: [at(0, 0), at(W, 0), at(W, H), at(0, H)] };
+  }
+  const plateOf = (o, v) => { const K = mk(v); K.v = v || {}; return plateGeom(o, K); };
+  // 板の中の図（自然な大きさで配置した図の外接矩形 figBox = {x, y, w, h}）を、縦横比を保って板の長方形に収め（中央寄せ）、
+  // 投影まで含めた写像を SVG の行列 [a, b, c, d, e, f]（図のローカル座標 → 部品の座標）にする。平行投影なので写像は 1 次（アフィン）
+  UZ.plateMatrix = function (plate, v, cam, figBox) {
+    const P = plateOf(plate, v), fw = Math.max(1e-9, figBox.w), fh = Math.max(1e-9, figBox.h);
+    const k = Math.min(P.W / fw, P.H / fh), ou = (P.W - fw * k) / 2, ov = (P.H - fh * k) / 2;
+    const S0 = cam.project(P.at(ou, ov)), S1 = cam.project(P.at(ou + fw * k, ov)), S2 = cam.project(P.at(ou, ov + fh * k));
+    const a = (S1[0] - S0[0]) / fw, b = (S1[1] - S0[1]) / fw, c = (S2[0] - S0[0]) / fh, d = (S2[1] - S0[1]) / fh;
+    return [a, b, c, d, S0[0] - a * figBox.x - c * figBox.y, S0[1] - b * figBox.x - d * figBox.y];
+  };
+  // 板の面と視線のなす角（度）。0 = 正面、90 = 真横から（読めない）
+  UZ.plateAngle = function (plate, v, cam) {
+    const P = plateOf(plate, v), n = cam.dir(cross(P.u, P.vd)), nl = Math.hypot(n[0], n[1], n[2]);
+    return nl > 0 ? Math.acos(clamp(Math.abs(n[2]) / nl, 0, 1)) / RAD : 90;
+  };
+  // 板の中の図を配置する大きさ（px）: 初めの値 v0 で、部品の区画 w × h のカメラに写した板の大きさ
+  UZ.plateArea = function (decl, plate, v0, w, h) {
+    const P = plateOf(plate, v0), cam = UZ.spaceView(decl, v0, w, h, v0);
+    return { w: cam.s * P.W, h: cam.s * P.H };
+  };
+
   // 内容の外接箱。axes があればその範囲、なければ decl.bounds、なければ要素を今の値で評価した外接箱
   UZ.spaceBounds = function (decl, v) {
     const K = mk(v); K.v = v || {};
@@ -134,6 +166,7 @@
       else if (o.kind === "box") pts.push(K.pt(o.min), K.pt(o.max));
       else if (o.kind === "surface") surfaceGrid(o, K).forEach(r => r.forEach(p => pts.push(p)));
       else if (o.kind === "curve") curvePts(o, K).forEach(p => pts.push(p));
+      else if (o.kind === "plate") plateGeom(o, K).pts.forEach(p => pts.push(p));
     }
     const ok = pts.filter(p => p.every(finite));
     if (!ok.length) return { min: [0, 0, 0], max: [0, 0, 0] };
@@ -244,8 +277,12 @@
         }
       } else if (o.kind === "text") {
         text(id, id, K.pt(o.at), o.text, colorOf(S, o.color, "ink"), o);
+      } else if (o.kind === "plate") {
+        // 板全体を 1 つのプリミティブにし、重心の奥行きで並べる（中の図は描く側が行列 1 つで描く。spaceRender の opts.plate）
+        const ps = plateGeom(o, K).pts;
+        if (ps.every(ok3)) push({ id, key: id, kind: "plate", pts: ps.map(xy), depth: depthOf(ps), plate: o });
       }
-      // plate は Task 10。未知の種類は無視する
+      // 未知の種類は無視する
     }
     // 奥 → 手前（depth の大きい順。同じ奥行きは宣言の順を保つ）
     out.forEach((p, i) => { p._i = i; });
@@ -313,8 +350,8 @@
   };
 
   // ---- 交差する面 ----
-  // surface 以外の面（polygon と box の面）のうち、3D で交差する要素の組 [[idA, idB], …]（宣言の順）。
-  // 縁や角で触れるだけ・同じ平面に重なるだけは数えない（触れるだけなら奥から塗る順で破綻しない）。plate は Task 10 で足す
+  // surface 以外の面（polygon と box の面と、板 plate の長方形）のうち、3D で交差する要素の組 [[idA, idB], …]（宣言の順）。
+  // 縁や角で触れるだけ・同じ平面に重なるだけは数えない（触れるだけなら奥から塗る順で破綻しない）
   const dot3 = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
   UZ.spaceIntersections = function (decl, v) {
     const K = mk(v); K.v = v || {};
@@ -323,6 +360,7 @@
       if (!o || !o.id) continue;
       let faces = [];
       if (o.kind === "polygon") faces = [o.points.map(K.pt)];
+      else if (o.kind === "plate") faces = [plateGeom(o, K).pts];
       else if (o.kind === "box") {
         const lo = K.pt(o.min), hi = K.pt(o.max), V = (i, j, k) => [i ? hi[0] : lo[0], j ? hi[1] : lo[1], k ? hi[2] : lo[2]];
         faces = [[[0, 0, 0], [1, 0, 0], [1, 1, 0], [0, 1, 0]], [[0, 0, 1], [1, 0, 1], [1, 1, 1], [0, 1, 1]], [[0, 0, 0], [1, 0, 0], [1, 0, 1], [0, 0, 1]],
@@ -424,7 +462,9 @@
   // 部品を、描き場 g（部品のローカル座標。w × h は区画の px）に描く。el は要素を作る関数（ブラウザは view_svg の el、node は svg_dom）。
   // decl = 部品の宣言、v = 今の値、states = UZ.spaceStates の結果（なければ全部出ている）。式の誤りは例外。TeX の誤りは { errors } で返す
   // v0 = 台本の初めの値（engine の図の F.v0）。axes も bounds もないとき、自動の大きさと中心はこの値で決める
-  UZ.spaceRender = function (el, g, decl, v, w, h, states, S, v0) {
+  // opts.plate(prim, g, cam) = 板を描く口。奥から塗る順の板の位置で呼ぶ（板の中の図は描く側が持つ。prim.plate = 板の宣言）。
+  // 板の中身の出し方は中の図の要素の状態で決まるので、板の要素自身の状態によらず呼ぶ
+  UZ.spaceRender = function (el, g, decl, v, w, h, states, S, v0, opts) {
     v = v || {};
     const cam = UZ.spaceView(decl, v, w, h, v0);
     const ALL = { opacity: 1, line: 1, draw: 1, dim: 1, pulse: 0, tint: null, tintP: 0 };
@@ -445,6 +485,7 @@
     let geo = null;
     const errors = [];
     for (const p of prims) {
+      if (p.kind === "plate") { if (opts && opts.plate) opts.plate(p, g, cam); continue; }
       const s = stOf(p.id);
       if (!s) continue;
       const k = p.opacity != null ? p.opacity : 1, dim = s.dim, pulse = s.pulse || 0;

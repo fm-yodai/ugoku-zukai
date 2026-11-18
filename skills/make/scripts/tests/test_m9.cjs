@@ -111,6 +111,15 @@ const fakeEl = (tag, attrs, parent) => {
 };
 const newGeo = () => ({ geo: UZ.makeGeo(fakeEl, UZ.styleOf(TH)), g: fakeEl("g") });
 
+
+// 2.5D の板（plate）の検査用: 部品 sp に板を並べたスライド 1 枚。lines は場面 s1 の行
+const PL = (id, figure, z, o = {}) => ({ id, kind: "plate", figure, origin: [-2, 0, z], size: [4, 0.8], ...o });
+const PF2 = { type: "list", items: [{ id: "i2", text: "中段の層" }] }, PF3 = { type: "list", items: [{ id: "i3", text: "下段の層" }] };
+const plateDeck = (items, lines, o = {}) => deck6({ a: { title: "A", parts: [{ id: "sp", type: "space", camera: o.camera || { yaw: 0, pitch: "pt" }, ...(o.part || {}), items }, ...(o.parts || [])] } },
+  [SC("s1", "a", lines)], o.figures || { g1: G1, f2: PF2, f3: PF3 }, { values: o.values || { th: 0, pt: 0 } });
+const plateOrder = svg => [...svg.matchAll(/data-plate="([^"]+)"/g)].map(m => m[1]);
+const lastEnd = M => Math.max(...M.timeline.lines.map(l => l.start + l.dur));
+
 const tests = {
   async geo_space() {
     const { geo, g } = newGeo();
@@ -455,6 +464,123 @@ const tests = {
     assert.ok(renderSvg(M, s2.start + 0.65).includes("項目") && !renderSvg(M, s2.start + 0.65).includes("名前"), "後半に新しい見出しが出ていない");
     assert.ok(renderSvg(M, s2.start + 1.2).includes("数値"), "終わっても新しい見出しが出ない");
   },
+  async plate_validate() {   // 板の宣言の誤り
+    const bad = async (items, re, o) => hasErr(await build(plateDeck(items, [{ id: "l1", text: "{a}出します。", do: [{ show: "sp", at: "a" }] }], o)), re);
+    await bad([{ id: "layer1", kind: "plate", figure: "g1", size: [4, 1] }], /要素 layer1（plate）に origin がない/);
+    await bad([PL("layer1", "nai", 0)], /要素 layer1 の figure「nai」が figures にない/);
+    await bad([PL("layer1", "g1", 0, { size: [4] })], /要素 layer1 の size は \[幅, 高さ\]/);
+    await bad([PL("layer1", "g1", 0, { tilt: "zz" })], /tilt.*「zz」が分からない/);
+    await bad([PL("layer1", "g1", 0)], /板「layer1」の図「g1」は、同じスライドに部品としても置いている/, { parts: [{ figure: "g1", area: { col: [1, 2], row: [1, 1] } }], part: { area: { col: [3, 12], row: [1, 6] } } });
+    await bad([PL("g1", "f2", 0)], /板の id「g1」が、図か部品の id と重なる/);
+    await bad([PL("layer1", "g1", 0), PL("layer2", { type: "space", items: [{ id: "q", kind: "point", at: [0, 0, 0] }] }, 1)], /要素 layer2 の figure に space は置けない/);
+    // 正しい宣言（図の id と、その場の宣言）は通る
+    const M = await build(plateDeck([PL("layer1", "g1", 1), PL("layer2", { type: "list", items: [{ id: "k1", text: "その場の層" }] }, 0)],
+      [{ id: "l1", text: "{a}出して{b}見ます。", do: [{ show: "sp", at: "a" }, { show: "layer2/k1", at: "b" }] }]));
+    assert.deepStrictEqual(M.errors || [], []);
+    assert.ok(M.figs.layer1 && M.figs.layer2, "板の図が子の図になっていない");
+    assert.deepStrictEqual(M.figs.layer1.parent, { fig: "sp", kind: "plate", item: "layer1" });
+  },
+  async plate_front_equals_2d() {   // 正面を向いた板（yaw 0・pitch 0）の中の箱は、普通の部品に置いたときと同じ縦横比
+    const M2 = await build(deck6({ a: { title: "A", parts: [{ figure: "g1" }] } }, [SC("s1", "a", [{ id: "l1", text: "{a}出します。", do: [{ show: "g1", at: "a" }] }])], { g1: G1 }));
+    assert.deepStrictEqual(M2.errors || [], []);
+    const A = M2.scenes[0].areas[0], it2 = M2.figs.g1.items.api;
+    const W = A.w / 100, H = A.h / 100;
+    const M = await build(plateDeck([{ id: "layer1", kind: "plate", figure: "g1", origin: [0, 0, 0], size: [W, H] }],
+      [{ id: "l1", text: "{a}出します。", do: [{ show: "sp", at: "a" }] }], { camera: { yaw: 0, pitch: 0, scale: 100, target: [W / 2, 0, -H / 2] }, values: {} }));
+    assert.deepStrictEqual(M.errors || [], []);
+    const K = M.figs.layer1, it = K.items.api, P = M.figs.sp, pl = M.scenes[0].place.sp, v = {};
+    const cam = UZ.spaceView(P.spec, v, pl.w, pl.h, P.v0);
+    const m = UZ.plateMatrix(P.spec.items[0], v, cam, { x: K.x0, y: K.y0, w: K.x1 - K.x0, h: K.y1 - K.y0 });
+    assert.ok(Math.abs(m[1]) < 1e-9 && Math.abs(m[2]) < 1e-9, `正面の板の行列に回転か傾きが入る: ${m}`);
+    const map = (x, y) => [m[0] * x + m[2] * y + m[4], m[1] * x + m[3] * y + m[5]];
+    const p0 = map(it.x, it.y), p1 = map(it.x + it.w, it.y + it.h);
+    const r = (p1[0] - p0[0]) / (p1[1] - p0[1]), r2 = it2.w / it2.h;
+    assert.ok(Math.abs(r / r2 - 1) <= 0.01, `箱の縦横比 ${r} が普通の部品 ${r2} と違う`);
+    const svg = renderSvg(M, lastEnd(M));
+    assert.ok(/<g\b[^>]*data-plate="layer1"[^>]*transform="matrix\(/.test(svg) || /<g\b[^>]*transform="matrix\([^"]*\)"[^>]*data-plate="layer1"/.test(svg), "板の図が matrix で描かれていない");
+    assert.ok(svg.includes("API"), "板の中の箱の文字が描かれていない");
+  },
+  async plate_rise() {   // 縦に並べた板を倒しながら見下ろす: 終わりは投影の奥行きの順に描く。板の中の箱に focus が効く
+    const items = [PL("layer1", "g1", 3, { tilt: "th" }), PL("layer2", "f2", 2, { tilt: "th" }), PL("layer3", "f3", 1, { tilt: "th" })];
+    const M = await build(plateDeck(items, [
+      { id: "l1", text: "{a}出して{b}倒します。", do: [{ show: "sp", at: "a" }, { set: "th", to: 90, at: "b", dur: 1.5 }, { set: "pt", to: 50, at: "b", dur: 1.5 }] },
+      { id: "l2", text: "ここで{a}一番上の層を見ます。", do: [{ focus: "layer1/api", at: "a" }] }]));
+    assert.deepStrictEqual(M.errors || [], []);
+    const setStart = M.acts.find(a => a.verb === "set").start;
+    assert.deepStrictEqual(plateOrder(renderSvg(M, setStart - 0.01)), ["layer1", "layer2", "layer3"], "初め（正面）は宣言の順");
+    const tEnd = lastEnd(M), v = UZ.valuesAt(M, tEnd);
+    assert.strictEqual(v.th, 90); assert.strictEqual(v.pt, 50);
+    // 期待する順 = 投影の奥行きの順（奥から）
+    const P = M.figs.sp, pl = M.scenes[0].place.sp, cam = UZ.spaceView(P.spec, v, pl.w, pl.h, P.v0);
+    const want = UZ.spacePrims(P.spec, v, cam, M.S).filter(p => p.kind === "plate").map(p => p.id);
+    assert.deepStrictEqual(want, ["layer3", "layer2", "layer1"], "投影の奥行きの順が下の層から（見下ろすので上の層が手前）でない");
+    assert.deepStrictEqual(plateOrder(renderSvg(M, tEnd)), want, "終わりの描画順が奥行きの順でない");
+    const fr = UZ.frame(M, tEnd);
+    assert.ok(fr.st["layer1/api"].dim > 0.99, "focus の対象が薄い");
+    assert.ok(fr.st["layer1/app"].dim < 0.3, "同じ板の他の箱が薄くならない");
+    assert.ok(fr.st["layer2/i2"].dim < 0.3, "他の板の中身が薄くならない");
+    assert.deepStrictEqual(fr.figs.layer1.parent, { fig: "sp", kind: "plate", item: "layer1" });
+  },
+  async plate_angle_warn() {   // 落ち着いた時刻（行の終わり）で板が 70° より傾いていたら警告。set の途中では警告しない
+    const items = [PL("layer1", "g1", 1, { tilt: "th" })];
+    const r = await checkSpace(plateDeck(items, [{ id: "l1", text: "{a}出して{b}倒します。", do: [{ show: "sp", at: "a" }, { set: "th", to: 75, at: "b", dur: 1 }] },
+      { id: "l2", text: "そのままです。" }]));
+    assert.deepStrictEqual(r.errors, []);
+    assert.ok(r.warnings.some(w => /板「layer1」が傾きすぎて読めない（75°）/.test(w)), JSON.stringify(r.warnings));
+    // 倒しながら見下ろす: 途中では板が視線に対して 75° を超えるが、終わりは 10°
+    const sb2 = plateDeck(items, [{ id: "l1", text: "{a}出して{b}倒します。", do: [{ show: "sp", at: "a" }, { set: "th", to: 90, at: "b", dur: 1 }, { set: "pt", to: 80, at: "b", dur: 5 }] },
+      { id: "l2", text: "上から見下ろすと、層が高さの順に重なって見えます。" }, { id: "l3", text: "一番上の層が、利用者に一番近い所です。" }]);
+    const M2 = await build(sb2), sets = M2.acts.filter(a => a.verb === "set");
+    assert.ok(lastEnd(M2) > Math.max(...sets.map(a => a.end)) + 0.1, "set が終わった後の行の終わりがない（検査が空回りする）");
+    const P = M2.figs.sp, pl = M2.scenes[0].place.sp, mid = sets[0].end, vm = UZ.valuesAt(M2, mid);
+    assert.ok(UZ.plateAngle(P.spec.items[0], vm, UZ.spaceView(P.spec, vm, pl.w, pl.h, P.v0)) > 75, "途中で 75° を超えていない");
+    const r2 = await checkSpace(sb2);
+    assert.deepStrictEqual(r2.errors, []);
+    assert.ok(!r2.warnings.some(w => /傾きすぎ/.test(w)), JSON.stringify(r2.warnings));
+  },
+  async plate_id_resolve() {   // 「板の id/要素の id」と、一意なら要素の id だけで、板の中の箱を指せる
+    const items = [PL("layer1", "g1", 2), PL("layer2", "f2", 1)];
+    for (const ref of ["layer1/api", "api"]) {
+      const M = await build(plateDeck(items, [{ id: "l1", text: "{a}出します。", do: [{ show: ref, at: "a" }] }]));
+      assert.deepStrictEqual(M.errors || [], [], ref);
+      const st = UZ.frame(M, lastEnd(M)).st;
+      assert.ok(st["layer1/api"] && st["layer1/api"].show > 0.99, `${ref} で板の中の箱が出ない`);
+      assert.ok(!st["layer1/app"] || st["layer1/app"].show < 0.01, `${ref} で他の箱まで出た`);
+      assert.ok(renderSvg(M, lastEnd(M)).includes("API"), `${ref}: 板の中の箱が描かれていない`);
+    }
+    // 2 枚の板に同じ図を置くと、要素の id だけでは決まらない
+    const M3 = await build(plateDeck([PL("layer1", "g1", 2), PL("layer2", "g1", 1)], [{ id: "l1", text: "{a}出します。", do: [{ show: "api", at: "a" }] }]));
+    hasErr(M3, /「api」が複数の図にある/);
+    // 部品全体を出すと、板の中身も出る
+    const M4 = await build(plateDeck(items, [{ id: "l1", text: "{a}出します。", do: [{ show: "sp", at: "a" }] }]));
+    const st4 = UZ.frame(M4, Math.max(...M4.acts.map(x => x.end)) + 0.01).st;
+    assert.ok(st4["layer1/api"].show > 0.99 && st4["layer2/i2"].show > 0.99, "部品全体の show で板の中身が出ない");
+  },
+  async plate_intersect_zoom_complete() {   // 板どうし・板と面の交差、板の中の箱への zoom、完成形のコマ
+    const X = { id: "wall", kind: "polygon", points: [[0, -1, 2], [0, 1, 2], [0, 1, 0], [0, -1, 0]] };
+    assert.deepStrictEqual(UZ.spaceIntersections({ items: [PL("layer1", "g1", 1.5), X] }, {}), [["layer1", "wall"]], "板と面の交差");
+    assert.deepStrictEqual(UZ.spaceIntersections({ items: [PL("layer1", "g1", 1, { tilt: 90 }), PL("layer2", "f2", 1.4, { origin: [-2, -0.4, 1.4] })] }, {}), [["layer1", "layer2"]], "板どうしの交差");
+    assert.deepStrictEqual(UZ.spaceIntersections({ items: [PL("layer1", "g1", 3), PL("layer2", "f2", 2)] }, {}), [], "離れた板は交差しない");
+    const items = [PL("layer1", "g1", 3, { tilt: "th" }), PL("layer2", "f2", 2, { tilt: "th" })];
+    const M = await build(plateDeck(items, [
+      { id: "l1", text: "{a}出して{b}倒します。", do: [{ show: "sp", at: "a" }, { set: "th", to: 60, at: "b", dur: 1 }, { set: "pt", to: 40, at: "b", dur: 1 }] },
+      { id: "l2", text: "ここで{a}この箱に寄ります。", do: [{ zoom: "layer1/api", at: "a" }] }]));
+    assert.deepStrictEqual(M.errors || [], []);
+    const z = M.acts.find(a => a.verb === "zoom"), K = M.figs.layer1, P = M.figs.sp, pl = M.scenes[0].place.sp, v = UZ.valuesAt(M, z.start);
+    const m = UZ.plateMatrix(P.spec.items[0], v, UZ.spaceView(P.spec, v, pl.w, pl.h, P.v0), { x: K.x0, y: K.y0, w: K.x1 - K.x0, h: K.y1 - K.y0 });
+    const b = K.items.api, cx = m[0] * (b.x + b.w / 2) + m[2] * (b.y + b.h / 2) + m[4] + pl.ox, cy = m[1] * (b.x + b.w / 2) + m[3] * (b.y + b.h / 2) + m[5] + pl.oy;
+    assert.ok(Math.abs(z.target.x + z.target.w / 2 - cx) < 1 && Math.abs(z.target.y + z.target.h / 2 - cy) < 1, `寄せ先の中心 ${z.target.x + z.target.w / 2},${z.target.y + z.target.h / 2} 期待 ${cx},${cy}`);
+    assert.ok(z.target.w < pl.w / 3, "寄せ先が区画全体になっている");
+    // 完成形のコマ: 板の中の図も出て、終わりの値で倒れている
+    const fr = UZ.finalFrame(M, "a");
+    assert.strictEqual(fr.values.th, 60);
+    assert.ok(fr.figs.layer1.opacity === 1 && fr.figs.layer1.parent && fr.st["layer1/api"].show === 1, "完成形に板の中の図が出ない");
+    assert.deepStrictEqual(plateOrder(renderSvg(M, 0, fr)).sort(), ["layer1", "layer2"]);
+    // 検査が通る（はみ出し・交差・傾きの警告なし）
+    const r = await checkSpace(plateDeck(items, [{ id: "l1", text: "{a}出して{b}倒します。", do: [{ show: "sp", at: "a" }, { set: "th", to: 60, at: "b", dur: 1 }, { set: "pt", to: 40, at: "b", dur: 1 }] }, { id: "l2", text: "そのままです。" }]));
+    assert.deepStrictEqual(r.errors, []);
+    assert.ok(!r.warnings.some(w => /部品「sp」/.test(w)), JSON.stringify(r.warnings));
+  },
   space_project_front() {
     const cam = UZ.spaceCamera({ yaw: 0, pitch: 0, scale: 10, target: [0, 0, 0] }, 200, 100, { min: [0, 0, 0], max: [1, 1, 1] });
     assert.deepStrictEqual(cam.project([1, 0, 0]).map(Math.abs), [110, 50, 0]);
@@ -503,7 +629,7 @@ const tests = {
     assert.throws(() => UZ.spacePrims(decl, {}, cam, S), /プリミティブが多すぎる/);
     assert.ok(UZ.spacePrims({ items: [sf("a")] }, {}, cam, S).length <= UZ.SPACE.maxPrims);
   },
-  space_kinds() {   // 各種類がプリミティブになり、plate は無視される
+  space_kinds() {   // 各種類がプリミティブになり、plate は板全体で 1 つ（中の図は描く側が描く）
     const S = UZ.styleOf(TH), v = { a: 1 };
     const decl = { axes: { x: [-2, 2], y: [-2, 2], z: [0, 3], labels: { x: "x" } }, items: [
       { id: "p", kind: "point", at: [1, "a", 2], label: "P" }, { id: "ln", kind: "line", from: [0, 0, 0], to: [1, 1, 1] },
@@ -512,7 +638,7 @@ const tests = {
       { id: "pl", kind: "plate", figure: "x", origin: [0, 0, 0], size: [1, 1] }] };
     const cam = UZ.spaceCamera({ yaw: 30, pitch: 25 }, 300, 200, UZ.spaceBounds(decl, v));
     const P = UZ.spacePrims(decl, v, cam, S), cnt = k => P.filter(p => p.id === k).length;
-    assert.strictEqual(cnt("bx"), 6); assert.strictEqual(cnt("cv"), 8); assert.strictEqual(cnt("p"), 2); assert.strictEqual(cnt("pl"), 0);
+    assert.strictEqual(cnt("bx"), 6); assert.strictEqual(cnt("cv"), 8); assert.strictEqual(cnt("p"), 2); assert.strictEqual(cnt("pl"), 1); assert.strictEqual(P.find(p => p.id === "pl").pts.length, 4);
     assert.strictEqual(cnt("ar"), 2); assert.ok(P.some(p => p.kind === "text" && p.text === "最大"));
     for (let i = 1; i < P.length; i++) assert.ok(P[i - 1].depth >= P[i].depth, "奥から手前");
   },

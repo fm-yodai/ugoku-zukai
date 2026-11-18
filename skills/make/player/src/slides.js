@@ -30,7 +30,7 @@
   const partId = p => (p && (p.figure != null ? p.figure : p.id));
   UZ.partId = partId;
 
-  // 図の表: figures に、スライドの中で宣言した部品（id と type を持つもの）を足す
+  // 図の表: figures に、スライドの中で宣言した部品（id と type を持つもの）と、space の板（plate）にその場で宣言した図（板の id で引く）を足す
   const figCache = new WeakMap();
   UZ.figuresOf = function (sb) {
     let m = figCache.get(sb);
@@ -39,9 +39,21 @@
     for (const sl of Object.values(sb.slides || {})) for (const p of asList(sl && sl.parts)) {
       if (p && p.figure == null && p.id != null && p.type != null && !Object.prototype.hasOwnProperty.call(m, p.id)) m[p.id] = p;
     }
+    for (const { plate } of platesIn(m)) {
+      const f = plate.figure;
+      if (f && typeof f === "object" && !Array.isArray(f) && typeof plate.id === "string" && !Object.prototype.hasOwnProperty.call(m, plate.id)) m[plate.id] = f;
+    }
     figCache.set(sb, m);
     return m;
   };
+  // space の部品の板（plate）の列 [{ space: 部品の id, plate: 板の宣言 }]。板の図は、その space の子の図になる（engine.js）
+  function platesIn(figs) {
+    const out = [];
+    for (const [fid, f] of Object.entries(figs)) if (f && typeof f === "object" && f.type === "space" && Array.isArray(f.items))
+      for (const o of f.items) if (o && typeof o === "object" && o.kind === "plate") out.push({ space: fid, plate: o });
+    return out;
+  }
+  UZ.platesOf = sb => platesIn(UZ.figuresOf(sb));
 
   // 場面の図の列と区画。figure を指す場面は今までと同じ（図 1 つは全面、2 つは左右）
   UZ.sceneParts = function (sb, sc) {

@@ -153,7 +153,8 @@
     }
 
     buildFig(F) {
-      const S = F.dark ? (this.SD || (this.SD = UZ.darkStyleOf(this.S))) : this.S, g = el("g", null, this.figLayer);   // 暗い地のスライドで組んだ部品は、暗い地の色
+      // 暗い地のスライドで組んだ部品は、暗い地の色。子の図（板の図）の g は層に置かず、親の space が描くときに自分の描き場へ入れる
+      const S = F.dark ? (this.SD || (this.SD = UZ.darkStyleOf(this.S))) : this.S, g = F.parent ? el("g", { "data-plate": F.id }) : el("g", null, this.figLayer);
       const L = { back: el("g", null, g), edge: el("g", null, g), box: el("g", null, g), fx: el("g", null, g) };
       this.figG[F.id] = g;
       const glow = this.M.theme.shape.glow, shadow = this.M.theme.shape.shadow;
@@ -243,6 +244,7 @@
           E.g = el("g", null, L.box);
           E.inner = el("g", null, E.g);
           E.S = S; E.F = F;
+          E.kids = Object.values(this.M.figs).filter(K => K.parent && K.parent.fig === F.id && K.parent.kind === "plate").map(K => K.id);
         } else if (it.kind === "mark") {
           E.g = el("g", null, L.fx);
           E.bgc = el("circle", { cx: 0, cy: 0, r: 15, fill: S.bg, stroke: S.good, "stroke-width": 2.4 }, E.g);
@@ -314,6 +316,7 @@
       if (this._camTf !== ct) { this._camTf = ct; for (const g of [this.capG, this.customG]) { if (ct) g.setAttribute("transform", ct); else g.removeAttribute("transform"); } }
       for (const [fid, g] of Object.entries(this.figG)) {
         const f = fr.figs[fid];
+        if (f.parent) continue;   // 子の図（板の図）は親の space が描く（親の g の中にあるので、出入りの不透明度も親に掛かる）
         g.style.opacity = f.opacity;
         g.style.display = f.opacity < 0.002 ? "none" : "";
         if (f.place) g.setAttribute("transform", `translate(${f.place.ox.toFixed(2)},${f.place.oy.toFixed(2)}) scale(${f.place.s.toFixed(4)})`);
@@ -500,10 +503,22 @@
           const fo = fr.figs[it.fig];
           if (fo && fo.opacity > 0.002) {
             const states = UZ.spaceStates(E.F, fr.st);
-            if (Object.values(states).some(x => x.show > 0.002)) {
+            // 板の中の図は、その要素がどれか出ていれば描く（板の要素自身を出していなくても）
+            const kidOn = E.kids.some(k => Object.values(this.M.figs[k].items).some(x => fr.st[x.key] && fr.st[x.key].show > 0.002));
+            if (kidOn || Object.values(states).some(x => x.show > 0.002)) {
               const pw = fo.place && fo.place.w != null ? fo.place.w : it.w, ph = fo.place && fo.place.w != null ? fo.place.h : it.h;
+              const v = fr.values || {};
+              // 板: 子の図の g を、奥から塗る順の位置に入れ、図のローカル座標 → 部品の座標の行列を掛ける
+              const plate = (p, g, cam) => {
+                const K = this.M.figs[p.id], kg = this.figG[p.id];
+                if (!K || !kg || !K.parent) return;
+                const m = UZ.plateMatrix(p.plate, v, cam, { x: K.x0, y: K.y0, w: K.x1 - K.x0, h: K.y1 - K.y0 });
+                if (!m.every(Number.isFinite)) return;
+                kg.setAttribute("transform", `matrix(${m.slice(0, 4).map(x => x.toFixed(5)).join(",")},${m[4].toFixed(2)},${m[5].toFixed(2)})`);
+                g.appendChild(kg);
+              };
               try {
-                const r = UZ.spaceRender(el, E.inner, E.F.spec, fr.values || {}, pw, ph, states, E.S, E.F.v0);
+                const r = UZ.spaceRender(el, E.inner, E.F.spec, v, pw, ph, states, E.S, E.F.v0, { plate });
                 if (r.errors.length) { const msg = r.errors.join(" / "); if (E._err !== msg) { E._err = msg; console.error("space の部品の数式に誤り", it.key, msg); } }
               } catch (e) {   // 式の誤りなどは、その部品だけ描かずに知らせる（プレーヤーは止めない。同じ誤りは 1 回だけ出す）
                 while (E.inner.firstChild) E.inner.removeChild(E.inner.firstChild);

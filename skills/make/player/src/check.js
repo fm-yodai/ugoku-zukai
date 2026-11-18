@@ -172,27 +172,31 @@
   const SPILL = 8;
 
   // space の部品を、custom と同じ時刻で投影して検査する: 描けない（式の誤り・プリミティブの上限）、見えている要素の値が数にならない、
-  // 区画からはみ出す、面が交差して前後が決まらない（警告）、TeX の誤り（文字は値で変わらないので 1 度だけ描いて見る）
+  // 区画からはみ出す、面が交差して前後が決まらない（警告）、TeX の誤り（文字は値で変わらないので 1 度だけ描いて見る）、
+  // 板（plate）が傾きすぎて読めない（警告。落ち着いた時刻 = 行の終わりで、動いている set がないときだけ。倒している途中は見ない）
   function checkSpaces(M, el, spaces, times, note, errors, warnings) {
-    const texDone = new Set();
-    for (const [t, lineId] of times) {
+    const texDone = new Set(), sets = M.acts.filter(a => a.verb === "set");
+    for (const [t, lineId, lineEnd] of times) {
       if (t >= M.endCard) continue;
       const fr = UZ.frame(M, t);
       for (const F of spaces) {
         const fo = fr.figs[F.id];
         if (!fo || fo.opacity <= 0.002) continue;
         const states = UZ.spaceStates(F, fr.st), vis = new Set(Object.keys(states).filter(k => states[k].show > 0.002));
+        // 板は、中の図の要素がどれか出ていれば見えている
+        for (const o of F.spec.items || []) if (o && o.kind === "plate" && M.figs[o.id] && M.figs[o.id].parent
+          && Object.values(M.figs[o.id].items).some(x => fr.st[x.key] && fr.st[x.key].show > 0.002)) vis.add(o.id);
         if (!vis.size) continue;
         const add = (list, body, kind) => note(list, lineId, F.id, body, kind);
         const S = F.dark ? UZ.darkStyleOf(M.S) : M.S, v = fr.values || {}, decl = F.spec;
         const W = fo.place && fo.place.w != null ? fo.place.w : F.w, H = fo.place && fo.place.w != null ? fo.place.h : F.h;
-        let prims;
-        try { prims = UZ.spacePrims(decl, v, UZ.spaceView(decl, v, W, H, F.v0), S); }
+        let prims, cam;
+        try { cam = UZ.spaceView(decl, v, W, H, F.v0); prims = UZ.spacePrims(decl, v, cam, S); }
         catch (e) { add(errors, `描けない（${String(e && e.message || e)}）`); continue; }
         const per = {};
         for (const p of prims) per[p.id] = (per[p.id] || 0) + 1;
         // 要素が 1 つも描けない = 値が数にならない（一部の網目だけ NaN なのは、定義域の外を描かない書き方なので数えない）
-        for (const o of decl.items || []) if (o && o.id && o.kind !== "plate" && vis.has(o.id) && !per[o.id])
+        for (const o of decl.items || []) if (o && o.id && vis.has(o.id) && !per[o.id])
           add(errors, `要素「${o.id}」の値が数にならない（NaN か Infinity。式と値の範囲を見直す）`, "nan:" + o.id);
         const box = UZ.spaceUnionBox(prims.filter(p => vis.has(p.id)).map(UZ.spacePrimBox));
         if (box && (box.x < -SPILL || box.y < -SPILL || box.x + box.w > W + SPILL || box.y + box.h > H + SPILL)) {
@@ -201,6 +205,14 @@
         }
         for (const [a, b] of UZ.spaceIntersections(decl, v)) if (vis.has(a) && vis.has(b))
           add(warnings, `要素「${a}」と「${b}」の面が交差していて、前後が決まらない（奥から塗るので、奥の面が手前に見える所が出る。面を分けるか、交差しないように置く）`, `x:${a}:${b}`);
+        if (lineEnd && !sets.some(a => t > a.start + 1e-6 && t < a.end - 1e-6)) {
+          for (const o of decl.items || []) {
+            if (!o || o.kind !== "plate" || !vis.has(o.id)) continue;
+            let ang;
+            try { ang = UZ.plateAngle(o, v, cam); } catch (e) { continue; }
+            if (ang > UZ.SPACE.plateMaxAngle) add(warnings, `板「${o.id}」が傾きすぎて読めない（${Math.round(ang)}°）。板の面が視線に対して ${UZ.SPACE.plateMaxAngle}° を超えると、中の文字が潰れる。tilt かカメラの pitch を見直す`, `angle:${o.id}`);
+          }
+        }
         if (!texDone.has(F.id) && (decl.items || []).some(o => o && o.kind === "text" && o.tex)) {
           texDone.add(F.id);
           try { for (const m of UZ.spaceRender(el, el("g"), decl, v, W, H, null, S, F.v0).errors) add(errors, m); }
@@ -232,7 +244,7 @@
     }
     if (!parts.length && !spaces.length) return { errors, warnings };
     const times = [];   // [t, 行の id]
-    for (const l of M.timeline.lines) times.push([l.start + l.dur, l.id]);
+    for (const l of M.timeline.lines) times.push([l.start + l.dur, l.id, true]);   // 3 番目 = 行の終わり（落ち着いた時刻）
     for (const a of M.acts) if (a.verb === "set") {
       const d = a.end - a.start;
       times.push([a.end, a.line], [a.start + d / 3, a.line], [a.start + d * 2 / 3, a.line]);
