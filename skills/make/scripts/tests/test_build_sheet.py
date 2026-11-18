@@ -206,8 +206,22 @@ class BuildSheetTest(unittest.TestCase):
         self.assertEqual(r.returncode, 0, r.stderr)
         m = re.search(r'<script type="application/json" id="us-data">([\s\S]*?)</script>', html)
         data = json.loads(m.group(1).replace("\\u003c", "<"))
-        self.assertEqual([sc["id"] for sc in data["storyboard"]["scenes"]], [sid])
+        self.assertEqual([sc["id"] for sc in data["storyboard"]["scenes"]], [sc["id"] for sc in full["scenes"]])   # 台本は全部埋め込む（Morph の前の場面が要る）
         self.assertEqual(re.findall(r'class="us-play" data-from="([^"]+)" data-to="([^"]+)"', html), [(sid, sid)])
+
+    def test_play_range_morph_chain_valid(self):
+        # camera-morph を s3 だけ書いても、埋め込んだ台本は Morph の前の場面を持ち、検査が通る。再生の範囲は s3 だけ
+        r, html = self.build(CM_SB, self.frames(CM_SB, "--scenes", "s3"))
+        self.assertEqual(r.returncode, 0, r.stderr)
+        m = re.search(r'<script type="application/json" id="us-data">([\s\S]*?)</script>', html)
+        data = json.loads(m.group(1).replace("\\u003c", "<"))
+        self.assertEqual([sc["id"] for sc in data["storyboard"]["scenes"]], [sc["id"] for sc in load(CM_SB)["scenes"]])
+        p = self.newdir() + ".json"
+        with open(p, "w", encoding="utf-8") as f:
+            json.dump(data["storyboard"], f, ensure_ascii=False)
+        c = subprocess.run(["node", os.path.join(SCRIPTS, "check_storyboard.cjs"), p, "--theme", "koo"], capture_output=True, text=True)
+        self.assertEqual(c.returncode, 0, c.stdout + c.stderr)
+        self.assertEqual(re.findall(r'class="us-play" data-from="([^"]+)" data-to="([^"]+)"', html), [("s3", "s3")])
 
     def test_no_play_with_voice_notice(self):
         r, html = self.build(SEQ, self.frames_seq, "--no-play", "--voice", self.newdir())

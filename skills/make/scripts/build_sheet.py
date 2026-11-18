@@ -369,7 +369,7 @@ def _row(line, frames_dir):
             f'<div><p class="us-ref">{esc(ref)}</p><p class="us-sub">{esc(line["text"])}</p></div></div>')
 
 
-def play_data(storyboard, sb_path, theme, timeline=None, scenes=None):
+def play_data(storyboard, sb_path, theme, timeline=None):
     """再生に埋め込むデータ（台本・テーマ・時刻表・画像）。build_player.py と同じ約束で読む。
     時刻表が今の台本のものでなければ、画像を読めなければ ValueError"""
     stale = build_player.stale_voice(storyboard, timeline) if timeline else []
@@ -380,9 +380,6 @@ def play_data(storyboard, sb_path, theme, timeline=None, scenes=None):
         assets = uz_assets.load_assets(sb_path, storyboard)
     except uz_assets.AssetError as e:
         raise ValueError(str(e))
-    if scenes is not None and any(sc["id"] not in scenes for sc in storyboard["scenes"]):
-        # frames.cjs --scenes で一部だけ書いたとき、再生も書いた場面だけにする（コマのない場面は流さない）
-        storyboard = dict(storyboard, scenes=[sc for sc in storyboard["scenes"] if sc["id"] in scenes])
     return {"storyboard": storyboard, "theme": theme, "timeline": timeline, "assets": assets or {}}
 
 
@@ -454,7 +451,7 @@ def build(storyboard, frames_dir, outline=None, artifact=False, alts=None, sb_pa
                             '<p id="us-play-err" hidden></p></div>')
         body.extend(parts)
         body.append("</section>")
-    # テーマの書体。<link> ではなく @import にして、Artifact の断片でも href を増やさない
+    # テーマの書体。再生ページも同じ Google Fonts を読むので、外部の CSS は意図して許している。<link> ではなく @import にして、Artifact の断片でも href を増やさない
     css_url = build_player.font_css_url(theme) if theme else None
     fam = (theme.get("font") or {}).get("family") if theme else None
     style = (f'@import url("{css_url}");\n' if css_url else "") + STYLE
@@ -545,8 +542,7 @@ def main():
                 with open(tl_path, encoding="utf-8") as f:
                     timeline = json.load(f)
             check_timed(drawn.get("timed"), timeline is not None)
-            written = {ln.get("scene") for ln in drawn.get("lines") or []}
-            play = play_data(sb, a.storyboard, theme, timeline, written)
+            play = play_data(sb, a.storyboard, theme, timeline)
         page = build(sb, a.frames, outline, a.artifact, alts, a.storyboard, play, theme)
     except (OSError, ValueError) as e:
         print(f"スライドコンテを作れない: {e}", file=sys.stderr)
