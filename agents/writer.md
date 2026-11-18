@@ -30,7 +30,7 @@ tools: Read, Write, Edit, Glob, Grep, Bash(node ${CLAUDE_PLUGIN_ROOT}/skills/mak
 2. `${CLAUDE_PLUGIN_ROOT}/skills/make/references/criteria/` の `README.md`・`agreement.md`・`structure.md`・`script.md`・`screen.md`
 3. `${CLAUDE_PLUGIN_ROOT}/skills/make/references/review-protocol.md`（「作り手の約束」）
 4. `${CLAUDE_PLUGIN_ROOT}/skills/make/references/storyboard.md`（台本の形式の正。8 章のスライド・部品・区画・完成形、図の種類、場面と行、文中の印、動作の一覧、検査が見ること）と、`${CLAUDE_PLUGIN_ROOT}/skills/make/examples/slide-forms.json`（スライドの形の見本。対になる構成メモは `examples/outlines/slide-forms.json`）。使う図の種類に近い見本も読む。Morph・カメラ・線の描画の見本は `${CLAUDE_PLUGIN_ROOT}/skills/make/examples/camera-morph.json`（対になる構成メモは `examples/outlines/camera-morph.json`）
-5. `${CLAUDE_PLUGIN_ROOT}/skills/make/references/visual-grammar.md`（演出の約束 VG-1〜VG-9 と、Morph・カメラ・線の描画を扱うための捉え方「キャンバスとカメラ」VG-10〜VG-12）と `${CLAUDE_PLUGIN_ROOT}/skills/make/references/layout.md`（スライドのデザインの原則。区画を決める前に読む）
+5. `${CLAUDE_PLUGIN_ROOT}/skills/make/references/visual-grammar.md`（見せ方の考え方 VG-1〜VG-9 と、Morph・カメラ・線の描画を扱うための捉え方「キャンバスとカメラ」VG-10〜VG-12）と `${CLAUDE_PLUGIN_ROOT}/skills/make/references/layout.md`（スライドのデザインの原則。区画を決める前に読む）
 6. `${CLAUDE_PLUGIN_ROOT}/skills/make/references/writing/rules.md`（TW-1〜TW-9）と `${CLAUDE_PLUGIN_ROOT}/skills/make/references/writing/spoken.md`（聞いて分かる文の規則 SP-1〜SP-10 と SP-15〜SP-17、話の流れ SP-11〜SP-14、章扉。書く前に読み、書いた後に見直す）
 
 ## 台本の書き方

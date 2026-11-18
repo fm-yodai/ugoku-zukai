@@ -20,7 +20,7 @@ VLM は「重なっているか」の判定が苦手（重なりの単純な課�
 | V-M1 | 見積もりの時刻で、`check_storyboard.cjs` の誤りと配置の問題（はみ出し・小さい・重なり）が 0 | 機械（`node scripts/check_storyboard.cjs <storyboard.json> --theme <テーマ>`。台本を変えるたび） | must |
 | V-M2 | 音声の時刻表を使って、`check_storyboard.cjs --timeline` の誤りと配置の問題が 0（音声が古い・印が文にない も含む） | 機械（`node scripts/check_storyboard.cjs <storyboard.json> --theme <テーマ> --timeline <timeline.json>`。合成の後） | must |
 | V-1 | 原稿がその行で説明している部品が、その行の落ち着いたコマに**読める大きさで**出ている（Mayer の temporal contiguity）。まだ出していない部品や、ぼかしたままの部品を説明している行は FAIL | director | must |
-| V-2 | 強調（`pulse`・`mark`・`focus`・`blur`・`tint`）が、原稿がその行で説明している部品に付いている（signaling・VG-6） | director | must |
+| V-2 | 強調（`pulse`・`mark`・`focus`・`blur`・`tint`）が、原稿がその行で説明している部品に付いていて、聴衆が「いまの話」を画面で見つけられる（signaling・VG-6）。字幕が次の要素に移ったのに前の所に強調が残る、説明していない部品が光る、は FAIL | director | must |
 | V-3 | 前の行の残り物（消し忘れの点・注記・印・札、戻し忘れのぼかし）が、今の行の説明と違う意味に読めない（VG-8） | director | must |
 | V-4 | 一時的な書き換え（`relabel` で値を書き換える、`hide` と `show` で部品を入れ替える）の結果が、原稿がその結論を言い終えるまで画面に残っている | director | must |
 | V-5 | 本題と関係のない要素が画面に無い（coherence） | director | should |
