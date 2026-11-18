@@ -209,6 +209,13 @@ const tests = {
     const W = { id: "W", kind: "polygon", points: [[-1, 1, 0], [1, 1, 0], [1, 1, 1], [-1, 1, 1]] };   // A の縁に立つ壁（触れるだけ）
     const K = { id: "K", kind: "box", min: [0.2, -0.8, 0], max: [0.6, -0.4, 0.4] };   // A の上に載る箱（触れるだけ）
     assert.deepStrictEqual(UZ.spaceIntersections({ items: [A, B] }, {}), [["A", "B"]]);
+    // 同じ大きさの 2 枚が十字に貫き合う（どの辺も相手の面の縁で交わる）
+    const X1 = { id: "X1", kind: "polygon", points: [[-1, 0, -1], [1, 0, -1], [1, 0, 1], [-1, 0, 1]] };
+    const X2 = { id: "X2", kind: "polygon", points: [[0, -1, -1], [0, 1, -1], [0, 1, 1], [0, -1, 1]] };
+    assert.deepStrictEqual(UZ.spaceIntersections({ items: [X1, X2] }, {}), [["X1", "X2"]]);
+    // 縁どうしで触れる 2 枚（L 字）は数えない
+    const X3 = { id: "X3", kind: "polygon", points: [[1, 0, -1], [1, 1, -1], [1, 1, 1], [1, 0, 1]] };
+    assert.deepStrictEqual(UZ.spaceIntersections({ items: [X1, X3] }, {}), []);
     assert.deepStrictEqual(UZ.spaceIntersections({ items: [A, W, K] }, {}), []);
     assert.deepStrictEqual(UZ.spaceIntersections({ items: [A, { ...K, id: "K2", min: [0.2, -0.8, -0.2] }] }, {}), [["A", "K2"]]);
     // 値で動く: 板 B を上へ上げきれば交差しない

@@ -274,6 +274,13 @@
     return UZ.spaceCamera(camO, w, h, b);
   };
 
+  // 文字のプリミティブの置き方（spaceRender と spacePrimBox が共有）: 目盛りは 13px、ほかは 18px。:label は右上にずらして左揃え
+  const TEXT = { size: 18, tick: 13, labelDx: 10, labelDy: -14 };
+  const textPlace = p => {
+    const tick = /:tick:/.test(p.key), lab = /:label$/.test(p.key);
+    return { tick, lab, size: tick ? TEXT.tick : TEXT.size, x: p.pts[0][0] + (lab ? TEXT.labelDx : 0), y: p.pts[0][1] + (lab ? TEXT.labelDy : 0), anchor: lab ? "start" : "middle" };
+  };
+
   // プリミティブの画面上の矩形（spaceRender と同じ大きさ・ずらし。文字の幅は見積もり。TeX は元の文字列で見積もる）
   UZ.spacePrimBox = function (p) {
     const xs = p.pts.map(q => q[0]), ys = p.pts.map(q => q[1]);
@@ -281,10 +288,9 @@
     if (p.kind === "seg") { const r = (p.width || 2.5) / 2; x0 -= r; x1 += r; y0 -= r; y1 += r; }
     else if (p.kind === "dot") { const r = (p.r || 6) + 0.75; x0 -= r; x1 += r; y0 -= r; y1 += r; }
     else if (p.kind === "text") {
-      const tick = /:tick:/.test(p.key), lab = /:label$/.test(p.key), size = tick ? 13 : 18;
+      const { size, x, y, anchor } = textPlace(p);
       const tw = UZ.textW(p.tex ? p.text.replace(/\\[A-Za-z]+|[{}^_]/g, "") || p.text : p.text, size);
-      const x = x0 + (lab ? 10 : 0), y = y0 + (lab ? -14 : 0);
-      x0 = lab ? x : x - tw / 2; x1 = x0 + tw; y0 = y - size / 2; y1 = y + size / 2;
+      x0 = anchor === "start" ? x : x - tw / 2; x1 = x0 + tw; y0 = y - size / 2; y1 = y + size / 2;
     }
     return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
   };
@@ -359,10 +365,33 @@
       return inside([a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t], P);
     };
     const edgesHit = (A, B) => A.ps.some((a, i) => crosses(a, A.ps[(i + 1) % A.ps.length], B));
+    // 面 P が平面 Q と交わる所（辺が平面を横切る点と、平面の上にある頂点）
+    const cutPts = (P, Q) => {
+      const out = [];
+      P.ps.forEach((a, i) => {
+        const b = P.ps[(i + 1) % P.ps.length], da = dot3(Q.n, a) - Q.d, db = dot3(Q.n, b) - Q.d;
+        if (Math.abs(da) <= ePlane) out.push(a);
+        else if ((da > ePlane && db < -ePlane) || (da < -ePlane && db > ePlane)) { const t = da / (da - db); out.push([0, 1, 2].map(k => a[k] + (b[k] - a[k]) * t)); }
+      });
+      return out;
+    };
+    // 2 枚の面が、互いの平面と交わる線分の重なり（共通の直線の上）を持ち、その真ん中が両方の面の内側にある。
+    // 同じ大きさの 2 枚が十字に貫き合うとき（どの辺も相手の縁で交わる）も拾う。縁で触れるだけなら真ん中が縁にあるので数えない
+    const midHit = (A, B) => {
+      const d = cross(A.n, B.n), dl = Math.hypot(...d);
+      if (!(dl > 1e-9)) return false;   // 平行（同じ平面を含む）
+      const u = d.map(x => x / dl), pa = cutPts(A, B), pb = cutPts(B, A);
+      if (pa.length < 2 || pb.length < 2) return false;
+      const ta = pa.map(p => dot3(u, p)), tb = pb.map(p => dot3(u, p));
+      const lo = Math.max(Math.min(...ta), Math.min(...tb)), hi = Math.min(Math.max(...ta), Math.max(...tb));
+      if (!(hi - lo > eIn)) return false;
+      const tm = (lo + hi) / 2, p0 = pa[0], k = tm - ta[0], m = [0, 1, 2].map(i => p0[i] + u[i] * k);
+      return inside(m, A) && inside(m, B);
+    };
     const boxOver = (A, B) => [0, 1, 2].every(i => A.min[i] <= B.max[i] + ePlane && B.min[i] <= A.max[i] + ePlane);
     const P = els.map(e => e.faces.map(prep).filter(Boolean)), out = [];
     for (let i = 0; i < els.length; i++) for (let j = i + 1; j < els.length; j++) {
-      const hit = P[i].some(A => P[j].some(B => boxOver(A, B) && (edgesHit(A, B) || edgesHit(B, A))));
+      const hit = P[i].some(A => P[j].some(B => boxOver(A, B) && (edgesHit(A, B) || edgesHit(B, A) || midHit(A, B))));
       if (hit) out.push([els[i].id, els[j].id]);
     }
     return out;
@@ -447,8 +476,7 @@
         el("circle", { ...tag, cx: n2(p.pts[0][0]), cy: n2(p.pts[0][1]), r: n2((p.r || 6) * (1 + 0.4 * pulse)), fill: p.color, stroke: S.bg, "stroke-width": "1.50", opacity: n2(fillO) }, g);
       } else if (p.kind === "text") {
         if (!(fillO > 0.002)) continue;
-        const tick = /:tick:/.test(p.key), lab = /:label$/.test(p.key), size = tick ? 13 : 18;
-        const x = p.pts[0][0] + (lab ? 10 : 0), y = p.pts[0][1] + (lab ? -14 : 0), anchor = lab ? "start" : "middle";
+        const { tick, size, x, y, anchor } = textPlace(p);
         if (p.tex) {
           geo = geo || UZ.makeGeo(el, S);
           const wrap = el("g", { ...tag, opacity: n2(fillO) }, g);
