@@ -27,6 +27,7 @@ SAMPLES = [
     ("proposal-concept", "サイクル・ベン図・ピラミッド"),
     ("camera-morph", "Morph・カメラ・線の描画"),
     ("math-geometry", "値と数式・グラフ（values・set・custom の部品）"),
+    ("depth", "立体と奥行き（space の曲面・起き上がる板 plate・中へ入るズーム inside）"),
 ]
 THEMES = [
     ("koo", os.path.join(MAKE, "player", "themes", "koo.json")),
