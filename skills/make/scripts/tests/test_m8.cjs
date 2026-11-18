@@ -237,6 +237,19 @@ const tests = {
     assert.ok(ser(a.g).length < ser(b.g).length);
     assert.ok(!/NaN/.test(ser(b.g)));
   },
+  async geo_axes_bad_ticks() {   // 負・0・数でない・細かすぎる間隔でも止まらず、目盛りは有限の数。潰れた範囲は知らせて NaN を書かない
+    for (const step of [-1, 0, NaN, "x", 1e-12, -0.5]) {
+      const { geo, g } = newGeo();
+      geo.axes(g, { x: [0, 4], y: [0, 2], box: { x: 0, y: 0, w: 100, h: 100 }, ticks: { x: step, y: step } });
+      const n = (ser(g).match(/<text /g) || []).length;
+      assert.ok(n > 0 && n <= 202, `step=${step}: 目盛りの数 ${n}`);
+    }
+    const { geo, g } = newGeo();
+    const Ax = geo.axes(g, { x: [1, 1], y: [0, 2], box: { x: 0, y: 0, w: 100, h: 100 } });
+    geo.tangent(g, Ax, x => 1 / (x - 1), 1);
+    assert.strictEqual(geo.errors.length, 1);
+    assert.ok(!/NaN|Infinity/.test(ser(g)));
+  },
   async geo_deriv() {
     const { geo } = newGeo();
     assert.ok(Math.abs(geo.deriv(x => x * x, 3) - 6) < 1e-6);

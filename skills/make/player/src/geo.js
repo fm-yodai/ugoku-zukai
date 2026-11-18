@@ -4,7 +4,7 @@
 (function (UZ) {
   "use strict";
   const C = UZ.color, clamp = UZ.clamp;
-  const ERR_COLOR = "#d32f2f";   // TeX の誤りの印。台本の書き手に向けた知らせで、テーマの色ではない（checkCustoms が誤りとして止める）
+  const ERR_COLOR = "#d32f2f";   // TeX の誤りの印。台本の書き手に向けた知らせで、テーマの色ではない（geo.errors に積んで知らせる）
   const KEYS = ["accent", "ink", "muted", "good", "bad", "warn", "line", "bg", "surface"];
 
   const n2 = v => { const s = (+v).toFixed(2); return s === "-0.00" ? "0" : String(+s); };   // 属性に書く数
@@ -72,7 +72,11 @@
       const raw = Math.abs(range) / 8 || 1, mag = Math.pow(10, Math.floor(Math.log10(raw))), k = raw / mag;
       return (k < 1.5 ? 1 : k < 3 ? 2 : k < 7 ? 5 : 10) * mag;
     }
+    // 間隔 step は絶対値で使う。0 以下・数でない・細かすぎて目盛りが MAX_TICKS を超えるときは、自動の間隔に戻す
+    const MAX_TICKS = 100;
     function ticksOf(lo, hi, step) {
+      step = Math.abs(Number(step));
+      if (!Number.isFinite(step) || step <= 0 || (hi - lo) / step > MAX_TICKS) step = niceStep(hi - lo);
       const out = [], dec = Math.max(0, -Math.floor(Math.log10(step) + 1e-9));
       for (let i = Math.ceil(lo / step - 1e-9); i * step <= hi + step * 1e-9; i++) out.push(+(i * step).toFixed(dec + 1));
       return { vals: out, dec };
@@ -80,7 +84,16 @@
     const fmt = (v, dec) => { const s = (+v).toFixed(dec); return /^-0(\.0*)?$/.test(s) ? s.slice(1) : s; };
 
     geo.axes = function (g, o) {
-      const box = o.box, [x0, x1] = o.x, [y0, y1] = o.y;
+      const box = o.box;
+      let [x0, x1] = o.x, [y0, y1] = o.y;
+      // 範囲が潰れている（数でない・両端が同じ）と 0 で割るので、知らせて幅 1 に広げる
+      const fix = (a, b, name) => {
+        if (Number.isFinite(a) && Number.isFinite(b) && a !== b) return [a, b];
+        geo.errors.push(`axes の ${name} の範囲が潰れている（${a}, ${b}）`);
+        a = Number.isFinite(a) ? a : 0;
+        return [a, a + 1];
+      };
+      [x0, x1] = fix(x0, x1, "x"); [y0, y1] = fix(y0, y1, "y");
       const toPx = ([x, y]) => [box.x + (x - x0) / (x1 - x0) * box.w, box.y + box.h - (y - y0) / (y1 - y0) * box.h];
       const toNum = ([px, py]) => [x0 + (px - box.x) / box.w * (x1 - x0), y0 + (box.y + box.h - py) / box.h * (y1 - y0)];
       const Ax = { toPx, toNum, box, x: [x0, x1], y: [y0, y1] };
@@ -90,7 +103,7 @@
       // 軸は 0 を通る（0 が範囲の外なら端）
       const ox = clamp(0, Math.min(x0, x1), Math.max(x0, x1)), oy = clamp(0, Math.min(y0, y1), Math.max(y0, y1));
       const [ax, ay] = toPx([ox, oy]);
-      const tk = o.ticks || {}, TX = ticksOf(Math.min(x0, x1), Math.max(x0, x1), tk.x || niceStep(x1 - x0)), TY = ticksOf(Math.min(y0, y1), Math.max(y0, y1), tk.y || niceStep(y1 - y0));
+      const tk = o.ticks || {}, TX = ticksOf(Math.min(x0, x1), Math.max(x0, x1), tk.x), TY = ticksOf(Math.min(y0, y1), Math.max(y0, y1), tk.y);
       if (o.grid) {
         const gg = el("g", { stroke: S.line, "stroke-width": 1, opacity: n2(0.7 * show) }, out);
         for (const v of TX.vals) { const px = toPx([v, oy])[0]; el("path", { d: `M${n2(px)},${n2(box.y)}V${n2(box.y + box.h)}` }, gg); }
@@ -208,8 +221,9 @@
     const pxPerX = Ax => Math.abs(Ax.box.w / (Ax.x[1] - Ax.x[0]));
     // 接線。len は x の数の単位で測った線の長さ（傾きによらず画面の上で同じ長さ。既定は x の範囲の 4 割）
     geo.tangent = function (g, Ax, f, x0, o = {}) {
-      const m = o.df ?? geo.deriv(f, x0), len = o.len ?? Math.abs(Ax.x[1] - Ax.x[0]) * 0.4;
-      return slopeLine(g, Ax, [x0, f(x0)], Number.isFinite(m) ? m : 0, len * pxPerX(Ax), o, "good");
+      const m = o.df ?? geo.deriv(f, x0), len = o.len ?? Math.abs(Ax.x[1] - Ax.x[0]) * 0.4, y0 = Number(f(x0));
+      if (!Number.isFinite(y0)) return el("path", { d: "M0,0", fill: "none" }, g);   // 接点がない
+      return slopeLine(g, Ax, [x0, y0], Number.isFinite(m) ? m : 0, len * pxPerX(Ax), o, "good");
     };
     // 割線。2 点を通り、両側へ 2 点の間の 1/4 ずつ延ばす（extend で変える）
     geo.secant = function (g, Ax, f, x0, x1, o = {}) {
