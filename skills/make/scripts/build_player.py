@@ -37,6 +37,12 @@ def elk_js():
     return open(os.path.join(PLAYER, "vendor", "elk.bundled.js"), encoding="utf-8").read()
 
 
+def engine_scripts():
+    """ELK とプレーヤーのコード（CORE の順）を、<script> の中にそのまま置ける形で返す。
+    再生ページとスライドコンテ（build_sheet.py）の両方が使う"""
+    return tuple(js.replace("</script", "<\\/script") for js in (elk_js(), core_js()))
+
+
 def safe_json(obj):
     # </script> を閉じないよう < をエスケープする
     return json.dumps(obj, ensure_ascii=False).replace("<", "\\u003c")
@@ -72,7 +78,7 @@ def theme_id(p):
     return real
 
 
-def pick_theme(storyboard_path, given):
+def pick_theme(storyboard_path, given, who="build_player"):
     """台本と同じフォルダの構成メモが見た目を決めていたら（basics.look.theme）、そのテーマを返す。
     違うテーマを渡されたら止まる（uz_node.cjs の pickTheme と同じ約束）"""
     wd = os.path.dirname(os.path.abspath(storyboard_path))
@@ -92,7 +98,7 @@ def pick_theme(storyboard_path, given):
         msg = (f"--theme {given} が、構成メモで決めた見た目（basics.look.theme = {look}）と違う。"
                "--theme を外すか合わせる。見た目を変えるなら、利用者と決めて構成メモを先に直す")
     if msg:
-        print("build_player: " + msg, file=sys.stderr)
+        print(f"{who}: " + msg, file=sys.stderr)
         sys.exit(2)
     return path
 
@@ -121,8 +127,9 @@ def build(storyboard, theme, timeline=None, audio_b64=None, artifact=False, asse
     esc = title.replace("&", "&amp;").replace("<", "&lt;").replace('"', "&quot;")
     html = tpl.replace("__TITLE__", esc).replace("__FONT_LINK__", font_link)
     # 置換文字列にバックスラッシュが含まれても壊れないよう、関数で置き換える
-    html = html.replace("/*UZ:ELK*/", "\n" + elk_js().replace("</script", "<\\/script") + "\n")
-    html = html.replace("/*UZ:CORE*/", "\n" + core_js() + "\n")
+    elk, core = engine_scripts()
+    html = html.replace("/*UZ:ELK*/", "\n" + elk + "\n")
+    html = html.replace("/*UZ:CORE*/", "\n" + core + "\n")
     html = html.replace("/*UZ:DATA*/null", safe_json(data))
     if artifact:
         head = html[html.index("<!--UZ:HEAD-->") + len("<!--UZ:HEAD-->"):html.index("<!--UZ:HEAD_END-->")]
