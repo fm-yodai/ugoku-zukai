@@ -22,9 +22,9 @@ grep -q -- "setup_voice.py --status" SKILL.md && grep -q -- "setup_voice.py --st
 grep -q "同意なしに、声を作らない" SKILL.md || ng "SKILL.md から、同意なしに声を作らない約束が消えている"
 grep -q "^| S-W11 " references/criteria/script.md || ng "script.md に S-W11（通して聞いて話がつながる）がない"
 for f in ../../agents/writing-reviewer.md references/criteria/README.md; do grep -q "S-W11" $f || ng "$f に S-W11 がない"; done
-grep -q "主張の範囲を変えない" ../../agents/writing-reviewer.md && grep -q "文の案をそのまま入れない" references/review-protocol.md || ng "文の案が主張の範囲を変えないことの約束がない"
+grep -q "主張の範囲を変えない" references/review-protocol.md && grep -q "文の案をそのまま入れない" references/review-protocol.md || ng "文の案が主張の範囲を変えないことの約束がない"
 grep -q "語りとして書く" ../../agents/writer.md && grep -q "章扉" ../../agents/writer.md && grep -q "かぎ括弧を外す" ../../agents/writer.md || ng "writer.md に、語りとして書く・章扉・read のかぎ括弧がない"
-grep -q "FAIL にした基準には、必ず指摘" ../../agents/fact-checker.md || ng "fact-checker.md に、FAIL には指摘を付ける約束がない"
+grep -q "FAIL にした基準には、指摘を 1 つ以上" references/review-protocol.md && grep -q "FAIL にした基準には、必ず指摘" ../../agents/fact-checker.md || ng "review-protocol.md と fact-checker.md に、FAIL には指摘を付ける約束がない"
 grep -q "章の意図と全体の長さから割り振る" references/outline.md || ng "outline.md に、章の長さを章の意図と全体の長さから割り振ることがない"
 grep -q "言うこと 1 つで 8〜10 秒" references/outline.md && ng "outline.md に、言うことの数からの尺の見積もり（R4 でやめた）が残っている"
 for f in references/run-code.md references/run-chat.md; do
@@ -35,10 +35,10 @@ grep -q "manim-web で描きます" ../../README.md && ng "README.md が、ま�
 grep -q '区間数 × 2.0' references/storyboard.md || ng "storyboard.md の trace の既定の長さが、エンジン（区間 1 つに 2 秒）と合っていない"
 # 通し 3 で見つかったこと（言い換えない・並べた項目の説明・章扉の sub・同じことを二度言う図・セルの箱・既定のテーマ）
 grep -q "^| SP-16 .*言い換えない" references/writing/spoken.md && grep -q "^| SP-17 " references/writing/spoken.md || ng "spoken.md に SP-16（用語を言い換えない）と SP-17（並べた項目の説明）がない"
-for f in ../../agents/writer.md ../../agents/writing-reviewer.md ../../agents/director.md references/criteria/script.md references/criteria/outline.md references/outline.md references/run-chat.md; do grep -q "SP-16" $f || ng "$f に SP-16 がない"; done
+for f in ../../agents/writer.md ../../agents/writing-reviewer.md references/review-protocol.md references/criteria/script.md references/criteria/outline.md references/outline.md; do grep -q "SP-16" $f || ng "$f に SP-16 がない"; done
 grep -q "言い換えておく" references/outline.md && ng "outline.md が、知らない語の言い換えを勧めている"
 grep -q "題をなぞるだけ" references/writing/spoken.md && grep -q "題をなぞるだけ" references/storyboard.md && grep -q "題をなぞるだけ" ../../agents/writer.md || ng "章扉の sub を必須にしない約束が、spoken.md・storyboard.md・writer.md にそろっていない"
-for id in G-D9 G-D10; do grep -q "^| $id " references/criteria/structure.md && grep -q "$id" ../../agents/director.md && grep -q "$id" references/criteria/README.md || ng "$id が、基準・director・README にそろっていない"; done
+for id in G-D9 G-D10; do grep -q "^| $id " references/criteria/structure.md && grep -q "$id" references/criteria/README.md || ng "$id が、基準と README の表にそろっていない"; done
 grep -q "^## 既定のテーマ（koo）" references/themes.md && grep -q "字幕の帯と章扉の色も、デザインから決める" references/themes.md && grep -q "colors.boxes" references/themes.md || ng "themes.md に、既定のテーマ・字幕の帯と章扉の決め方・colors.boxes がない"
 for f in references/run-code.md references/run-chat.md SKILL.md; do grep -q "章扉" $f && grep -q "字幕の帯" $f || ng "$f に、字幕の帯と章扉の色をデザインから決めることがない"; done
 grep -rq "3b1b\|--theme flat" SKILL.md references ../../agents ../../CLAUDE.md && ng "なくしたテーマ（3b1b・flat）が文書に残っている"
