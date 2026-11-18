@@ -29,7 +29,7 @@ for f in $A/writer.md $A/director.md references/storyboard.md SKILL.md reference
   grep -q '「キャンバスとカメラ」' $f || ng "$f が visual-grammar.md の「キャンバスとカメラ」を指していない"
 done
 # 前の、規則として書いた言い回しが残っていない
-for w in '同じものが育つなら' '話している 1〜数個に寄せる' '線の形を追わせるときだけ' 'Morph でつなぐかを' '意図に合う所でだけ使う' '静止画なので' '演出の約束' 'その他の VG の約束' '線は一方向にする' '象限は塗り分ける。' '`table` か `list` にする' 'セルの中に箱を並べていない' '1 行 1 つの画面変化にし'; do
+for w in '同じものが育つなら' '話している 1〜数個に寄せる' '線の形を追わせるときだけ' 'Morph でつなぐかを' '意図に合う所でだけ使う' '静止画なので' '演出の約束' 'その他の VG の約束' '線は一方向にする' '象限は塗り分ける。' '`table` か `list` にする' 'セルの中に箱を並べていない' '1 行 1 つの画面変化にし' '途中で質問を挟まない' '最初に全部読む' '| 呼びどころ |'; do
   grep -qF -- "$w" $vg $A/writer.md $A/director.md $c/structure.md references/storyboard.md SKILL.md references/run-code.md references/run-chat.md && ng "前の規則の言い回し「$w」が残っている"
 done
 for w in 'ugoku-zukai/4' '"morph"' '"zoom"' '"pan"' '"draw"'; do grep -qF -- "$w" references/storyboard.md || ng "storyboard.md に $w がない"; done
