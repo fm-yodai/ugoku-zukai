@@ -397,9 +397,18 @@
         }
       }
       const ins = UZ.insidesOf(sb).filter(x => Object.prototype.hasOwnProperty.call(FIGS, x.inside));
+      // Morph でつながる graph の組（同じ系列の図は 1 枚のキャンバスに組むので、同じ id の箱は同じ形）
+      const root = {};
+      const find = a => (root[a] == null || root[a] === a ? a : (root[a] = find(root[a])));
+      for (const sl of Object.values(sb.slides && typeof sb.slides === "object" ? sb.slides : {})) for (const p of (sl && Array.isArray(sl.parts) ? sl.parts : [])) {
+        const id = UZ.partId(p);
+        if (p && typeof p.morph === "string" && FIGS[id] && FIGS[p.morph] && FIGS[id].type === "graph" && FIGS[p.morph].type === "graph") root[find(id)] = find(p.morph);
+      }
       const owner = {};
       for (const x of ins) {
-        if (owner[x.inside]) E(`図「${x.fig}」: 中身の図「${x.inside}」を、別の箱（${owner[x.inside].fig}/${owner[x.inside].node}）の inside にも使っている（中身の図は 1 つの箱にだけ置く）`);
+        const o = owner[x.inside];
+        if (o && o.node === x.node && find(o.fig) === find(x.fig)) continue;   // 系列の図の同じ箱
+        if (o) E(`図「${x.fig}」: 中身の図「${x.inside}」を、別の箱（${o.fig}/${o.node}）の inside にも使っている（中身の図は 1 つの箱にだけ置く。Morph でつながる系列の同じ id の箱どうしなら書ける）`);
         else owner[x.inside] = x;
       }
       // 循環と深さ: 中身の図から親をたどる

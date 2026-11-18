@@ -823,8 +823,10 @@ const tests = {
     assert.ok(UZ.checkLayout(M).some(x => x.kind === "小さい" && /^srv\//.test(x.msg)), "中身の図の自然な大きさでの検査（小さい文字）がない");
   },
   async inside_morph_series() {   // Morph でつながる系列の箱にも効く
-    const g2 = { ...G2, nodes: G2.nodes.map(n => (n.id === "api" ? { ...n, inside: "srv" } : n)) };
-    const sb = seriesDeck({ g1: G1, g2, srv: SRV() }, [["g1"], ["g2", "g1"]]);
+    // v1 と v2 の同じ箱 api の両方に inside（書き手は宣言を写して次の図を書く）
+    const withIn = G => ({ ...G, nodes: G.nodes.map(n => (n.id === "api" ? { ...n, inside: "srv" } : n)) });
+    const g2 = withIn(G2);
+    const sb = seriesDeck({ g1: withIn(G1), g2, srv: SRV() }, [["g1"], ["g2", "g1"]]);
     sb.format = "ugoku-zukai/6";
     sb.scenes[1].lines.push(LN("l3", "API の{a}中に入ります。", { zoom: "api" }));
     const M = await build(sb);
@@ -833,6 +835,59 @@ const tests = {
     assert.ok(z.to.s > UZ.CAMERA.maxZoom, `倍率: ${z.to.s}`);
     assert.ok(fr.figs.srv.opacity > 0.999 && fr.figs.srv.place.s >= 0.9, `系列の箱の中身: ${fr.figs.srv.opacity} ${fr.figs.srv.place.s}`);
     assert.strictEqual(UZ.frame(M, lineEnd(M, "l1")).figs.srv.opacity, 0, "前のスライドでは中身は出ない");
+    assert.strictEqual(fr.figs.srv.parent.fig, "g2", "v2 のスライドでは親は g2");
+    // 中身は v2 の箱 api の内側にある
+    const P = fr.figs.g2.place, b = M.figs.g2.items.api, K = M.figs.srv, p = fr.figs.srv.place;
+    const bx = P.ox + b.x * P.s, kx = p.ox + K.x0 * p.s;
+    assert.ok(kx > bx && kx + (K.x1 - K.x0) * p.s < bx + b.w * P.s, "中身が v2 の箱の内側にない");
+    // 寄る前の 1 枚目でも、箱の名前は薄くならない（中身は出ない）
+    assert.ok(!(UZ.frame(M, lineEnd(M, "l1")).st["g1/api"] || {}).inside, "1 枚目で箱の名前が薄い");
+    // 系列でない図・違う箱で同じ中身を使うのは誤り
+    const sb2 = seriesDeck({ g1: withIn(G1), g2: { ...G2, nodes: G2.nodes.map(n => (n.id === "db" ? { ...n, inside: "srv" } : n)) }, srv: SRV() }, [["g1"], ["g2", "g1"]]);
+    sb2.format = "ugoku-zukai/6";
+    hasErr(await build(sb2), /中身の図「srv」を、別の箱（g1\/api）の inside にも使っている/);
+    const sb3 = deck6({ a: { title: "A", parts: [{ figure: "g" }] }, b: { title: "B", parts: [{ figure: "h" }] } }, [SC("s1", "a"), SC("s2", "b")], { g: IG(), h: IG(), srv: SRV() });
+    hasErr(await build(sb3), /中身の図「srv」を、別の箱（g\/server）の inside にも使っている/);
+  },
+  async inside_deep_fit_camera() {   // 中身の図の中の要素に寄るときも fitCamera が働く（隣の箱が端で切れれば、中身が読める倍率まで下げる）
+    const N = Array.from({ length: 3 }, (_, i) => ({ id: `n${i}`, label: `とても長い名前の段階その${i}とても長い名前の段階` }));
+    const wide = { type: "graph", direction: "right", nodes: N, edges: N.slice(1).map((n, i) => ({ from: N[i].id, to: n.id })) };
+    const lines = [LN("l1", "{a}出します。", { show: "g" }), LN("l2", "サーバーの{a}中に入ります。", { zoom: "server" }), LN("l3", "真ん中に{a}寄ります。", { zoom: "srv/n1" })];
+    const M = await build(insideDeck(lines, { srv: wide }));
+    assert.deepStrictEqual(M.errors, []);
+    hasWarn(M, /行 l3（zoom）: 寄せ先の隣の部品が body の端で切れるため、倍率を [\d.]+ に下げた/);
+    const z = zoomAct(M, "l3"), fr = UZ.frame(M, z.end + 0.05), K = M.figs.srv, p = fr.figs.srv.place, B = fr.scene.body;
+    assert.ok(p.s >= 0.9 - 1e-6, `中身が読める倍率より下げた: ${p.s}`);
+    // 下げた後、寄せ先の隣の箱は端で切れない
+    for (const id of ["n0", "n2"]) {
+      const b = K.items[id], x0 = p.ox + b.x * p.s, x1 = x0 + b.w * p.s;
+      assert.ok(x1 <= B.x + 1 || x0 >= B.x + B.w - 1 || (x0 >= B.x - 1 && x1 <= B.x + B.w + 1), `${id} が端で切れる: ${x0}〜${x1}`);
+    }
+    // 隣が収まる普通の中身では警告しない
+    const M2 = await build(insideDeck([lines[0], lines[1], LN("l3", "キャッシュに{a}寄ります。", { zoom: "srv/cache" })]));
+    assert.ok(!(M2.warnings || []).some(w => /行 l3/.test(w)), JSON.stringify(M2.warnings));
+  },
+  async inside_big_box_unzoomed() {   // 本文の 6 割を超える大きな箱でも、寄せていなければ中身は出ない（完成形も）
+    const long = "とても長い名前のついたサーバーの箱、中に部品がいくつも入っている";
+    const g = { type: "graph", nodes: [{ id: "server", label: long, inside: "srv" }], edges: [] };
+    const M = await build(deck6({ a: { title: "A", parts: [{ figure: "g" }] } }, [SC("s1", "a", [LN("l1", "{a}出します。", { show: "g" })])], { g, srv: SRV() }));
+    assert.deepStrictEqual(M.errors, []);
+    const fr = UZ.frame(M, lineEnd(M, "l1"));
+    const a = UZ.insidePlace(M.figs.srv, M.figs.g.items.server, fr.figs.g.place).a;
+    assert.ok(a > 0.55, `前提: 倍率 1 で区画の倍率が 0.55 を超える大きな箱（${a}）`);
+    assert.strictEqual(fr.figs.srv.opacity, 0, "寄せていないのに中身が出る");
+    assert.strictEqual(UZ.finalFrame(M, "a").figs.srv.opacity, 0, "完成形で中身が出る");
+  },
+  async inside_cull_only_deep() {   // 画面から遠い要素を描かないのは、倍率 2 を超えるときだけ
+    const N = ["利用者", "受付", "認証", "サーバー", "倉庫", "外部"].map((label, i) => ({ id: `n${i}`, label, ...(i === 3 ? { inside: "srv" } : {}) }));
+    const g = { type: "graph", direction: "right", nodes: N, edges: N.slice(1).map((n, i) => ({ from: N[i].id, to: n.id })) };
+    const M = await build(insideDeck([LN("l1", "{a}出します。", { show: "g" }), LN("l2", "利用者に{a}寄せます。", { zoom: "n0" })], { g }));
+    assert.deepStrictEqual(M.errors, []);
+    const t = zoomAct(M, "l2").end + 0.05, fr = UZ.frame(M, t), c = fr.camera.clip, P = fr.figs.g.place, b = M.figs.g.items.n5;
+    assert.ok(fr.camera.on && fr.camera.s <= 2, `倍率: ${fr.camera.s}`);
+    assert.ok(P.ox + b.x * P.s > c.x + c.w + 200, "前提: 最後の箱が clip から 200px より外");
+    const svg = renderSvg(M, t);
+    assert.ok(svg.includes("外部"), "倍率 2 以下で、画面の外の要素を描かない");
   },
   async inside_complete_unzoomed() {   // 完成形のコマは寄らない姿（中身は出さない）
     const sb = insideDeck([LN("l1", "{a}出します。", { show: "g" }), LN("l2", "サーバーの{a}中に入ります。", { zoom: "server" })]);

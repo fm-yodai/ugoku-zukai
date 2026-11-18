@@ -333,8 +333,9 @@
       }
       for (const [key, E] of Object.entries(this.els)) {
         const it = E.it, s = fr.st[key] || { show: 0, dim: 1, pulse: 0, off: [0, 0] };
-        // 寄せている間、画面（clip）から遠く外れた要素は描かない（深く寄ると、外れた要素の座標が数千 px になる。resvg はそれで止まることがある）
-        if (E.g && cam && cam.on && c && it.bbox && !["custom", "space", "s3", "dot"].includes(it.kind)) {
+        // 深く寄せている間（倍率 2 を超える）、画面（clip）から遠く外れた要素は描かない（外れた要素の座標が数千 px になり、resvg が止まることがある）。
+        // 経路を描き直している辺（Morph の s.pts）は、外接矩形が今の形と違うので外さない
+        if (E.g && cam && cam.on && cam.s > 2 && c && it.bbox && !s.pts && !["custom", "space", "s3", "dot"].includes(it.kind)) {
           const fp = fr.figs[it.fig] && fr.figs[it.fig].place;
           let far = false;
           if (fp) {
