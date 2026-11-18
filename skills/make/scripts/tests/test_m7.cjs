@@ -511,6 +511,26 @@ const tests = {
     assert.strictEqual(+E.fill.style.opacity, 1, `面に dim が重ねて掛かる: ${E.fill.style.opacity}`);
     assert.strictEqual(+E.texts[0].style.opacity, 1, `文字に dim が重ねて掛かる: ${E.texts[0].style.opacity}`);
   },
+  async series_earlier_nodes_stay_in_line() {
+    // UX の評価の形: v2 で「良くする体験を決める→提案」を足し、ヒアリングと一緒に枠「提案の前」に入れる。
+    // 和集合を組んでも、v1 の 5 つの箱は一列に並び、v1 の辺は全部まっすぐ（後から加わる箱が外側に入る）
+    const P = { type: "graph", direction: "right",
+      nodes: [["hearing", "ヒアリング"], ["proposal", "提案"], ["req", "要件定義"], ["design", "設計"], ["dev", "開発・テスト"]].map(([id, label]) => ({ id, label, role: "process" })),
+      edges: [["hearing", "proposal"], ["proposal", "req"], ["req", "design"], ["design", "dev"]].map(([from, to]) => ({ from, to })) };
+    const v1 = { ...P, groups: [{ id: "screen", label: "画面を設計する", members: ["design"], style: "frame" }] };
+    const v2 = { ...P, nodes: [...P.nodes, { id: "goal", label: "良くする体験を決める", role: "added" }],
+      groups: [{ id: "early", label: "提案の前", members: ["hearing", "goal"], style: "frame" }, v1.groups[0]],
+      edges: [...P.edges, { from: "goal", to: "proposal", label: "作るものを選ぶ" }] };
+    const M = await build(seriesDeck({ v1, v2 }, [["v1"], ["v2", "v1"]]));
+    assert.deepStrictEqual(M.errors, []);
+    const F = M.figs.v1;
+    const cy = P.nodes.map(n => { const it = F.items[n.id]; return it.y + it.h / 2; });
+    assert.ok(Math.max(...cy) - Math.min(...cy) < 0.5, `v1 の箱の中心の y がそろわない: ${cy}`);
+    for (const e of P.edges) {
+      const pts = F.items[`${e.from}>${e.to}`].pts;
+      assert.strictEqual(pts.length, 2, `v1 の辺 ${e.from}>${e.to} が折れている: ${JSON.stringify(pts)}`);
+    }
+  },
   async non_series_graph_unchanged() {
     // 系列に入らない graph は、この変更の前と同じ座標（examples の見本）
     const fs = require("fs"), path = require("path");

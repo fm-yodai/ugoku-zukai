@@ -410,7 +410,7 @@
     const canvas = ctx && ctx.canvas;
     const edges = f.edges.map(e => ({ ...e, id: e.id || `${e.from}>${e.to}` }));
     const { abs, edgeGeom, r } = canvas ? { abs: canvas.abs, edgeGeom: canvas.edgeGeom, r: { width: canvas.width, height: canvas.height } }
-      : await elkGeom(f, nodeSpec, edges, bands, frames, dir, lsize);
+      : await elkGeom(f, nodeSpec, edges, bands, frames, dir, lsize, !!(ctx && ctx.sizes));
 
     const items = [], order = [];
     let topPad = 0;
@@ -533,7 +533,7 @@
   }
 
   // ELK で組む: ノードの絶対座標（abs）と、辺の経路とラベルの位置（edgeGeom）
-  async function elkGeom(f, nodeSpec, edges, bands, frames, dir, lsize) {
+  async function elkGeom(f, nodeSpec, edges, bands, frames, dir, lsize, series) {
     const elkNode = id => {
       const s = nodeSpec[id];
       const o = { id, width: s.w, height: s.h };
@@ -558,12 +558,26 @@
       },
       children: [], edges: [],
     };
-    for (const g of frames) {
-      root.children.push({ id: g.id, layoutOptions: { "elk.padding": "[top=46,left=22,bottom=22,right=22]",
+    // 系列のキャンバス: 先の図の要素を先に渡し、その順を考慮させる（後から加わる箱ができるだけ外側に入る）。
+    // さらに同じノードに出入りする辺の端を 1 か所にまとめる。まとめないと、後の図で辺が加わったノードの入口が中心からずれ、
+    // 先の図のノードがその入口に合わせて一段ずれる（UX の評価で、v1 の「ヒアリング」だけが下がった）
+    if (series) Object.assign(root.layoutOptions, { "elk.layered.considerModelOrder.strategy": "NODES_AND_EDGES", "elk.layered.mergeEdges": "true" });
+    const frameNode = g => ({ id: g.id, layoutOptions: { "elk.padding": "[top=46,left=22,bottom=22,right=22]",
         ...(bands.length ? { "elk.partitioning.partition": String(Math.max(0, bands.findIndex(b => b.members.includes(g.id)))) } : {}) },
-        children: g.members.filter(m => nodeSpec[m]).map(elkNode) });
+        children: (series ? f.nodes.map(n => n.id).filter(id => g.members.includes(id)) : g.members.filter(m => nodeSpec[m])).map(elkNode) });
+    if (series) {
+      // 系列のキャンバス: ノードの順（初めて出る図の順）に、枠はその最初のメンバーの場所に置く
+      const placed = new Set();
+      for (const n of f.nodes) {
+        const g = frames.find(x => x.id === inFrame[n.id]);
+        if (!g) root.children.push(elkNode(n.id));
+        else if (!placed.has(g.id)) { placed.add(g.id); root.children.push(frameNode(g)); }
+      }
+      for (const g of frames) if (!placed.has(g.id)) root.children.push(frameNode(g));
+    } else {
+      for (const g of frames) root.children.push(frameNode(g));
+      for (const n of f.nodes) if (!inFrame[n.id]) root.children.push(elkNode(n.id));
     }
-    for (const n of f.nodes) if (!inFrame[n.id]) root.children.push(elkNode(n.id));
     for (const e of edges) {
       root.edges.push({ id: e.id, sources: [e.from], targets: [e.to],
         labels: e.label ? [{ text: e.label, width: UZ.textW(e.label, lsize) + 10, height: lsize + 8 }] : [] });
