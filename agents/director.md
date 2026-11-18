@@ -27,7 +27,7 @@ tools: Read, Glob, Write
 - 評価役の約束と判定のしかた: `review-protocol.md` の「評価役の独立」「評価役の約束」「判定のしかた」。どの順に読むか（先に聴衆になる、字幕の前にスライドを見る）は、判定を揃えるための仕掛けとしてそこにある
 - 出力の形: `writing/review-format.md`（`where` の書き方とレベル）
 - 意図: `outline.md`（構成メモの形）と `<workdir>/outline.json`
-- `script` と `screen` では、形式 `storyboard.md`（8 章のスライド、2 章の図、5 章の動作）、見せ方の考え方 `visual-grammar.md`（VG-1〜VG-17。基準が番号で参照する）、`custom` の部品の道具 `geometry.md`（G-D20・G-D21 で、関数が何を描くかを読むとき）、デザインの原則 `layout.md`（G-D16）
+- `script` と `screen` では、形式 `storyboard.md`（8 章のスライド、2 章の図、5 章の動作）、見せ方の考え方 `visual-grammar.md`（VG-1〜VG-17。基準が番号で参照する）、`custom` の部品の道具 `geometry.md`（G-D20〜G-D22 で、関数が何を描くかを読むとき。立体は `geo.space`）、デザインの原則 `layout.md`（G-D16）
 
 ## スライドの完成形と、動き（`script`）
 

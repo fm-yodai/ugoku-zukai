@@ -176,7 +176,7 @@ python3 scripts/build_player.py storyboard.json -o preview.html     # 音声な�
   "edges": [ { "from": "web", "to": "db", "label": "書く" } ] }
 ```
 
-- 書けるのは、スライドに置いた `graph` の箱だけ。Morph でつながる系列では、同じ id の箱どうしなら同じ中身を書ける。板（`plate`）に置いた `graph` の箱、`space` の `box` には効かない。`venn` の集合の `inside`（2 章の `venn`）は包含を表す別の書き方
+- 書けるのは、スライドに置いた `graph` の箱だけ。Morph でつながる系列では、同じ id の箱どうしなら同じ中身を書ける。板（`plate`）に置いた `graph` の箱と、`space` の `box` に書くと誤りになる。`venn` の集合の `inside`（2 章の `venn`）は包含を表す別の書き方
 - 中身は `figures` の図（`space`・`custom`・`title`・`frame`・`toc` は中身にできない）。1 つの図を中身にできる箱は 1 つ。中身の図は、部品や場面の図としては置かない
 - 入れ子は 3 段まで。循環すると誤り
 - 寄る: `{"zoom": "server"}`。中身の見え方はカメラの倍率で決まり（寄り切ると中身だけが見える）、時刻では決まらないので、シークしても同じ絵になる。倍率の上限は、`inside` の箱へは中身が読める倍率まで上がる（1 段ごとに 6 倍まで）
