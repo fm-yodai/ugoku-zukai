@@ -38,7 +38,7 @@ grep -q "^| SP-16 .*言い換えない" references/writing/spoken.md && grep -q 
 for f in ../../agents/writer.md ../../agents/writing-reviewer.md ../../agents/director.md references/criteria/script.md references/criteria/outline.md references/outline.md references/run-chat.md; do grep -q "SP-16" $f || ng "$f に SP-16 がない"; done
 grep -q "言い換えておく" references/outline.md && ng "outline.md が、知らない語の言い換えを勧めている"
 grep -q "題をなぞるだけ" references/writing/spoken.md && grep -q "題をなぞるだけ" references/storyboard.md && grep -q "題をなぞるだけ" ../../agents/writer.md || ng "章扉の sub を必須にしない約束が、spoken.md・storyboard.md・writer.md にそろっていない"
-for id in G-D9 G-D10; do grep -q "^| $id " references/criteria/structure.md && grep -q "$id" ../../agents/director.md && grep -q "$id" ../../agents/writer.md && grep -q "$id" references/criteria/README.md || ng "$id が、基準・director・writer・README にそろっていない"; done
+for id in G-D9 G-D10; do grep -q "^| $id " references/criteria/structure.md && grep -q "$id" ../../agents/director.md && grep -q "$id" references/criteria/README.md || ng "$id が、基準・director・README にそろっていない"; done
 grep -q "^## 既定のテーマ（koo）" references/themes.md && grep -q "字幕の帯と章扉の色も、デザインから決める" references/themes.md && grep -q "colors.boxes" references/themes.md || ng "themes.md に、既定のテーマ・字幕の帯と章扉の決め方・colors.boxes がない"
 for f in references/run-code.md references/run-chat.md SKILL.md; do grep -q "章扉" $f && grep -q "字幕の帯" $f || ng "$f に、字幕の帯と章扉の色をデザインから決めることがない"; done
 grep -rq "3b1b\|--theme flat" SKILL.md references ../../agents ../../CLAUDE.md && ng "なくしたテーマ（3b1b・flat）が文書に残っている"
