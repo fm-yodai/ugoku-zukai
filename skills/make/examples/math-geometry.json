@@ -1,0 +1,262 @@
+{
+  "format": "ugoku-zukai/5",
+  "title": "数式は、動かすと見えてくる",
+  "voice": {
+    "speaker": 8,
+    "speed": 1.1
+  },
+  "values": {
+    "a": -2.4,
+    "tl": 0,
+    "tr": 0,
+    "cut": 0,
+    "e": 0,
+    "g": 0.02
+  },
+  "custom": {
+    "tangent": "({ g, v, el, S, geo, w, h }) => {\n  // 曲線 f と、その導関数 df。点は x = a にあり、tl で接線が、tr で導関数の記録が現れる\n  const f = x => x * x * x / 4 - x, df = x => 3 * x * x / 4 - 1;\n  const num = x => { const s = x.toFixed(2); return s === \"-0.00\" ? \"0.00\" : s; };\n  const Ax = geo.axes(g, { box: { x: 30, y: 10, w: w * 0.58, h: h - 30 }, x: [-3, 3], y: [-2.5, 2.5], grid: true, labels: { x: \"$x$\", y: \"$y$\" } });\n  geo.plot(g, Ax, f, { color: \"accent\" });\n  const a = v.a, m = df(a);\n  if (v.tr > 0 && a > -2.4) geo.plot(el(\"g\", { opacity: v.tr }, g), Ax, df, { from: -2.4, to: a, color: \"good\" });\n  geo.tangent(el(\"g\", { opacity: v.tl }, g), Ax, f, a, { df: m, color: \"warn\" });\n  const [px, py] = Ax.toPx([a, f(a)]), py0 = Ax.toPx([a, 0])[1];\n  el(\"path\", { d: `M${px},${py0}V${py}`, stroke: S.muted, \"stroke-width\": 2, \"stroke-dasharray\": \"6 6\" }, g);\n  geo.point(g, Ax, [a, f(a)], { color: \"warn\" });\n  const X = w * 0.64;\n  geo.tex(g, String.raw`f(x)=\\tfrac{1}{4}x^3-x`, { x: X, y: 20, size: 34, color: \"accent\" });\n  geo.tex(el(\"g\", { opacity: v.tr }, g), String.raw`f'(x)=\\tfrac{3}{4}x^2-1`, { x: X, y: 90, size: 34, color: \"good\" });\n  geo.tex(el(\"g\", { opacity: v.tl }, g), `f'(${num(a)})=${num(m)}`, { x: X, y: 190, size: 44, color: \"warn\" });\n}",
+    "expand": "({ g, v, el, S, geo, w, h }) => {\n  // 一辺 x+1 の正方形（x = 2 の比で描く）。cut で切れ目が入って 4 つに分かれ、e で式が展開される\n  const c = v.cut, e = v.e, side = h - 80, u = side / 3, xs = 2 * u, x0 = 50, y0 = 60;\n  const parts = [[x0, y0, xs, xs, \"accent\", \"$x^2$\"], [x0 + xs, y0, u, xs, \"warn\", \"$x$\"],\n    [x0, y0 + xs, xs, u, \"warn\", \"$x$\"], [x0 + xs, y0 + xs, u, u, \"good\", \"$1$\"]];\n  for (const [x, y, pw, ph, col] of parts)\n    el(\"rect\", { x, y, width: pw, height: ph, fill: geo.col(col), \"fill-opacity\": 0.35 * c }, g);\n  geo.polygon(g, [[x0, y0], [x0 + side, y0], [x0 + side, y0 + side], [x0, y0 + side]], { color: \"ink\" });\n  if (c > 0) {\n    el(\"path\", { d: `M${x0 + xs},${y0}V${y0 + side * c}M${x0},${y0 + xs}H${x0 + side * c}`, stroke: S.ink, \"stroke-width\": 3 }, g);\n    const lg = el(\"g\", { opacity: c }, g);\n    for (const [x, y, pw, ph, col, lab] of parts) geo.label(lg, [x + pw / 2, y + ph / 2], lab, { color: col, size: 34 });\n  }\n  // 上の辺の長さ: 切る前は x+1、切った後は x と 1\n  geo.label(el(\"g\", { opacity: 1 - c }, g), [x0 + side / 2, y0 - 26], \"$x+1$\", { size: 28 });\n  const sg = el(\"g\", { opacity: c }, g);\n  geo.label(sg, [x0 + xs / 2, y0 - 26], \"$x$\", { size: 28 });\n  geo.label(sg, [x0 + xs + u / 2, y0 - 26], \"$1$\", { size: 28 });\n  const X = x0 + side + 120;\n  geo.tex(el(\"g\", { opacity: e }, g), String.raw`(x+1)^2=`, { x: X, y: h / 2 - 110, size: 44, color: \"muted\" });\n  geo.texMorph(g, String.raw`(\\cssId{x}{x}\\cssId{p}{+}\\cssId{one}{1})^{\\cssId{two}{2}}`,\n    String.raw`\\cssId{x}{x}^{\\cssId{two}{2}}\\cssId{p}{+}2x+\\cssId{one}{1}`, e, { x: X, y: h / 2 - 30, size: 64 });\n}",
+    "sales": "({ g, v, el, S, geo, w, h }) => {\n  // 月の売上 100 万円が、毎月 r ずつ伸びる。伸び率を上げたら、2% のときの高さを横線で残して比べる\n  const r = v.g, sales = (rate, m) => 100 * Math.pow(1 + rate, m - 1);\n  const Ax = geo.axes(g, { box: { x: 70, y: 20, w: w * 0.58, h: h - 50 }, x: [0.3, 12.7], y: [0, 200], ticks: { x: 1, y: 50 }, labels: { y: \"万円\" } });\n  for (let m = 1; m <= 12; m++) {\n    geo.bar(g, Ax, m, sales(r, m), { color: m === 12 ? \"warn\" : \"accent\", opacity: 0.85 });\n    if (r > 0.0201) {\n      const [x0, y] = Ax.toPx([m - 0.3, sales(0.02, m)]), x1 = Ax.toPx([m + 0.3, 0])[0];\n      el(\"path\", { d: `M${x0},${y}H${x1}`, stroke: S.ink, \"stroke-width\": 3, \"stroke-dasharray\": \"5 4\" }, g);\n    }\n  }\n  const X = w * 0.66, last = sales(r, 12);\n  geo.label(g, [X, 30], \"月の伸び率\", { anchor: \"start\", color: \"muted\", size: 24 });\n  geo.number(g, [X, 80], r * 100, { decimals: 1, unit: \"%\", anchor: \"start\", color: \"accent\", size: 48 });\n  geo.label(g, [X, 160], \"12 月の売上（万円）\", { anchor: \"start\", color: \"muted\", size: 24 });\n  geo.tex(g, String.raw`100\\times${(1 + r).toFixed(3)}^{11}\\approx${Math.round(last)}`, { x: X, y: 190, size: 36, color: \"warn\" });\n}"
+  },
+  "figures": {
+    "cover": {
+      "type": "title",
+      "text": "数式は、動かすと\n見えてくる"
+    }
+  },
+  "slides": {
+    "tangent-slope": {
+      "title": "接線の傾きと導関数",
+      "statement": "接線の傾きは点とともに変わり、その傾きを並べた曲線が導関数です。",
+      "parts": [
+        {
+          "id": "tan",
+          "type": "custom",
+          "draw": "tangent"
+        }
+      ]
+    },
+    "square-expand": {
+      "title": "(x+1)² の展開を面積で見る",
+      "statement": "一辺 x+1 の正方形は、x² と、x が 2 つと、1 に分かれます。",
+      "parts": [
+        {
+          "id": "sq",
+          "type": "custom",
+          "draw": "expand"
+        }
+      ]
+    },
+    "growth-rate": {
+      "title": "伸び率と 1 年後の売上",
+      "statement": "月 2% と 5% の差は、12 月の売上では約 1.4 倍の差になります。",
+      "parts": [
+        {
+          "id": "bars",
+          "type": "custom",
+          "draw": "sales"
+        }
+      ]
+    }
+  },
+  "scenes": [
+    {
+      "id": "s1",
+      "chapter": "c1",
+      "figure": "cover",
+      "lines": [
+        {
+          "id": "l1",
+          "text": "式の中の文字を、実際に動かしてみると、何が変わり何が変わらないかが見えてきます。"
+        }
+      ]
+    },
+    {
+      "id": "s2",
+      "chapter": "c1",
+      "slide": "tangent-slope",
+      "lines": [
+        {
+          "id": "l2",
+          "text": "{a}青い曲線の上に点を置き、{b}その点で曲線に接する直線を引きます。",
+          "do": [
+            {
+              "at": "a",
+              "show": "tan"
+            },
+            {
+              "at": "b",
+              "set": "tl",
+              "to": 1,
+              "dur": 0.8
+            }
+          ]
+        },
+        {
+          "id": "l3",
+          "text": "点を{a}右へ動かすと、接線の傾きも一緒に変わります。",
+          "do": [
+            {
+              "at": "a",
+              "set": "a",
+              "to": -1.6,
+              "dur": 2.2
+            }
+          ]
+        },
+        {
+          "id": "l4",
+          "text": "{a}山の頂上では接線が水平になり、傾きは 0 です。",
+          "do": [
+            {
+              "at": "a",
+              "set": "a",
+              "to": -1.1547,
+              "dur": 1.4
+            }
+          ]
+        },
+        {
+          "id": "l5",
+          "text": "{a}頂上を越えて下り始めると、傾きはマイナスになります。",
+          "do": [
+            {
+              "at": "a",
+              "set": "a",
+              "to": 0,
+              "dur": 2.0
+            }
+          ]
+        },
+        {
+          "id": "l6",
+          "text": "{a}谷を抜けて上り始めると、傾きはまたプラスに戻ります。",
+          "do": [
+            {
+              "at": "a",
+              "set": "a",
+              "to": 2.2,
+              "dur": 2.4
+            }
+          ]
+        },
+        {
+          "id": "l7",
+          "text": "{a}点を左端に戻し、{b}傾きを高さにして記録しながら、もう一度動かします。",
+          "do": [
+            {
+              "at": "a",
+              "set": "a",
+              "to": -2.4,
+              "dur": 1.0
+            },
+            {
+              "at": "b",
+              "set": "tr",
+              "to": 1,
+              "dur": 0.4
+            },
+            {
+              "set": "a",
+              "to": 2.2,
+              "dur": 3.6,
+              "ease": "linear"
+            }
+          ]
+        },
+        {
+          "id": "l8",
+          "text": "こうして描けた緑の曲線が、傾きの変化を表す導関数です。"
+        }
+      ]
+    },
+    {
+      "id": "s3",
+      "chapter": "c2",
+      "slide": "square-expand",
+      "lines": [
+        {
+          "id": "l9",
+          "text": "{a}一辺が x+1 である正方形は、面積が x+1 を 2 乗した値です。",
+          "read": "{a}一辺がエックスたすいちである正方形は、面積がエックスたすいちをにじょうした値です。",
+          "do": [
+            {
+              "at": "a",
+              "show": "sq"
+            }
+          ]
+        },
+        {
+          "id": "l10",
+          "text": "{a}辺を x と 1 に分けて切ると、正方形は 4 つに分かれます。",
+          "read": "{a}辺をエックスといちに分けて切ると、正方形はよっつに分かれます。",
+          "do": [
+            {
+              "at": "a",
+              "set": "cut",
+              "to": 1,
+              "dur": 1.6
+            }
+          ]
+        },
+        {
+          "id": "l11",
+          "text": "{a}大きな正方形が x の 2 乗、細長い長方形が x の 2 つぶん、小さな正方形が 1 です。",
+          "read": "{a}大きな正方形がエックスのにじょう、細長い長方形がエックスのふたつぶん、小さな正方形がいちです。",
+          "do": [
+            {
+              "at": "a",
+              "set": "e",
+              "to": 1,
+              "dur": 2.4
+            }
+          ]
+        },
+        {
+          "id": "l12",
+          "text": "変形した式に並ぶ 3 つの項は、図にある 3 種類の面積に当たります。"
+        }
+      ]
+    },
+    {
+      "id": "s4",
+      "chapter": "c3",
+      "slide": "growth-rate",
+      "lines": [
+        {
+          "id": "l13",
+          "text": "{a}月の売上が 100 万円で、毎月 2% ずつ伸びる場合を考えます。",
+          "read": "{a}月の売上がひゃくまんえんで、毎月にパーセントずつ伸びる場合を考えます。",
+          "do": [
+            {
+              "at": "a",
+              "show": "bars"
+            }
+          ]
+        },
+        {
+          "id": "l14",
+          "text": "{a}伸び率を 5% に上げると、後ろの月ほど棒が大きく伸びます。",
+          "read": "{a}伸び率をごパーセントに上げると、後ろの月ほど棒が大きく伸びます。",
+          "do": [
+            {
+              "at": "a",
+              "set": "g",
+              "to": 0.05,
+              "dur": 3.0
+            }
+          ]
+        },
+        {
+          "id": "l15",
+          "text": "12 月の売上は、2% なら約 124 万円、5% なら約 171 万円です。",
+          "read": "じゅうにがつの売上は、にパーセントなら約ひゃくにじゅうよんまんえん、ごパーセントなら約ひゃくななじゅういちまんえんです。"
+        },
+        {
+          "id": "l16",
+          "text": "毎月のわずかな差が、月を重ねるほど大きく開いていきます。"
+        }
+      ]
+    }
+  ]
+}

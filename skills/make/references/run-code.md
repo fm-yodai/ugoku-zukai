@@ -105,7 +105,7 @@ python3 ${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/check_theme.py <workdir>/theme
 
 ## 台本と機械検査
 
-台本（`<workdir>/storyboard.json`）の作り方の考え方は SKILL.md の「作る順番」と `agents/writer.md`、形式は `storyboard.md`（スライドは 8 章。見本は `${CLAUDE_PLUGIN_ROOT}/skills/make/examples/slide-forms.json`、Morph とカメラの見本は `camera-morph.json`）。スライドの意図は、台本のスライドと同じ id で、構成メモの章の `slides` に `proposed` で書く。画像やイラストは `<workdir>/assets/` に置き、出どころ（`source`）と利用条件（`license`）を書く。
+台本（`<workdir>/storyboard.json`）の作り方の考え方は SKILL.md の「作る順番」と `agents/writer.md`、形式は `storyboard.md`（スライドは 8 章。見本は `${CLAUDE_PLUGIN_ROOT}/skills/make/examples/slide-forms.json`、Morph とカメラの見本は `camera-morph.json`）。値に連動して動く図と数式の変形は `visual-grammar.md` の「値と数式」（VG-13・VG-14）、座標・グラフ・数式を描く `custom` の部品の道具とリファレンスは `geometry.md`（見本は `math-geometry.json`）。スライドの意図は、台本のスライドと同じ id で、構成メモの章の `slides` に `proposed` で書く。画像やイラストは `<workdir>/assets/` に置き、出どころ（`source`）と利用条件（`license`）を書く。
 
 writer には、初稿と章単位の書き直しを任せられる（書く範囲を「全部」か章の id で渡す）。writer は `review/ledger.json` を読むので、閉じた指摘（`ledger.py list <workdir> --state closed`）で直した言い回しは、頼むときに伝えれば保たれる。一文の言い回しや動作 1 つなら、進行役が `<workdir>/storyboard.json` を直接直すほうが、writer に文脈を渡す往復より速い。
 

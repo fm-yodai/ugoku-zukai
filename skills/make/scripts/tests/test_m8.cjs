@@ -58,6 +58,16 @@ const newGeo = () => ({ geo: UZ.makeGeo(fakeEl, UZ.styleOf(TH)), g: fakeEl("g") 
 const ser = e => SVGDOM.serialize(e);
 const attrsOf = (str, tag) => [...str.matchAll(new RegExp(`<${tag} [^>]*>`, "g"))].map(m => m[0]);
 
+// geometry.md のリファレンス（### R<n> の節）ごとに、値と動作の例（```json）と関数（```js）を取り出す
+function geometryRefs() {
+  const fs = require("fs"), path = require("path");
+  const md = fs.readFileSync(path.join(__dirname, "../../references/geometry.md"), "utf8");
+  return md.split(/^### /m).slice(1).filter(s => /^R\d /.test(s)).map(s => {
+    const block = lang => { const m = s.match(new RegExp("```" + lang + "\\n([\\s\\S]*?)\\n```")); assert.ok(m, `${s.slice(0, 10)} に ${lang} の塊がない`); return m[1]; };
+    return { id: s.split(" ")[0], ex: JSON.parse(block("json")), js: block("js") };
+  });
+}
+
 const tests = {
   async tex_tree_basic() {
     const r = UZMJ.tex2tree("f'(a)=\\cssId{k1}{2.35}", { display: true });
@@ -392,6 +402,27 @@ const tests = {
     const M = await build(customDeck(CPART, null, { custom: { dot: src } }));
     const r = UZ.checkCustoms(M, fakeEl);
     assert.deepStrictEqual(r, { errors: [], warnings: [] });
+  },
+  async geometry_md_references_run() {   // geometry.md のリファレンス R1〜R6 は、写せばそのまま誤りも警告もなく描ける
+    const refs = geometryRefs();
+    assert.deepStrictEqual(refs.map(r => r.id), ["R1", "R2", "R3", "R4", "R5", "R6"]);
+    for (const r of refs) {
+      const sb = deck5({ a: { title: "A", parts: [{ id: "p", type: "custom", draw: "r" }] } },
+        [SC("s1", "a", [{ id: "l1", text: "{a}出して、{b}値を動かしながら、ゆっくりと説明していきます。",
+          do: [{ show: "p", at: "a" }, { ...r.ex.do[0], at: "b" }, ...r.ex.do.slice(1)] }])], {},
+        { values: r.ex.values, custom: { r: r.js } });
+      const M = await build(sb);
+      assert.deepStrictEqual(M.errors, [], `${r.id}: ${JSON.stringify(M.errors)}`);
+      const c = UZ.checkCustoms(M, fakeEl);
+      assert.deepStrictEqual(c, { errors: [], warnings: [] }, `${r.id}: ${JSON.stringify(c)}`);
+    }
+  },
+  async example_matches_geometry_md() {   // 見本の接線と売上の関数は、リファレンス R1・R6 の写し
+    const fs = require("fs"), path = require("path");
+    const sb = JSON.parse(fs.readFileSync(path.join(__dirname, "../../examples/math-geometry.json"), "utf8"));
+    const refs = Object.fromEntries(geometryRefs().map(r => [r.id, r.js]));
+    assert.strictEqual(sb.custom.tangent, refs.R1, "見本の tangent が geometry.md の R1 と違う");
+    assert.strictEqual(sb.custom.sales, refs.R6, "見本の sales が geometry.md の R6 と違う");
   },
   async check_cli_json_reports() {
     const fs = require("fs"), os = require("os"), path = require("path"), cp = require("child_process");
