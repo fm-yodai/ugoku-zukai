@@ -618,7 +618,10 @@
             }
           }
           let s = 1;   // all は恒等（スライドの写し方）に戻す
-          if (R && a.verb === "pan") s = a.from.s;
+          if (R && a.verb === "pan") {
+            s = a.from.s;
+            if (s <= 1.0001) warn(`${where}: 倍率 1 のまま pan しても動かない（先に zoom で寄る）`);
+          }
           else if (R) {
             const pad = a.a.pad ?? CA.pad;
             s = Math.min((B.w - 2 * pad) / Math.max(1, R.w), (B.h - 2 * pad) / Math.max(1, R.h), CA.maxZoom);
@@ -631,7 +634,10 @@
             ty = clamp(B.y + B.h / 2 - s * (R.y + R.h / 2), (B.y + B.h) * (1 - s), B.y * (1 - s));
             // 隣の箱が body の端で半分だけ写らないように、写す範囲をずらすか、倍率を下げる
             const fit = fitCamera(sc, R, s, a.verb === "pan", a.end, a.a.pad ?? CA.pad);
-            if (fit) ({ s, tx, ty } = fit);
+            if (fit) {
+              if (fit.s < s - 0.01) warn(`${where}: 寄せ先の隣の部品が body の端で切れるため、倍率を ${fit.s.toFixed(2)} に下げた（${s.toFixed(2)} では収まらない。pad を小さくするか、寄せ先を変える）`);
+              ({ s, tx, ty } = fit);
+            }
           }
           a.to = { s, tx, ty };
           a.target = R;

@@ -67,6 +67,21 @@ const tests = {
     assert.deepStrictEqual(fr.figs.g1.place, s1.place.g1, "g1 の写し方が s1 と違う（補間している）");
     assert.strictEqual(fr.figs.g1.opacity, 1);
   },
+  async zoom_lowered_warns() {   // fitCamera が倍率を下げたら、台本の書き手に知らせる（M7 の制限 2）
+    const nodes = [], edges = [];
+    for (let i = 0; i < 8; i++) { nodes.push({ id: "n" + i, label: "ノード" + i }); if (i > 0) edges.push({ from: "n" + Math.floor((i - 1) / 3), to: "n" + i, label: "呼ぶ" }); }
+    const mk = target => deck6({ a: { title: "A", parts: [{ figure: "g" }] } }, [SC("s1", "a", [{ id: "l1", text: "{a}出して{b}寄ります。", do: [{ show: "g", at: "a" }, { zoom: target, at: "b" }] }])], { g: { type: "graph", nodes, edges } });
+    const M = await build(mk("n7"));   // 端の密な箱: 倍率 2 から 1.67 に下がる
+    assert.deepStrictEqual(M.errors || [], []);
+    hasWarn(M, /行 l1（zoom）: .*倍率を [0-9.]+ に下げた/);
+    assert.ok(!(await build(mk("all")).then(m => m.warnings || [])).some(w => /倍率を [0-9.]+ に下げた/.test(w)), "zoom all で下げた警告が出た");
+  },
+  async pan_noop_warns() {   // 倍率 1 のままの pan は動かない
+    const G = { type: "graph", nodes: [{ id: "app", label: "アプリ" }, { id: "api", label: "API" }, { id: "db", label: "DB" }], edges: [{ from: "app", to: "api" }, { from: "api", to: "db" }] };
+    const M = await build(deck6({ a: { title: "A", parts: [{ figure: "g1" }] } }, [SC("s1", "a", [{ id: "l1", text: "{a}出して{b}移ります。", do: [{ show: "g1", at: "a" }, { pan: "db", at: "b" }] }])], { g1: G }));
+    assert.deepStrictEqual(M.errors || [], []);
+    hasWarn(M, /倍率 1 のまま pan しても動かない/);
+  },
 };
 
 (async () => {
