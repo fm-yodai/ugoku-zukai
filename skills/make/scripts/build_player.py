@@ -78,9 +78,8 @@ def theme_id(p):
     return real
 
 
-def pick_theme(storyboard_path, given, who="build_player"):
-    """台本と同じフォルダの構成メモが見た目を決めていたら（basics.look.theme）、そのテーマを返す。
-    違うテーマを渡されたら止まる（uz_node.cjs の pickTheme と同じ約束）"""
+def decided_theme(storyboard_path):
+    """台本と同じフォルダの構成メモが決めた見た目（basics.look.theme）。戻り値: (書いてある値, 開くパスか名前)。決めていなければ None"""
     wd = os.path.dirname(os.path.abspath(storyboard_path))
     try:
         with open(os.path.join(wd, "outline.json"), encoding="utf-8") as f:
@@ -88,8 +87,17 @@ def pick_theme(storyboard_path, given, who="build_player"):
     except (OSError, ValueError, KeyError, TypeError):
         look = None
     if not isinstance(look, str) or not look.strip():
+        return None
+    return look, (os.path.join(wd, look) if os.path.exists(os.path.join(wd, look)) else look)
+
+
+def pick_theme(storyboard_path, given, who="build_player"):
+    """台本と同じフォルダの構成メモが見た目を決めていたら（basics.look.theme）、そのテーマを返す。
+    違うテーマを渡されたら止まる（uz_node.cjs の pickTheme と同じ約束）"""
+    dec = decided_theme(storyboard_path)
+    if not dec:
         return given or "koo"
-    path = os.path.join(wd, look) if os.path.exists(os.path.join(wd, look)) else look
+    look, path = dec
     want = theme_id(path)
     msg = None
     if not want:

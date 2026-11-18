@@ -63,7 +63,7 @@ node skills/make/scripts/frames.cjs skills/make/examples/sequence.json --theme k
 node skills/make/scripts/frames.cjs skills/make/examples/mixed.json --theme koo -o work/frames-s2 --scenes s2   # 一部の場面のコマだけ書く（カンマ区切り。出力先の前の回のコマは消えるので、全体とは分ける。--lines l8,l33 なら、その行のある場面）
 
 # 利用者向けのスライドコンテのページ（スライドごとに完成形のコマ、行ごとにコマと「s2 / l2 @0:14」と字幕の全文。PNG は要らない。--outline で章の題と、章・スライドの意図とつながりが付く。出すのはスライド・原稿・意図だけ。台本を直したら frames.cjs を回し直す。コマが古いと終了コード 2 で止まる）
-python3 skills/make/scripts/build_sheet.py skills/make/examples/slide-forms.json --frames work/frames -o work/sheet.html [--outline skills/make/examples/outlines/slide-forms.json] [--alts <workdir>/alts.json] [--voice work/voice] [--no-play] [--artifact]   # 既定で章ごとに「この章を再生」（音声なし・字幕あり。--voice の timeline.json があればその時刻）。--no-play で JS なしの軽いページ
+python3 skills/make/scripts/build_sheet.py skills/make/examples/slide-forms.json --frames work/frames -o work/sheet.html [--outline skills/make/examples/outlines/slide-forms.json] [--alts <workdir>/alts.json] [--voice work/voice] [--no-play] [--artifact]   # 既定で章ごとに「この章を再生」（音声なし・字幕あり。テーマはコマを書いたときのもの。--voice の timeline.json があればその時刻で、そのときはコマも frames.cjs --timeline で書く。食い違うと終了コード 2）。--no-play で JS なしの軽いページ
 
 # スライドの複数案（2〜4 つ）を作り、スライドコンテの中に並べ、選んだ案を台本と構成メモに入れる。案の台本は <workdir>/storyboard.<組>-<案>.json、コマは <workdir>/alts/<組>/<案>/frames、一覧は <workdir>/alts.json
 python3 skills/make/scripts/alts.py new <workdir> g1 --replaces <スライドの id,…> --options a,b [--keep-current]

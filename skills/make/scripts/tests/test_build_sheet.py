@@ -185,7 +185,7 @@ class BuildSheetTest(unittest.TestCase):
         d = self.newdir()
         os.makedirs(d)
         shutil.copy(self.voice_timeline(), os.path.join(d, "timeline.json"))
-        r, html = self.build(PAIR_SB, self.frames_pair, "--voice", d)
+        r, html = self.build(PAIR_SB, self.frames(PAIR_SB, "--timeline", os.path.join(d, "timeline.json")), "--voice", d)
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertIn('"speaker": 8', html)
         # 時刻表がなければ（声の前）、見積もりで流す
@@ -196,11 +196,12 @@ class BuildSheetTest(unittest.TestCase):
     def test_play_voice_stale(self):
         d = self.newdir()
         os.makedirs(d)
-        tl = load(self.voice_timeline())
+        good = self.voice_timeline()
+        tl = load(good)
         tl["lines"][0]["text"] = "前の文"
         with open(os.path.join(d, "timeline.json"), "w", encoding="utf-8") as f:
             json.dump(tl, f, ensure_ascii=False)
-        r, html = self.build(PAIR_SB, self.frames_pair, "--voice", d)
+        r, html = self.build(PAIR_SB, self.frames(PAIR_SB, "--timeline", good), "--voice", d)
         self.assertEqual(r.returncode, 2)
         self.assertIn("音声が古い", r.stderr)
 
@@ -593,9 +594,12 @@ class BuildSheetTest(unittest.TestCase):
         self.assertNotIn("絵コンテ", html)
 
     def test_note_voice(self):
-        d = self.frames(PAIR_SB, "--timeline", self.voice_timeline())
+        vd = self.newdir()
+        os.makedirs(vd)
+        shutil.copy(self.voice_timeline(), os.path.join(vd, "timeline.json"))
+        d = self.frames(PAIR_SB, "--timeline", os.path.join(vd, "timeline.json"))
         self.assertEqual(load(os.path.join(d, "frames.json")).get("timed"), "voice")
-        r, html = self.build(PAIR_SB, d)
+        r, html = self.build(PAIR_SB, d, "--voice", vd)
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertNotIn("合成した声", html)
         self.assertRegex(html, r"s1 / l1 @0:01")   # 時刻は、渡した時刻表のもの
@@ -608,6 +612,85 @@ class BuildSheetTest(unittest.TestCase):
         with open(os.path.join(d, "frames.json"), "w", encoding="utf-8") as f:
             json.dump(fr, f, ensure_ascii=False)
         r, html = self.build(PAIR_SB, d)
+        self.assertEqual(r.returncode, 0, r.stderr)
+
+    # ---- 再生のテーマと時刻は、コマを書いたときのもの（frames.json の theme と timed）に合わせる ----
+    def other_theme(self):
+        """koo の地の色だけを変えた、同梱でないテーマのファイル"""
+        th = load(os.path.join(SCRIPTS, "..", "player", "themes", "koo.json"))
+        th["name"] = "other"
+        th["colors"]["bg"] = "#fafaf0"
+        path = self.newdir() + "-theme.json"
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(th, f, ensure_ascii=False)
+        return path
+
+    def frames_with_theme(self, sb, theme):
+        out = self.newdir()
+        r = subprocess.run(["node", FRAMES, sb, "--theme", theme, "-o", out], capture_output=True, text=True)
+        self.assertIn(r.returncode, (0, 4), r.stderr)
+        return out
+
+    def test_frames_records_theme(self):
+        self.assertEqual(load(os.path.join(self.frames_seq, "frames.json")).get("theme"), "koo")   # 同梱のテーマは名前
+        th = self.other_theme()
+        fr = load(os.path.join(self.frames_with_theme(SEQ, th), "frames.json"))
+        self.assertEqual(fr.get("theme"), os.path.realpath(th))   # それ以外は実体のパス
+        for k in ("png", "timed", "storyboard_sha256", "sheets", "lines", "slides"):
+            self.assertIn(k, fr)   # 前からの項目はそのまま
+
+    def test_play_follows_frames_theme(self):
+        # --theme を frames.cjs にだけ渡しても（themes.md の見本の手順）、再生はコマと同じテーマで流れる
+        d = self.frames_with_theme(SEQ, self.other_theme())
+        r, html = self.build(SEQ, d)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertTrue("#fafaf0" in html, "再生のテーマがコマのテーマでない")
+
+    def test_play_theme_disagrees_with_frames(self):
+        d = self.frames_with_theme(SEQ, self.other_theme())
+        r, html = self.build(SEQ, d, "--theme", "koo")
+        self.assertEqual(r.returncode, 2)
+        self.assertIn("コマを書いたテーマ", r.stderr)
+        self.assertEqual(html, "")
+        r, html = self.build(SEQ, d, "--theme", "koo", "--no-play")   # 再生しないなら、テーマは使わない
+        self.assertEqual(r.returncode, 0, r.stderr)
+
+    def test_outline_theme_disagrees_with_frames(self):
+        # コマを書いた後で、構成メモの見た目を変えた
+        wd = self.newdir()
+        os.makedirs(wd)
+        sb = os.path.join(wd, "storyboard.json")
+        shutil.copy(PAIR_SB, sb)
+        d = self.frames_with_theme(sb, self.other_theme())
+        shutil.copy(PAIR_OUTLINE, os.path.join(wd, "outline.json"))   # basics.look.theme = koo
+        r, html = self.build(sb, d)
+        self.assertEqual(r.returncode, 2)
+        self.assertIn("コマを書いたテーマ", r.stderr)
+        self.assertIn("構成メモ", r.stderr)
+
+    def test_old_frames_without_theme(self):
+        d = self.copy_frames(self.frames_seq)
+        fr = load(os.path.join(d, "frames.json"))
+        fr.pop("theme", None)
+        with open(os.path.join(d, "frames.json"), "w", encoding="utf-8") as f:
+            json.dump(fr, f, ensure_ascii=False)
+        r, html = self.build(SEQ, d)
+        self.assertEqual(r.returncode, 0, r.stderr)
+
+    def test_play_timeline_disagrees_with_frames(self):
+        vd = self.newdir()
+        os.makedirs(vd)
+        shutil.copy(self.voice_timeline(), os.path.join(vd, "timeline.json"))
+        # 見積もりで書いたコマに、声の時刻表を渡した
+        r, html = self.build(PAIR_SB, self.frames_pair, "--voice", vd)
+        self.assertEqual(r.returncode, 2)
+        self.assertIn("timed = estimate", r.stderr)
+        # 声の時刻で書いたコマに、時刻表を渡していない
+        d = self.frames(PAIR_SB, "--timeline", os.path.join(vd, "timeline.json"))
+        r, html = self.build(PAIR_SB, d)
+        self.assertEqual(r.returncode, 2)
+        self.assertIn("timed = voice", r.stderr)
+        r, html = self.build(PAIR_SB, d, "--no-play")
         self.assertEqual(r.returncode, 0, r.stderr)
 
 

@@ -136,12 +136,13 @@ python3 ${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/check_text.py <workdir>/storyb
 
 ```sh
 python3 ${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/setup_render.py
-node ${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/frames.cjs <workdir>/storyboard.json --theme <テーマ> -o <workdir>/frames
+node ${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/frames.cjs <workdir>/storyboard.json --theme <テーマ> -o <workdir>/frames [--timeline <workdir>/voice/timeline.json]
 python3 ${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/build_sheet.py <workdir>/storyboard.json --frames <workdir>/frames --outline <workdir>/outline.json [--voice <workdir>/voice] -o <workdir>/sheet.html --artifact
 ```
 
 - `setup_render.py` か `frames.cjs` の終了コード 4 は、PNG のシートを作れなかったという意味（SVG と `frames.json` は書けている）。スライドコンテのページは SVG から作るので、そのまま `build_sheet.py` に進める
 - **台本を直したら `frames.cjs` を回し直す。** コマが古いと、`build_sheet.py` は書かずに終了コード 2 で止まる
+- 「この章を再生」は、コマを書いたときのテーマと時刻で流れる（`frames.json` の `theme` と `timed`）。`build_sheet.py` の `--voice` は、`frames.cjs` に `--timeline` を渡したときだけ付ける。`--theme`・構成メモの見た目・時刻表がコマと食い違うと、書かずに終了コード 2 で止まる
 - 直した場面だけを見せるときは、`--scenes` で場面を選び、**別の出力先**に書く（同じ出力先に書くと、全体のコマが消える）
 
 ```sh

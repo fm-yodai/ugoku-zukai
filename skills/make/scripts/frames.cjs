@@ -8,11 +8,12 @@
 //   （完成形のコマ。frames.json の slides[] に id・svg・png・使う場面）、<出力先>/sheet-NN.png、<出力先>/frames.json（始めに、前の回のこれらだけを消す）
 // シート: 1280×1170。1 コマは 640×390（上に 30 の帯「行 id ＋字幕の頭 20 字」、その下に 640×360 のコマ）を 2 列 × 3 行
 // frames.json の timed = 時刻の出どころ（voice = --timeline で渡した合成した声の時刻表、estimate = 文字数からの見積もり）
+// frames.json の theme = コマを書いたテーマ（同梱のテーマは名前、それ以外は実体の絶対パス。build_sheet.py の再生は、このテーマで流す）
 // frames.json の lines[].start = その行の始まりの時刻、t = コマを取った時刻、sub_forced = 再生ではその時刻に字幕が出ていない（または薄い）ので補った、settled = その行の動作がすべて終わっている
 // 終了コード: 0 = PNG まで書けた、1 = 台本の誤りか想定外の誤り、2 = 使い方の誤り（--scenes の場面が台本にないときも。何も書かない）、4 = resvg を読めず SVG と frames.json だけ書いた
 "use strict";
 const fs = require("fs"), path = require("path"), vm = require("vm"), os = require("os"), cp = require("child_process");
-const { load, pickTheme, PLAYER } = require("./uz_node.cjs");
+const { load, theme, pickThemeRef, themeRecord, PLAYER } = require("./uz_node.cjs");
 const { makeDocument, serialize } = require("./svg_dom.cjs");
 const { loadAssets } = require("./assets.cjs");
 
@@ -59,8 +60,8 @@ const esc = s => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(
   const raw = fs.readFileSync(file);
   const sbHash = require("crypto").createHash("sha256").update(raw).digest("hex");   // コマを書いたときの台本（build_sheet.py が、台本が変わっていないかを見る）
   const sb = JSON.parse(raw.toString("utf8"));
-  let th;   // 構成メモが見た目を決めていたら、そのテーマ（違うテーマを渡したら、何も書かずに止まる）
-  try { th = pickTheme(file, opt("--theme")); }
+  let th, thRef;   // 構成メモが見た目を決めていたら、そのテーマ（違うテーマを渡したら、何も書かずに止まる）
+  try { thRef = pickThemeRef(file, opt("--theme")); th = theme(thRef); }
   catch (e) { if (e.code !== "THEME") throw e; console.error(e.message); process.exit(2); }
   const tl = opt("--timeline") ? JSON.parse(fs.readFileSync(opt("--timeline"), "utf8")) : null;
   // --lines は、その行のある場面に直す（台本にない行は、出力先に触る前に知らせる）
@@ -168,7 +169,7 @@ const esc = s => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(
 
   const Resvg = loadResvg();
   const writeJson = png => fs.writeFileSync(path.join(outDir, "frames.json"),
-    JSON.stringify({ png, timed: tl ? "voice" : "estimate", storyboard_sha256: sbHash, sheets: sheets.map(({ file: f, lines }) => ({ file: f, lines })), lines: frames,
+    JSON.stringify({ png, timed: tl ? "voice" : "estimate", theme: themeRecord(thRef), storyboard_sha256: sbHash, sheets: sheets.map(({ file: f, lines }) => ({ file: f, lines })), lines: frames,
       slides: slides.map(({ _svg, png: p, ...x }) => (png ? { ...x, png: p } : x)) }, null, 2) + "\n");
   if (!Resvg) {
     writeJson(false);

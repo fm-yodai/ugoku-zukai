@@ -412,6 +412,10 @@ const tests = {
     let M = await one([{ id: "l1", text: "{a}出して{b}寄ります。", do: [{ show: "app", at: "a" }, { zoom: "db", at: "b" }] }]);
     assert.deepStrictEqual(M.errors, []);
     assert.ok(UZ.checkLayout(M).some(i => i.kind === "カメラ"), JSON.stringify(UZ.checkLayout(M)));
+    // 配列の zoom は、対象の 1 つでもまだ出ていなければ知らせる
+    M = await one([{ id: "l1", text: "{a}出して{b}寄ります。", do: [{ show: "app", at: "a" }, { zoom: ["app", "db"], at: "b" }] }]);
+    assert.deepStrictEqual(M.errors, []);
+    assert.ok(UZ.checkLayout(M).some(i => i.kind === "カメラ"), "配列の zoom で、出ていない対象を見逃した: " + JSON.stringify(UZ.checkLayout(M)));
     // 1 行で 3 回
     M = await one([{ id: "l1", text: "{a}出して{b}寄り{c}移り{d}移ります。", do: [{ show: "g1", at: "a" }, { zoom: "api", at: "b" }, { pan: "db", at: "c" }, { pan: "app", at: "d" }] }]);
     hasWarn(M, /カメラが 1 行で 3 回/);

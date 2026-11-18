@@ -21,11 +21,11 @@
     // Morph の途中（[start, end)）の時刻は外す。act の終わり + 0.01 は times に入っている
     const morphs = M.acts.filter(a => a.verb === "morph");
     for (const t of [...times]) if (morphs.some(a => t >= a.start && t < a.end)) times.delete(t);
-    // カメラ: 寄せる先が、動き終わっても出ていない（まだ show していない要素に寄る）
+    // カメラ: 寄せる先が、動き終わっても出ていない（まだ show していない要素に寄る。配列なら、どれか 1 つでも）
     for (const a of M.acts) {
       if ((a.verb !== "zoom" && a.verb !== "pan") || !a.keys || !a.keys.length) continue;
       const fr = UZ.frame(M, a.end);
-      if (!a.keys.some(k => fr.st[k] && fr.st[k].show >= 0.5)) add("カメラ", `行 ${a.line}: ${a.verb} の対象「${a.a[a.verb]}」がまだ出ていない（show してから寄る）`, a.start);
+      if (!a.keys.every(k => fr.st[k] && fr.st[k].show >= 0.5)) add("カメラ", `行 ${a.line}: ${a.verb} の対象「${a.a[a.verb]}」がまだ出ていない（show してから寄る）`, a.start);
     }
     const B = UZ.AREA.body;
     const bounds = { x: B.x - 16, y: B.y - 40, w: B.w + 32, h: B.h + 52 };

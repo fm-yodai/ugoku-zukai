@@ -105,6 +105,12 @@ const fr = JSON.parse(require("fs").readFileSync(process.argv[1] + "/frames.json
 process.exit(fr.lines.every(l => typeof l.start === "number" && l.start <= l.t) ? 0 : 1);
 ' "$out/a" || ng "frames.json の行に start がない（か t より後）"
 
+# frames.json にコマを書いたテーマ（同梱は名前）と時刻の出どころが残る（build_sheet.py の再生が合わせる）
+node -e '
+const fr = JSON.parse(require("fs").readFileSync(process.argv[1] + "/frames.json", "utf8"));
+process.exit(fr.theme === "koo" && fr.timed === "estimate" ? 0 : 1);
+' "$out/a" || ng "frames.json の theme が koo でない（か timed が estimate でない）"
+
 # --lines: 行の id から、その行のある場面を選ぶ（直しは行の id で来るため）
 ln=$(node -e 'const sb = JSON.parse(require("fs").readFileSync("examples/mixed.json", "utf8")); console.log(sb.scenes[1].lines[0].id)')
 node scripts/frames.cjs examples/mixed.json --theme koo -o "$out/bylines" --lines "$ln" >/dev/null 2>&1

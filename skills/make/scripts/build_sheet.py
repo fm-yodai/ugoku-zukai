@@ -22,13 +22,15 @@
   押した章の頭へ移り、その章の場面の時間（最初の場面の start から最後の場面の end まで）だけを流す。音声は鳴らさず、字幕は出す。
   プレーヤーと同じエンジン（ELK と CORE。build_player.py の engine_scripts）と、台本・テーマ・時刻表・画像を埋め込む。
   時刻は --voice の timeline.json があればそれ（台本が変わっていれば止まる）、なければ文字数からの見積もり。
-  テーマは build_player.py と同じ決め方（構成メモの basics.look.theme、なければ --theme か koo）。
+  コマの時刻の出どころ（frames.json の timed）と食い違えば止まる（声の時刻のコマに時刻表がない、見積もりのコマに時刻表を渡した）。
+  テーマは、コマを書いたテーマ（frames.json の theme）。--theme か構成メモの basics.look.theme がそれと違えば止まる。
+  theme のない前の版の frames.json では、build_player.py と同じ決め方（構成メモ、なければ --theme か koo）。
   --no-play: 再生を付けない（JS を含まない軽いページ）
 
 - コマが今の台本のものでない（台本を直した後に frames.cjs を回し直していない、別の台本のコマ）ときは、書かずに止まる
 
 終了コード: 0 = 書けた、2 = 使い方の誤りか、frames.json・コマの SVG がないか、コマが今の台本のものでないか、構成メモの形に誤りがあるか、
-  音声が古いか（--voice）、画像の部品を読めないか、ページが 15MB を超える。
+  音声が古いか（--voice）、再生のテーマか時刻の出どころがコマと食い違うか、画像の部品を読めないか、ページが 15MB を超える。
 """
 import argparse
 import base64
@@ -458,6 +460,34 @@ def build(storyboard, frames_dir, outline=None, artifact=False, alts=None, sb_pa
             f"{head}\n</head>\n<body>\n{main}\n</body>\n</html>\n")
 
 
+def play_theme(sb_path, given, drawn):
+    """再生のテーマ。コマを書いたテーマ（frames.json の theme）を既定にし、--theme か構成メモの見た目がそれと違えば ValueError。
+    theme のない前の版の frames.json では、構成メモ → --theme → koo の順に決める"""
+    if not isinstance(drawn, str) or not drawn:
+        return build_player.pick_theme(sb_path, given, who="build_sheet")
+    want = build_player.theme_id(drawn)
+    if not want:
+        raise ValueError(f"コマを書いたテーマ（frames.json の theme = {drawn}）が見つからない。テーマを置き直すか、frames.cjs を回し直す")
+    if given and build_player.theme_id(given) != want:
+        raise ValueError(f"--theme {given} が、コマを書いたテーマ（frames.json の theme = {drawn}）と違う。"
+                         "--theme を外すか、そのテーマで frames.cjs を回し直す")
+    dec = build_player.decided_theme(sb_path)
+    if dec and build_player.theme_id(dec[1]) != want:
+        raise ValueError(f"構成メモで決めた見た目（basics.look.theme = {dec[0]}）が、コマを書いたテーマ（frames.json の theme = {drawn}）と違う。"
+                         "frames.cjs を回し直す")
+    return drawn
+
+
+def check_timed(timed, has_timeline):
+    """コマの時刻の出どころ（frames.json の timed）と、再生に使う時刻表が食い違っていれば ValueError"""
+    if timed == "voice" and not has_timeline:
+        raise ValueError("コマは合成した声の時刻で書いてある（frames.json の timed = voice）のに、再生に使う時刻表がない。"
+                         "--voice に timeline.json のある声の出力先を渡すか、--timeline を付けずに frames.cjs を回し直す")
+    if timed == "estimate" and has_timeline:
+        raise ValueError("コマは文字数からの見積もりの時刻で書いてある（frames.json の timed = estimate）のに、--voice の時刻表で再生しようとした。"
+                         "frames.cjs を --timeline <声の出力先>/timeline.json で回し直すか、--voice を外す")
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("storyboard")
@@ -466,7 +496,7 @@ def main():
     ap.add_argument("--outline")
     ap.add_argument("--alts", help="案の一覧 alts.json。置き換えるスライドの位置に、案を並べて出す（alts.py が作る）")
     ap.add_argument("--voice", help="tts.py の出力先。timeline.json があれば、再生をその時刻で流す（なければ文字数からの見積もり）")
-    ap.add_argument("--theme", help="再生のテーマ。省くと、構成メモが決めたテーマ（なければ koo）")
+    ap.add_argument("--theme", help="再生のテーマ。省くと、コマを書いたテーマ（frames.json の theme）。違うテーマを渡すと止まる")
     ap.add_argument("--no-play", action="store_true", help="章ごとの再生を付けない（JS を含まない軽いページ）")
     ap.add_argument("--artifact", action="store_true")
     a = ap.parse_args()   # 使い方の誤りは argparse が終了コード 2 で止める
@@ -486,12 +516,15 @@ def main():
         alts = load_alts(a.alts, sb) if a.alts else None
         play = None
         if not a.no_play:
-            theme = build_player.load_theme(build_player.pick_theme(a.storyboard, a.theme, who="build_sheet"))
+            with open(os.path.join(a.frames, "frames.json"), encoding="utf-8") as f:
+                drawn = json.load(f)
+            theme = build_player.load_theme(play_theme(a.storyboard, a.theme, drawn.get("theme")))
             tl_path = os.path.join(a.voice, "timeline.json") if a.voice else None
             timeline = None
             if tl_path and os.path.exists(tl_path):
                 with open(tl_path, encoding="utf-8") as f:
                     timeline = json.load(f)
+            check_timed(drawn.get("timed"), timeline is not None)
             play = play_data(sb, a.storyboard, theme, timeline)
         page = build(sb, a.frames, outline, a.artifact, alts, a.storyboard, play)
     except (OSError, ValueError) as e:
