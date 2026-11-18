@@ -112,7 +112,7 @@ python3 scripts/build_player.py storyboard.json -o preview.html     # 音声な�
   "items": [ { "id": "i1", "text": "紙の領収書を毎月まとめて提出している", "sub": "月末に経理の作業が集中する" } ] }
 ```
 
-8 個までにする（多いと読み切れない）。
+8 個を超えると、検査が「画面で読み切れない」と警告する。
 
 ### compare
 
@@ -183,7 +183,7 @@ python3 scripts/build_player.py storyboard.json -o preview.html     # 音声な�
   "after":  { "label": "これから", "steps": [ { "id": "a1", "text": "荷主が Web で依頼" } ] } }
 ```
 
-手順は上から下へ矢印でつながる（`"flow": false` なら箇条）。各側 6 個まで。板の色は既定で `before` = `muted`、`after` = `added`（`role` で変える）。構成図どうしを比べるなら、`graph` を 2 つ並べた場面にする。
+手順は上から下へ矢印でつながる（`"flow": false` なら箇条）。各側 6 個を超えると検査が警告する。板の色は既定で `before` = `muted`、`after` = `added`（`role` で変える）。構成図どうしを比べるなら、`graph` を 2 つ並べた場面にする。
 
 #### roadmap
 
@@ -225,7 +225,7 @@ python3 scripts/build_player.py storyboard.json -o preview.html     # 音声な�
   "delta": "-11 分", "better": "down", "prefix": "（任意: ¥ など）" } ] }
 ```
 
-4 枚まで。`delta` の符号で ▲▼、`better`（`up` / `down`）と合わせて良し悪しの色になる。
+4 枚を超えると検査が警告する。`delta` の符号で ▲▼、`better`（`up` / `down`）と合わせて良し悪しの色になる。
 
 #### matrix
 
@@ -254,7 +254,7 @@ python3 scripts/build_player.py storyboard.json -o preview.html     # 音声な�
 { "type": "cycle", "center": "毎月 1 回", "steps": [ { "id": "atsume", "label": "数字を集める", "sub": "（任意）", "edge": "（任意: 次への弧の言葉）" } ] }
 ```
 
-3〜8 個を時計回りに並べ、最後から最初へも弧を引く（`"closed": false` で引かない）。
+3〜8 個（範囲の外は検査の誤り）を時計回りに並べ、最後から最初へも弧を引く（`"closed": false` で引かない）。
 
 #### venn
 

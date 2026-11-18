@@ -40,4 +40,4 @@
 
 この文書の規則は、聞いて分かる文のためのもので、字幕と読みにかける。スライドのテキスト（見出し・言いたいこと・テキストの部品）は書き言葉なので、かけない（かけるのは `rules.md` の TW- だけ）。
 
-writer は書く前に読み、書いた後に SP-1〜SP-17 を 1 つずつ見直す。writing-reviewer は構成メモの聴衆（`basics.audience`・`basics.knows`）として初めて聞いたつもりで S-W5〜S-W7 と S-W11 を判定する。
+writer は書く前と書いた後に読むと、見直しの漏れが減る。writing-reviewer は構成メモの聴衆（`basics.audience`・`basics.knows`）として初めて聞いたつもりで S-W5〜S-W7 と S-W11 を判定する。

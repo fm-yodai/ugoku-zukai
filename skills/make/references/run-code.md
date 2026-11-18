@@ -251,7 +251,7 @@ python3 ${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/setup_voice.py --agree
 
 このコマンドが許可されずに止まったら（利用者の同意を、進行役が代わりに渡すことになるため、自動の許可では通らないことがある）、利用者に、プロンプトで `! python3 ${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/setup_voice.py --agree` と打って実行してもらう（`${CLAUDE_PLUGIN_ROOT}` は実際のパスに置き換えて伝える）。VOICEVOX がもう入っているとき（`tts.py --readings` が動く）は、実行しなくてよい。
 
-最後に、入っている声の一覧が出る。名前だけでは声を選べないときは、候補の話者 2〜3 人に同じ 1 文を読ませた、声の試聴のページを作る。
+最後に、入っている声の一覧が出る。名前だけでは声を選べないときは、候補の話者に同じ 1 文を読ませた、声の試聴のページを作れる（比べる声は 2〜3 人が選びやすい）。
 
 ```sh
 python3 ${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/tts.py -o <workdir>/voice --audition 8,2,3 --sample "<聞き比べる 1 文>" --artifact

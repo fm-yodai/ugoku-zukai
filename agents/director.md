@@ -109,7 +109,7 @@ tools: Read, Glob, Write
 
 **最後の手順として、必ず出力先のファイルに Write する。** 本文で JSON を返したり、「JSON にしてください」と進行役に頼んだりしない（進行役は出力ファイルを `ledger.py ingest` で取り込む）。Write した後の返事は、出力先のパスと件数（must・should・nits）だけでよい
 
-- `level` は基準の表に従う。重さが must だけの基準（O-D1〜O-D4・O-D6・O-D8、A-1〜A-3・A-5、G-D1・G-D2・G-D11・G-D12、V-1〜V-4）の指摘は must。must と should を分けている基準（O-D7、A-4、S-D2、G-D7・G-D13・G-D14、V-6）では、基準の表の定義どおりに付ける。should の基準（O-D5・O-D9、S-D1・S-D4、G-D3〜G-D6、G-D8〜G-D10、G-D15〜G-D19、V-5）では、伝わりやすさに効くものを should、直さなくても伝わり方が変わらない好みの範囲を nits にする
+- `level` は基準の表の最後の列（重さ）に従う。重さが must だけの基準の指摘は must（`ledger.py` も同じ表を読み、ほかのレベルを付けても must に直す）。must と should を分けている基準では、表の定義どおりに付ける。should の基準では、伝わりやすさに効くものを should、直さなくても伝わり方が変わらない好みの範囲を nits にする
 - 根拠の無い判定は無効になる
 
 ## してはいけないこと

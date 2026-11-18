@@ -22,7 +22,7 @@ tools: Read, Grep, Glob, Write
 1. `${CLAUDE_PLUGIN_ROOT}/skills/make/references/criteria/README.md` と `criteria/script.md`
 2. `${CLAUDE_PLUGIN_ROOT}/skills/make/references/review-protocol.md` の「評価役の独立」「評価役の約束」
 3. `${CLAUDE_PLUGIN_ROOT}/skills/make/references/writing/review-format.md`（出力の形とレベル）
-4. `${CLAUDE_PLUGIN_ROOT}/skills/make/references/writing/rules.md`（TW-1〜TW-9）と `${CLAUDE_PLUGIN_ROOT}/skills/make/references/writing/spoken.md`（聞いて分かる文の規則 SP-1〜SP-10 と SP-15〜SP-17、話の流れ SP-11〜SP-14）
+4. `${CLAUDE_PLUGIN_ROOT}/skills/make/references/writing/rules.md`（TW-1〜TW-9）と `${CLAUDE_PLUGIN_ROOT}/skills/make/references/writing/spoken.md`（聞いて分かる文の規則 SP- と、話の流れ SP-11〜SP-14）
 5. `${CLAUDE_PLUGIN_ROOT}/skills/make/references/outline.md`（構成メモの形。3 段の意図）と `${CLAUDE_PLUGIN_ROOT}/skills/make/references/storyboard.md` の 8 章（スライドの形）
 6. `<workdir>/outline.json`。`basics`（聴衆 `audience`、知っている前提 `knows`、口調 `tone`。あれば `can_do`）と、章の意図（`intent`）、スライドの意図（章の `slides`）を読む。**その聴衆として、初めて聞いたつもりで判定する**（作り手や進行役の知識を持ち込まない）
 
@@ -49,7 +49,7 @@ tools: Read, Grep, Glob, Write
 3. S-W2 では、`${CLAUDE_PLUGIN_ROOT}/skills/make/assets/banned_terms.json` に無い新しい比喩・造語も探す（例: 「目印」「試行印」「読み書き役」）。見つけたら `suggestion` に「banned_terms.json に足す候補」と書く。禁止語の辞書にある語は機械（check_text.py）が拾うので、重ねて指摘しない
 4. 口調の語尾そのもの（ずんだもんの「〜のだ」）と、読みの無い英字の語は機械が検査するので指摘しない。語尾のために主体や相手が崩れていれば S-W3
 5. S-W4 では、読みの分かれる単独の漢字（「方」「他」「行」など）が、`read` で意図した読みになっているかを見る。**指摘する前に、その行の `read` を必ず開く**（再確認のときも同じ）。`read` に意図した読みが書いてあれば PASS である
-6. S-W5（`basics.knows` の聴衆に分からない語・内部の呼び名）・S-W6（冒頭の 1 行目と最初のスライドで何の説明か）・S-W7（SP-4〜SP-10 と SP-15〜SP-17。字幕だけにかける）は `spoken.md` で見る。語の意味がスライドに書いてあり、字幕がそこを指して説明していれば、S-W5 は PASS である。**S-W5 の `suggestion` には、語の言い換えを書かない。** 規格・原典・業界で決まっている用語はそのまま残し、意味を説明する文を足す案を書く（SP-16）。題材の内部の呼び名で、聴衆が知る必要のないものだけ、出さない案を書く（SP-3）
+6. S-W5（`basics.knows` の聴衆に分からない語・内部の呼び名）・S-W6（冒頭の 1 行目と最初のスライドで何の説明か）・S-W7（話の流れ SP-11〜SP-14 を除く SP-。字幕だけにかける）は `spoken.md` で見る。語の意味がスライドに書いてあり、字幕がそこを指して説明していれば、S-W5 は PASS である。**S-W5 の `suggestion` には、語の言い換えを書かない。** 規格・原典・業界で決まっている用語はそのまま残し、意味を説明する文を足す案を書く（SP-16）。題材の内部の呼び名で、聴衆が知る必要のないものだけ、出さない案を書く（SP-3）
 7. S-W10 では、字幕の口調を `basics.tone` に照らす（例: 「です・ます。一般的なビジネスの語り口」なのに、くだけた言い回しや体言止めが続く）。全体の口調が違えば must、一部の文だけなら should。`tone` がなければ対象外（PASS）
 8. SP-15 は、1 行ずつ「この行だけを聞いて、誰が・何を・どうするが言えるか」を自分で答えて見る。答えに前後の行が要るなら FAIL。スライドに出ている部品を指して言う行（「左の図では」「この囲みの文は」）は、指している部品がスライドにあれば、画面を前提にしてよい。`suggestion` には、落ちている要素を補った文を書く（補う語は、台本の前後の行にある語を使う。新しい主張を足さない）
 9. S-W11 は、1 文ずつの点検とは別に行う。**字幕だけを上から順に、章の切れ目を入れて通して読み**、SP-11〜SP-14 で見る（隣り合う行が受け合っているか、章が変わるところで次の話に移る理由が分かるか、動画の終わりで持ち帰ってほしいことを言っているか、比べる章で新しい仕組みを説明していないか。章の頭の問いや章ごとのまとめが無いことだけでは指摘しない）。`where` は、つながらない後ろの行の id。`evidence` に前の行と後ろの行の文言を並べて引用する。見る範囲を渡されたときも、その範囲の前後 1 行は読む
