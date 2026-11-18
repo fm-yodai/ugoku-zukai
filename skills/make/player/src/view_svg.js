@@ -95,13 +95,15 @@
       this.figLayer = el("g", null, svg);
       this.figG = {};
       for (const F of Object.values(M.figs)) this.buildFig(F);
-      this.capG = el("g", null, svg);
+      this.capWrap = el("g", null, svg);
+      this.capG = el("g", null, this.capWrap);
       this.capEls = {};
       for (const sc of M.scenes) for (const c of sc.captions) {
         const k = sc.id + c.fig;
         this.capEls[k] = this.text(this.capG, [c.text], c.x, c.y, 21, { weight: 500, color: S.muted });
       }
-      this.customG = el("g", null, svg);
+      this.customWrap = el("g", null, svg);
+      this.customG = el("g", null, this.customWrap);
       this.customs = (M.customs || []);
       // 右上の札
       this.badge = el("g", null, svg);
@@ -301,7 +303,10 @@
       const cam = fr.camera, c = cam && cam.on ? cam.clip : null;
       const cid = c ? `uz-body-${[c.x, c.y, c.w, c.h].map(v => Math.round(v * 10) / 10).join("-").replace(/\./g, "_")}` : "";
       if (c && !this.clips[cid]) this.clips[cid] = el("rect", { x: c.x, y: c.y, width: c.w, height: c.h }, el("clipPath", { id: cid }, this.defs));
-      if (this._clip !== cid) { this._clip = cid; if (cid) this.figLayer.setAttribute("clip-path", `url(#${cid})`); else this.figLayer.removeAttribute("clip-path"); }
+      if (this._clip !== cid) { this._clip = cid; for (const g of [this.figLayer, this.capWrap, this.customWrap]) { if (cid) g.setAttribute("clip-path", `url(#${cid})`); else g.removeAttribute("clip-path"); } }
+      // 図の題と custom の動作の描画（図だけの場面）も、図と同じカメラで動かす（clip は外側の層、transform は内側の g に掛ける。clip を transform の g に掛けると clip も動く）
+      const ct = cam && cam.on ? `translate(${cam.tx.toFixed(2)},${cam.ty.toFixed(2)}) scale(${cam.s.toFixed(4)})` : "";
+      if (this._camTf !== ct) { this._camTf = ct; for (const g of [this.capG, this.customG]) { if (ct) g.setAttribute("transform", ct); else g.removeAttribute("transform"); } }
       for (const [fid, g] of Object.entries(this.figG)) {
         const f = fr.figs[fid];
         g.style.opacity = f.opacity;

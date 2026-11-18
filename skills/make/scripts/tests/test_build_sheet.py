@@ -195,6 +195,35 @@ class BuildSheetTest(unittest.TestCase):
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertIn('"timeline": null', html)
 
+    # --- 一部の場面だけ書いたコマ・--no-play と --voice・書体（M7 の制限 7） ---
+
+    def test_play_range_follows_drawn_scenes(self):
+        mixed = os.path.join(SCRIPTS, "..", "examples", "mixed.json")
+        full = load(mixed)
+        self.assertGreater(len(full["scenes"]), 1)
+        sid = full["scenes"][1]["id"]
+        r, html = self.build(mixed, self.frames(mixed, "--scenes", sid))
+        self.assertEqual(r.returncode, 0, r.stderr)
+        m = re.search(r'<script type="application/json" id="us-data">([\s\S]*?)</script>', html)
+        data = json.loads(m.group(1).replace("\\u003c", "<"))
+        self.assertEqual([sc["id"] for sc in data["storyboard"]["scenes"]], [sid])
+        self.assertEqual(re.findall(r'class="us-play" data-from="([^"]+)" data-to="([^"]+)"', html), [(sid, sid)])
+
+    def test_no_play_with_voice_notice(self):
+        r, html = self.build(SEQ, self.frames_seq, "--no-play", "--voice", self.newdir())
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("--no-play では --voice を使わない", r.stderr)
+        self.assertNotIn("<script", html)
+
+    def test_theme_font_css(self):
+        theme = load(os.path.join(SCRIPTS, "..", "player", "themes", "koo.json"))["font"]
+        for extra in ((), ("--no-play",), ("--artifact",)):
+            r, html = self.build(SEQ, self.frames_seq, *extra)
+            self.assertEqual(r.returncode, 0, r.stderr)
+            style = re.search(r"<style>([\s\S]*?)</style>", html).group(1)
+            self.assertIn(theme["css"], style)
+            self.assertIn(theme["family"], style)
+
     def test_play_voice_stale(self):
         d = self.newdir()
         os.makedirs(d)

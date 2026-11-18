@@ -369,7 +369,7 @@ def _row(line, frames_dir):
             f'<div><p class="us-ref">{esc(ref)}</p><p class="us-sub">{esc(line["text"])}</p></div></div>')
 
 
-def play_data(storyboard, sb_path, theme, timeline=None):
+def play_data(storyboard, sb_path, theme, timeline=None, scenes=None):
     """再生に埋め込むデータ（台本・テーマ・時刻表・画像）。build_player.py と同じ約束で読む。
     時刻表が今の台本のものでなければ、画像を読めなければ ValueError"""
     stale = build_player.stale_voice(storyboard, timeline) if timeline else []
@@ -380,6 +380,9 @@ def play_data(storyboard, sb_path, theme, timeline=None):
         assets = uz_assets.load_assets(sb_path, storyboard)
     except uz_assets.AssetError as e:
         raise ValueError(str(e))
+    if scenes is not None and any(sc["id"] not in scenes for sc in storyboard["scenes"]):
+        # frames.cjs --scenes で一部だけ書いたとき、再生も書いた場面だけにする（コマのない場面は流さない）
+        storyboard = dict(storyboard, scenes=[sc for sc in storyboard["scenes"] if sc["id"] in scenes])
     return {"storyboard": storyboard, "theme": theme, "timeline": timeline, "assets": assets or {}}
 
 
@@ -391,7 +394,7 @@ def _play_scripts(data):
             f"<script>{PLAY_JS}</script>")
 
 
-def build(storyboard, frames_dir, outline=None, artifact=False, alts=None, sb_path=None, play=None):
+def build(storyboard, frames_dir, outline=None, artifact=False, alts=None, sb_path=None, play=None, theme=None):
     """スライドコンテのページの HTML を返す。frames.json やコマの SVG がなければ OSError、形が違えば ValueError。
     play（play_data の戻り値）を渡すと、章ごとに再生ボタンを置き、エンジンとデータを埋め込む"""
     frames = _load_frames(frames_dir, storyboard, sb_path)
@@ -415,6 +418,7 @@ def build(storyboard, frames_dir, outline=None, artifact=False, alts=None, sb_pa
     player_at = None   # 再生領域を最初に置く場所（最初の章の再生ボタンの直後。押すまで隠しておく）
     for ch in chapters(storyboard, outline):
         parts = []
+        drawn_scenes = []   # この章のうちコマのある場面（再生の範囲）
         for sid in ch["scenes"]:
             if sid in alt_at:
                 parts.append(_alts_block(alt_at[sid], intents))
@@ -423,6 +427,7 @@ def build(storyboard, frames_dir, outline=None, artifact=False, alts=None, sb_pa
             rows = [_row(ln, frames_dir) for ln in lines if ln.get("scene") == sid]
             if not rows:
                 continue
+            drawn_scenes.append(sid)
             slide = scene_slide.get(sid)
             if slide is not None and slide not in done and slide in finals:   # 完成形と意図は、最初に使う場面の位置に 1 回だけ
                 done.add(slide)
@@ -442,14 +447,20 @@ def build(storyboard, frames_dir, outline=None, artifact=False, alts=None, sb_pa
         if c and _item_text(c.get("intent")):
             body.append(f'<p class="us-intent">{esc(_item_text(c["intent"]))}</p>')
         if play is not None:
-            body.append(f'<button type="button" class="us-play" data-from="{esc(ch["scenes"][0])}" data-to="{esc(ch["scenes"][-1])}" aria-pressed="false">この章を再生</button>')
+            body.append(f'<button type="button" class="us-play" data-from="{esc((drawn_scenes or ch["scenes"])[0])}" data-to="{esc((drawn_scenes or ch["scenes"])[-1])}" aria-pressed="false">この章を再生</button>')
             if player_at is None:
                 player_at = len(body)
                 body.append('<div class="us-player" id="us-player" hidden><svg id="us-stage" role="img" aria-label="再生"></svg>'
                             '<p id="us-play-err" hidden></p></div>')
         body.extend(parts)
         body.append("</section>")
-    head = f"<title>{esc(title)} スライドコンテ</title>\n<style>{STYLE}</style>"
+    # テーマの書体。<link> ではなく @import にして、Artifact の断片でも href を増やさない
+    css_url = build_player.font_css_url(theme) if theme else None
+    fam = (theme.get("font") or {}).get("family") if theme else None
+    style = (f'@import url("{css_url}");\n' if css_url else "") + STYLE
+    if fam:
+        style += f"\n  body, .us-wrap {{ font-family: {fam}, system-ui, sans-serif; }}"
+    head = f"<title>{esc(title)} スライドコンテ</title>\n<style>{style}</style>"
     main = '<div class="us-wrap">\n' + "\n".join(body) + "\n</div>"
     if play is not None and player_at is not None:
         main += "\n" + _play_scripts(play)
@@ -514,10 +525,19 @@ def main():
                     print("  " + e, file=sys.stderr)
                 return 2
         alts = load_alts(a.alts, sb) if a.alts else None
+        with open(os.path.join(a.frames, "frames.json"), encoding="utf-8") as f:
+            drawn = json.load(f)
         play = None
-        if not a.no_play:
-            with open(os.path.join(a.frames, "frames.json"), encoding="utf-8") as f:
-                drawn = json.load(f)
+        if a.no_play:
+            # 再生しないなら、テーマの食い違いでは止めない（書体のためだけに、コマを書いたテーマを読む）
+            try:
+                theme = build_player.load_theme(play_theme(a.storyboard, a.theme, drawn.get("theme")))
+            except (OSError, ValueError):
+                theme = None
+
+            if a.voice:
+                print("--no-play では --voice を使わない（再生を付けないので、声の時刻表は読まない）", file=sys.stderr)
+        else:
             theme = build_player.load_theme(play_theme(a.storyboard, a.theme, drawn.get("theme")))
             tl_path = os.path.join(a.voice, "timeline.json") if a.voice else None
             timeline = None
@@ -525,8 +545,9 @@ def main():
                 with open(tl_path, encoding="utf-8") as f:
                     timeline = json.load(f)
             check_timed(drawn.get("timed"), timeline is not None)
-            play = play_data(sb, a.storyboard, theme, timeline)
-        page = build(sb, a.frames, outline, a.artifact, alts, a.storyboard, play)
+            written = {ln.get("scene") for ln in drawn.get("lines") or []}
+            play = play_data(sb, a.storyboard, theme, timeline, written)
+        page = build(sb, a.frames, outline, a.artifact, alts, a.storyboard, play, theme)
     except (OSError, ValueError) as e:
         print(f"スライドコンテを作れない: {e}", file=sys.stderr)
         return 2

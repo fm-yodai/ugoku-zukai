@@ -177,6 +177,23 @@ const tests = {
     const F = M.figs.g1, ends = ["b>c", "a>c"].map(id => F.items[id].pts[F.items[id].pts.length - 1]);
     assert.ok(Math.hypot(ends[0][0] - ends[1][0], ends[0][1] - ends[1][1]) >= 10, `c に入る 2 本の矢じりが重ならない: ${JSON.stringify(ends)}`);
   },
+  async figure_scene_title_in_camera() {   // 図だけの場面で zoom すると、図の題も同じカメラの g の中にある（M7 の制限 6）
+    const sb = { format: "ugoku-zukai/6", title: "検査", voice: { speaker: 8, speed: 1.1 },
+      figures: { l1: { ...L1, title: "図の題です" }, l2: { ...L1, title: "もう 1 つの題" } },
+      scenes: [{ id: "s1", figure: ["l1", "l2"], lines: [{ id: "l1", text: "{a}寄せます。", do: [{ show: "l1", at: "a" }, { zoom: "l1/i1", at: "a" }] }, { id: "l2", text: "そのままです。" }] }] };
+    const M = await build(sb);
+    assert.deepStrictEqual(M.errors || [], []);
+    const t = M.timeline.lines.find(l => l.id === "l2").start + 0.5;
+    const svg = renderSvg(M, t);
+    assert.ok(UZ.frame(M, t).camera.on, "カメラが寄せている");
+    const i = svg.indexOf("図の題です");
+    assert.ok(i > 0, "題が描かれている");
+    const before = svg.slice(0, i);
+    // 題の祖先の g のうち、transform を持つものがある（開いたままの g を後ろから数える）
+    const stack = [];
+    for (const m of before.matchAll(/<g\b[^>]*>|<\/g>/g)) { if (m[0] === "</g>") stack.pop(); else if (!m[0].endsWith("/>")) stack.push(m[0]); }   // 空の <g/> は開かない
+    assert.ok(stack.some(g => /^<g\b[^>]*transform="translate\([^"]*\) scale\([\d.]+\)"/.test(g)), `題がカメラの g の子孫にない: ${stack.join(" ")}`);
+  },
 };
 
 (async () => {
