@@ -5,6 +5,7 @@ cd "$(dirname "$0")/../.."
 fail=0
 ng() { echo "NG: $1"; fail=1; }
 node scripts/tests/test_m7.cjs >/dev/null 2>&1 || { ng "test_m7.cjs"; node scripts/tests/test_m7.cjs; }
+node scripts/tests/test_m8.cjs >/dev/null 2>&1 || { ng "test_m8.cjs"; node scripts/tests/test_m8.cjs; }
 # 見本（Morph・カメラ・線の描画）: 構成メモと突き合わせて誤りがなく、コマが書ける
 ex=examples/camera-morph.json
 ol=examples/outlines/camera-morph.json

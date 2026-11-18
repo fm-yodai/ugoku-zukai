@@ -5,6 +5,8 @@ const SRC = ["util.js", "figures.js", "figures2.js", "figures3.js", "validate.js
 function load() {
   const ELK = require(path.join(PLAYER, "vendor", "elk.bundled.js"));
   globalThis.UZ = { ELK };
+  // 数式の組版（MathJax の束）。グローバル UZMJ を生やす。ブラウザは template.html の /*UZ:MATH*/ で同じ束を読む
+  vm.runInThisContext(fs.readFileSync(path.join(PLAYER, "vendor", "mathjax-uz.js"), "utf8"), { filename: "mathjax-uz.js" });
   for (const f of SRC) vm.runInThisContext(fs.readFileSync(path.join(PLAYER, "src", f), "utf8"), { filename: f });
   return globalThis.UZ;
 }

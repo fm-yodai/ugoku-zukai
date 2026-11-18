@@ -31,13 +31,15 @@ const tags = [...html.matchAll(/<script([^>]*)>([\s\S]*?)<\/script>/g)];
 for (const [, attr, src] of tags) if (!/application\/json/.test(attr)) new vm.Script(src);   // 構文エラーなら投げる
 const code = tags.filter(([, attr]) => !/application\/json/.test(attr)).map(m => m[2]);
 const json = tags.find(([, attr]) => /application\/json/.test(attr));
-if (!json || code.length < 3) throw new Error("スクリプトが足りない: " + code.length);
+if (!json || code.length < 4) throw new Error("スクリプトが足りない: " + code.length);
 const data = JSON.parse(json[2]);
 const ctx = { console, setTimeout, clearTimeout, Promise };
-ctx.window = ctx; ctx.self = ctx; ctx.document = {};   // ELK は document があるとブラウザとみなし、worker を使わずに動く
+ctx.window = ctx; ctx.self = ctx; ctx.document = { getElementsByTagName: () => [] };   // ELK は document があるとブラウザとみなし、worker を使わずに動く。MathJax は読み込み時に script 要素を探す
 vm.createContext(ctx);
 vm.runInContext(code[0], ctx);   // ELK
-vm.runInContext(code[1], ctx);   // プレーヤーのコード
+vm.runInContext(code[1], ctx);   // 数式の組版（MathJax の束）
+if (typeof ctx.UZMJ.tex2tree !== "function") throw new Error("UZMJ がない");
+vm.runInContext(code[2], ctx);   // プレーヤーのコード
 ctx.UZ.ELK = ctx.ELK || (ctx.module && ctx.module.exports);
 ctx.UZ.build(data.storyboard, data.theme, data.timeline, { assets: data.assets || {} }).then(M => {
   console.log(JSON.stringify({ errors: M.errors, scenes: M.scenes.map(s => s.id), duration: M.duration }));
