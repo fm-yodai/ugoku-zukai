@@ -118,7 +118,7 @@ const esc = s => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(
     fs.rmSync(path.join(outDir, "svg"), { recursive: true, force: true });
   }
   fs.mkdirSync(path.join(outDir, "svg"), { recursive: true });
-  const frames = [], inner = [];
+  const frames = [], inner = [], unsettled = [];
   L.forEach((ln, i) => {
     if (only && !only.includes(ln.scene)) return;   // 時刻は全行から求めるので、書かない行もここまでは回す
     const actsEnd = Math.max(-Infinity, ...M.acts.filter(a => a.line === ln.id).map(a => a.end));
@@ -141,6 +141,7 @@ const esc = s => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(
     fs.writeFileSync(path.join(outDir, rel), serialize(svg, { xmlns: "http://www.w3.org/2000/svg", width: W, height: H }));
     inner.push(svg.childNodes.map(c => serialize(c)).join(""));
     frames.push({ id: ln.id, scene: ln.scene, start: +ln.start.toFixed(3), t: +t.toFixed(3), text: textOf[ln.id], svg: rel, sub_forced: subForced, settled });
+    if (!settled || subForced) unsettled.push({ ln, t, subForced, acts: M.acts.filter(a => a.line === ln.id && a.end > t + 1e-9) });
   });
 
   // スライドの完成形のコマ（svg/slide-<id>.svg）。--scenes・--lines のときは、選んだ場面が使うスライドだけ。PNG のシートには入れない
@@ -175,6 +176,27 @@ const esc = s => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(
     body = body.replace(/font-family="([^"]*)"/g, (m0, v) => `font-family="${v}, ${esc(famList)}"`);
     const svgStr = `<svg xmlns="http://www.w3.org/2000/svg" width="${CW * COLS}" height="${CELL * ROWS}">${body}</svg>`;
     sheets.push({ file: `sheet-${String(s + 1).padStart(2, "0")}.png`, lines: group.map(f => f.id), svg: svgStr });
+  }
+
+  // 行の中で動きが終わらない行（settled: false か sub_forced: true）を、終わりに一覧で出す。終了コードは変えない。
+  // settled: false = コマの時刻にまだ動作が続いている（コマは動きの途中）。sub_forced だけ = 声が終わった後に動作が終わる（コマは終わった後で取り、字幕を補った）
+  if (unsettled.length) {
+    const sec = x => Math.max(0.1, x).toFixed(1);
+    const what = a => {
+      const v = a.a && a.a[a.verb], sep = a.verb === "trace" || a.verb === "reply" ? "→" : "・";
+      const s = Array.isArray(v) ? (v.length > 3 ? v.slice(0, 3).join(sep) + `…ほか ${v.length - 3} 件` : v.join(sep)) : (typeof v === "string" ? v : "");
+      return s ? `${a.verb}「${s}」` : a.verb;
+    };
+    console.error(`行の中で動きが終わらない行が ${unsettled.length} 行ある（声が終わった時点で、画面が完成形に届いていない）:`);
+    for (const u of unsettled) {
+      let msg;
+      if (u.acts.length) msg = u.acts.map(a => `${what(a)}がコマの後もあと ${sec(a.end - u.t)} 秒続く`).join("、") + "（コマは動きの途中）";
+      else {
+        const end = Math.max(...M.acts.filter(a => a.line === u.ln.id).map(a => a.end));
+        msg = `声が終わった後も動きが ${sec(end - (u.ln.start + u.ln.dur))} 秒続く（コマは動きが終わった後で取り、字幕を補った）`;
+      }
+      console.error(`  ${u.ln.id}（${u.ln.scene}）: ${msg}`);
+    }
   }
 
   const Resvg = loadResvg();

@@ -1141,6 +1141,24 @@ const tests = {
     const r2 = Object.values(M2.figs.path.items).find(it => it.isReply);
     assert.strictEqual(r2.pts.length, 2, JSON.stringify(r2.pts));
   },
+  async frames_lists_unsettled() {   // frames.cjs は、動きが行の中で終わらない行を、終わりに標準エラーで一覧にする（終了コードは変えない）
+    const fs = require("fs"), os = require("os"), path = require("path"), cp = require("child_process");
+    const d = fs.mkdtempSync(path.join(os.tmpdir(), "uz-m9-")), f = path.join(d, "sb.json");
+    fs.writeFileSync(f, JSON.stringify(deck6({ a: { title: "A", parts: [{ figure: "g1" }] } },
+      [SC("s1", "a", [LN("l1", "{a}図を出して、しばらくそのまま説明を続けます。", { show: "g1" }), { id: "l2", text: "{a}たどります。", do: [{ at: "a", trace: ["app", "api", "db"], dur: 9 }] }, { id: "l3", text: "そのままです。" }])], { g1: G1 })));
+    const r = cp.spawnSync("node", [path.join(__dirname, "../frames.cjs"), f, "-o", path.join(d, "fr")], { encoding: "utf8" });
+    assert.ok(r.status === 0 || r.status === 4, `終了コード ${r.status}: ${r.stderr}`);
+    assert.ok(/完成形に届いていない/.test(r.stderr), r.stderr);
+    assert.ok(/l2（s1）: .*trace「app→api→db」がコマの後もあと \d+\.\d 秒続く（コマは動きの途中）/.test(r.stderr), r.stderr);
+    assert.ok(!/l1（s1）|l3（s1）/.test(r.stderr), r.stderr);
+    const js = JSON.parse(fs.readFileSync(path.join(d, "fr", "frames.json"), "utf8"));
+    assert.strictEqual(js.lines.find(x => x.id === "l2").settled, false);
+    // 全部終わる台本では一覧を出さない
+    fs.writeFileSync(f, JSON.stringify(deck6({ a: { title: "A", parts: [{ figure: "g1" }] } }, [SC("s1", "a", [LN("l1", "{a}図を出して、しばらくそのまま説明を続けます。", { show: "g1" })])], { g1: G1 })));
+    const r2 = cp.spawnSync("node", [path.join(__dirname, "../frames.cjs"), f, "-o", path.join(d, "fr")], { encoding: "utf8" });
+    assert.ok(!/完成形に届いていない/.test(r2.stderr), r2.stderr);
+    fs.rmSync(d, { recursive: true, force: true });
+  },
 };
 
 (async () => {
