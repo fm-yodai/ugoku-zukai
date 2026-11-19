@@ -48,7 +48,7 @@
         for (const it of Object.values(F.items)) {
           if (it.kind === "group" || it.kind === "dot") continue;
           const s = fr.st[it.key];
-          if (!s || s.show < 0.95 || s.dim < 0.5 || s.blur > 0.5) continue;
+          if (!s || s.show < 0.95 || s.dim < 0.5 || s.blur > 0.5 || (s.out || 0) > 0.5) continue;   // out: 箱の中へ入って消えた外の段
           list.push({ it, pl, s });
         }
       }
@@ -63,7 +63,8 @@
       for (const v of vis) {
         const off = v.s.off || [0, 0];
         const pl = { ...v.pl, ox: v.pl.ox + off[0] * v.pl.s, oy: v.pl.oy + off[1] * v.pl.s };
-        const name = `${v.it.fig}/${v.it.id}`;
+        // 台本から指せない内部の要素（chart の目盛りなど）は、図が付けた読める名前で出す
+        const name = v.it.name ? `${v.it.fig} の${v.it.name}` : `${v.it.fig}/${v.it.id}`;
         // 大きさを変えた箱（resize）は、変えた後の形と、付いていった文字の位置で調べる
         const rz = v.s.rect || null, tOff = (rz && v.s.textOff) || [0, 0];
         const bbox = rz || ((v.it.kind === "custom" || v.it.kind === "space" || v.it.kind === "s3") && v.pl.w != null ? { x: 0, y: 0, w: v.pl.w, h: v.pl.h } : v.it.bbox);

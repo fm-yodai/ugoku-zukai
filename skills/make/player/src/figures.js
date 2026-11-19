@@ -596,11 +596,15 @@
     // さらに同じノードに出入りする辺の端を 1 か所にまとめる。まとめないと、後の図で辺が加わったノードの入口が中心からずれ、
     // 先の図のノードがその入口に合わせて一段ずれる（UX の評価で、v1 の「ヒアリング」だけが下がった）
     if (series) Object.assign(root.layoutOptions, { "elk.layered.considerModelOrder.strategy": "NODES_AND_EDGES", "elk.layered.mergeEdges": "true" });
+    // order: "declared": 同じ段の箱を、宣言の順に並べる（既定では ELK が交差の少ない順に並べ替える）。系列のキャンバスでは、どれかの図に書けば効く
+    const declared = f.order === "declared";
+    if (declared) Object.assign(root.layoutOptions, { "elk.layered.considerModelOrder.strategy": "NODES_AND_EDGES", "elk.layered.crossingMinimization.forceNodeModelOrder": "true" });
+    const modelOrder = series || declared;
     const frameNode = g => ({ id: g.id, layoutOptions: { "elk.padding": "[top=46,left=22,bottom=22,right=22]",
         ...(bands.length ? { "elk.partitioning.partition": String(Math.max(0, bands.findIndex(b => b.members.includes(g.id)))) } : {}) },
-        children: (series ? f.nodes.map(n => n.id).filter(id => g.members.includes(id)) : g.members.filter(m => nodeSpec[m])).map(elkNode) });
-    if (series) {
-      // 系列のキャンバス: ノードの順（初めて出る図の順）に、枠はその最初のメンバーの場所に置く
+        children: (modelOrder ? f.nodes.map(n => n.id).filter(id => g.members.includes(id)) : g.members.filter(m => nodeSpec[m])).map(elkNode) });
+    if (modelOrder) {
+      // 系列のキャンバスと order: "declared": ノードの順（系列は初めて出る図の順）に、枠はその最初のメンバーの場所に置く
       const placed = new Set();
       for (const n of f.nodes) {
         const g = frames.find(x => x.id === inFrame[n.id]);
@@ -675,7 +679,7 @@
         groups[g.id] = o ? { ...o, members: [...new Set([...o.members, ...g.members])] } : { ...g, members: [...g.members] };
       }
     }
-    const U = { type: "graph", nodes: Object.values(nodes), edges: Object.values(edges), groups: Object.values(groups) };
+    const U = { type: "graph", nodes: Object.values(nodes), edges: Object.values(edges), groups: Object.values(groups), ...(specs.some(f => f.order === "declared") ? { order: "declared" } : {}) };
     const geom = (await layoutGraph(U, S, dir, { sizes })).geom;
     // 置き換わる辺の経路を、辺ごとに 1 回だけ決める（どの図でも同じ経路になる）。避ける箱は、その辺を持つ全図のノードの和集合（両端を除く）。
     // ラベルの大きさは一番長い文言で取る

@@ -994,6 +994,121 @@ const tests = {
     const svg = renderSvg(M, 0, fr);
     assert.ok(svg.includes("サーバー"), "完成形に箱の名前がない");
   },
+  // ---- writer の初稿で見つかった不具合（Task 15）----
+  async inside_outer_fades() {   // 箱の中へ入ると、外の段（寄せ先の箱以外の要素・辺の label・同じスライドのほかの部品）は中身と同じ係数で消える
+    const g = { ...IG(), edges: [{ from: "client", to: "server", label: "データを送る" }] };
+    const sb = deck6({ a: { title: "A", parts: [{ figure: "g", area: { col: [1, 8], row: [1, 6] } },
+      { id: "memo", type: "text", area: { col: [9, 12], row: [1, 6] }, blocks: [{ id: "m1", kind: "para", text: "外のメモ" }] }] } },
+      [SC("s1", "a", [{ id: "l1", text: "{a}出します。", do: [{ show: ["g", "memo"], at: "a" }] }, LN("l2", "サーバーの{a}中に入ります。", { zoom: "server" }),
+        LN("l3", "DB の{a}中へ。", { zoom: "srv/db" }), LN("l4", "{a}戻ります。", { zoom: "all" })])],
+      { g, srv: SRV({ db: { inside: "dbf" } }), dbf: DBF });
+    const M = await build(sb);
+    assert.deepStrictEqual(M.errors, []);
+    const out = (fr, k) => (fr.st[k] && fr.st[k].out) || 0;
+    // 寄っていないときは何も消えない
+    const f1 = UZ.frame(M, lineEnd(M, "l1"));
+    for (const k of ["g/client", "g/server", "g/client>server"]) assert.strictEqual(out(f1, k), 0, `寄る前に ${k} が消えている`);
+    assert.strictEqual(f1.figs.memo.opacity, 1);
+    // 寄り切ると、寄せ先の箱だけが残る
+    const f2 = UZ.frame(M, zoomAct(M, "l2").end + 0.05), cf = f2.st["g/server"].inside;
+    assert.ok(cf > 0.99, `前提: 中身が出ている（${cf}）`);
+    for (const k of ["g/client", "g/client>server"]) assert.ok(Math.abs(out(f2, k) - cf) < 1e-9, `${k} が中身と同じ係数で消えない（${out(f2, k)}）`);
+    assert.strictEqual(out(f2, "g/server"), 0, "寄せ先の箱が消えた");
+    assert.ok(f2.figs.memo.opacity < 0.01, `ほかの部品が消えない（${f2.figs.memo.opacity}）`);
+    assert.ok(f2.figs.srv.opacity > 0.99, "中身が消えた");
+    // 途中（中身が半分）では、外も半分
+    const z = zoomAct(M, "l2");
+    for (let t = z.start; t <= z.end; t += 0.05) {
+      const fr = UZ.frame(M, t), c = (fr.st["g/server"] || {}).inside || 0;
+      assert.ok(Math.abs(out(fr, "g/client") - c) < 1e-9 && Math.abs(fr.figs.memo.opacity - (1 - c)) < 1e-9, `t=${t}: 外の不透明度が 1 − 中身の係数でない`);
+    }
+    // 描いた SVG で、辺の label の不透明度が 0 になる
+    loadView();
+    const V = new UZ.View(document.createElementNS("http://www.w3.org/2000/svg", "svg"), M), E = V.els["g/client>server"];
+    V.render(lineEnd(M, "l1"));
+    assert.ok(+E.label.style.opacity > 0.5, `寄る前に辺の label が見えない: ${E.label.style.opacity}`);
+    V.render(z.end + 0.05);
+    assert.ok(E.label.style.display === "none" || +E.label.style.opacity < 0.01, `寄った後に辺の label が見えている: ${E.label.style.opacity}`);
+    // 2 段: db に寄ると、srv のほかの箱が消え、祖先の箱 server と db は残る
+    const f3 = UZ.frame(M, zoomAct(M, "l3").end + 0.05);
+    for (const k of ["srv/web", "srv/cache", "srv/cache>db"]) assert.ok(out(f3, k) > 0.99, `2 段目で ${k} が消えない`);
+    for (const k of ["srv/db", "g/server"]) assert.strictEqual(out(f3, k), 0, `2 段目で ${k} が消えた`);
+    // 戻ると元に戻る
+    const f4 = UZ.frame(M, zoomAct(M, "l4").end + 0.05);
+    for (const k of ["g/client", "srv/web"]) assert.ok(out(f4, k) < 1e-9, `戻った後も ${k} が消えている`);
+    assert.strictEqual(f4.figs.memo.opacity, 1);
+    // 完成形のコマは寄らない姿（何も消えない）
+    const ff = UZ.finalFrame(M, "a");
+    assert.strictEqual(out(ff, "g/client"), 0);
+    assert.strictEqual(ff.figs.memo.opacity, 1);
+  },
+  async inside_outer_fades_no_cut_warn() {   // 中身の箱へ寄るとき、外の段（消える部品）は「端で切れる」の検査で数えない（writer の初稿の l3）
+    const figures = {
+      system: { type: "graph", direction: "right", nodes: [{ id: "chip", label: "CPU チップ", role: "process", inside: "chip-in" }, { id: "dram", label: "メモリ（DRAM）", role: "store", sub: "チップの外" }],
+        edges: [{ from: "chip", to: "dram", label: "データを読み書き" }] },
+      "chip-in": { type: "graph", direction: "down", nodes: [{ id: "core0", label: "コア", role: "actor", inside: "core-in" }, { id: "core1", label: "コア", role: "actor" }, { id: "core2", label: "コア", role: "actor" },
+        { id: "core3", label: "コア", role: "actor" }, { id: "l3", label: "L3 キャッシュ", role: "process", sub: "全コアで共有" }],
+        edges: ["core0", "core1", "core2", "core3"].map(c => ({ from: c, to: "l3" })) },
+      "core-in": { type: "graph", direction: "right", nodes: [{ id: "exec", label: "実行ユニット", role: "actor" }, { id: "l1", label: "L1", role: "process" }, { id: "l2", label: "L2", role: "process" }],
+        edges: [{ from: "exec", to: "l1" }, { from: "l1", to: "l2" }] },
+    };
+    const M = await build(deck6({ a: { title: "A", statement: "キャッシュは、コアに近い順に L1・L2・L3 と置かれ、メモリはチップの外にあります。", parts: [{ figure: "system", area: { col: [1, 8], row: [1, 6] } }] } },
+      [SC("s1", "a", [LN("l1", "{a}出します。", { show: "system" }), LN("l2", "チップに{a}寄ります。", { zoom: "chip" }), LN("l3", "コアに{a}寄ります。", { zoom: "core0" })])], figures));
+    assert.deepStrictEqual(M.errors, []);
+    assert.ok(!(M.warnings || []).some(w => /行 l3（zoom）: 寄せ先の隣の部品/.test(w)), JSON.stringify(M.warnings));
+    // 寄り切ったコマでは、外の段は見えない（配置の検査も数えない）
+    const fr = UZ.frame(M, zoomAct(M, "l3").end + 0.05);
+    for (const k of ["chip-in/core1", "chip-in/l3", "system/dram"]) assert.ok(fr.st[k].out > 0.99, `${k} が消えない`);
+    assert.ok(!UZ.checkLayout(M).some(i => /core1|core2|core3|dram/.test(i.msg) && i.at > zoomAct(M, "l3").end), JSON.stringify(UZ.checkLayout(M)));
+  },
+  async plate_show_by_plate_ids() {   // 板の id だけを show しても、space の部品を show したとみなす（「部品を show していない」と言わない）
+    const M = await build(plateDeck([PL("p2", "f2", 1), PL("p3", "f3", 0)], [{ id: "l1", text: "{a}出します。", do: [{ show: ["p2", "p3"], at: "a" }] }]));
+    assert.deepStrictEqual(M.errors, []);
+    assert.ok(!(M.warnings || []).some(w => /部品「sp」を、どの場面でも show していない/.test(w)), JSON.stringify(M.warnings));
+    // 何も show しなければ、今までどおり知らせる
+    const M2 = await build(plateDeck([PL("p2", "f2", 1)], [{ id: "l1", text: "出します。" }]));
+    hasWarn(M2, /部品「sp」を、どの場面でも show していない/);
+  },
+  async plate_layout_by_figure_type() {   // 板の中の図: 区画に合わせて組む図（list など）は板の幅いっぱい、compare などは縦横比を保って縮む（storyboard.md の板の節）
+    const CMP = { type: "compare", items: [{ id: "x1", label: "左" }, { id: "x2", label: "右" }] };
+    const M = await build(plateDeck([PL("w", "f2", 1, { origin: [-4, 0, 1], size: [8, 0.8] }), PL("n", "f3", 0, { size: [4, 0.8] }),
+      PL("cw", "c1", 2, { origin: [-4, 0, 2], size: [8, 0.8] }), PL("cn", "c2", 3, { origin: [-3, 0, 3], size: [6, 0.8] })],
+      [{ id: "l1", text: "{a}出します。", do: [{ show: "sp", at: "a" }] }], { figures: { f2: PF2, f3: PF3, c1: CMP, c2: { ...CMP, items: [{ id: "y1", label: "左" }, { id: "y2", label: "右" }] } } }));
+    assert.deepStrictEqual(M.errors, []);
+    const F = id => M.figs[id];
+    assert.ok(F("w").w > F("n").w * 1.5, `list の板が幅に合わせて組まれない: ${F("w").w} / ${F("n").w}`);
+    assert.strictEqual(F("cw").w, F("cn").w, "compare は自然な大きさで組む（板の幅で組み直さない）");
+    const doc = require("fs").readFileSync(require("path").join(__dirname, "../../references/storyboard.md"), "utf8");
+    const line = doc.slice(doc.indexOf("**板（`plate`）**")).split("\n").find(l => l.startsWith("- 中の図は、板の大きさに合わせて 1 回だけ組"));
+    assert.ok(line && /`list`/.test(line) && /`compare`/.test(line), "storyboard.md の板の節に、図の種類による組み方の違いがない");
+  },
+  async chart_tick_readable_name() {   // 配置の検査の文に、目盛りの内部の名前（tick25000）を出さない
+    const chart = { id: "lat", type: "chart", kind: "bar", unit: " ns", categories: ["L1", "L2", "L3", "メモリ"],
+      series: [{ id: "t", label: "読む時間", values: [1, 4, 12, 90] }], area: { col: [1, 4], row: [1, 3] } };
+    const M = await build(deck6({ a: { title: "A", parts: [chart] } }, [SC("s1", "a", [{ id: "l1", text: "{a}出します。", do: [{ show: "lat", at: "a" }] }])]));
+    assert.deepStrictEqual(M.errors, []);
+    const msgs = UZ.checkLayout(M).map(i => i.msg);
+    assert.ok(msgs.some(m => /目盛り|tick\d/.test(m)), `前提: 目盛りの文字の警告が出る: ${JSON.stringify(msgs)}`);
+    assert.ok(!msgs.some(m => /tick\d/.test(m)), `内部の名前が出る: ${JSON.stringify(msgs)}`);
+  },
+  async graph_order_declared() {   // order: "declared" で、同じ段の箱を宣言の順に並べる（既定は変えない）
+    const nodes = [0, 1, 2, 3].map(i => ({ id: `core${i}`, label: "コア" })).concat([{ id: "l3", label: "L3 キャッシュ" }]);
+    const G = o => ({ type: "graph", direction: "down", nodes, edges: [0, 1, 2, 3].map(i => ({ from: `core${i}`, to: "l3", label: "使う" })), ...o });
+    const xs = M => [0, 1, 2, 3].map(i => M.figs.g.items[`core${i}`].x);
+    const one = async o => build(deck6({ a: { title: "A", parts: [{ figure: "g" }] } }, [SC("s1", "a", [LN("l1", "{a}出します。", { show: "g" })])], { g: G(o) }));
+    const M0 = await one({});
+    const sorted = a => a.every((x, i) => !i || x > a[i - 1]);
+    assert.ok(!sorted(xs(M0)), `前提: 既定では宣言の順にならない（${xs(M0)}）。既定を変えていないか`);
+    const M1 = await one({ order: "declared" });
+    assert.deepStrictEqual(M1.errors, []);
+    assert.ok(sorted(xs(M1)), `宣言の順に並ばない: ${xs(M1)}`);
+    hasErr(await one({ order: "random" }), /order は "declared" だけ/);
+    // Morph の系列: どれかの図に書けば、1 枚のキャンバスを宣言の順で組む（系列の図どうしで同じ位置）
+    const G2b = { ...G({}), nodes: nodes.concat([{ id: "mem", label: "メモリ" }]), edges: G({}).edges.concat([{ from: "l3", to: "mem", label: "読む" }]) };
+    const M2 = await build(seriesDeck({ v1: G({ order: "declared" }), v2: G2b }, [["v1"], ["v2", "v1"]]));
+    assert.deepStrictEqual(M2.errors, []);
+    for (const f of ["v1", "v2"]) { const a = [0, 1, 2, 3].map(i => M2.figs[f].items[`core${i}`].x); assert.ok(sorted(a), `系列の ${f} が宣言の順に並ばない: ${a}`); }
+  },
 };
 
 (async () => {

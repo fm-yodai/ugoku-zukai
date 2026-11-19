@@ -349,7 +349,7 @@
           if (E._far !== d) { E._far = d; E.g.style.display = d; if (E.label && E.label.parentNode !== E.g) E.label.style.display = d; }
           if (far) continue;
         } else if (E._far) { E._far = ""; E.g.style.display = ""; if (E.label && E.label.parentNode !== E.g) E.label.style.display = ""; }
-        const show = s.show, blur = s.blur || 0, dim = s.dim * (1 - 0.35 * blur);
+        const show = s.show, blur = s.blur || 0, dim = s.dim * (1 - 0.35 * blur) * (1 - (s.out || 0));   // out = 箱の中へ入って「外」になった分（engine の insideOut）
         // ぼかし（blur）: 部品ごとのフィルタを、初めてぼかすときに作る。範囲は部品の外枠から座標で決める
         // （外枠の割合で取ると、水平な線は高さ 0 で消える。広く取りすぎると PNG にするのが遅い）
         const bl = blur > 0.02 && E.g && it.bbox ? +(blur * 4).toFixed(2) : 0;

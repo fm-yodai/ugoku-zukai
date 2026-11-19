@@ -628,8 +628,9 @@
     for (const sc of scenes) sc.figs.forEach((fid, i) => { const F = figs[fid]; if (F.parent && !F.fit) F.fit = { ...sc.place[fid], w: sc.areas[i].w, h: sc.areas[i].h, ...(sc.areas[i].lw ? { lw: sc.areas[i].lw } : {}) }; });
     // 時刻 T の場面 sc で見えている箱・グループの枠・テキストの部品の、画面上の矩形（カメラの前）。
     // show・hide をたどる。Morph の v2 の要素は、同じ id の v1 の要素が出ていれば出ているとみなす
-    // inner = 数える中身（inside）の図の id の列（中身の中に寄るとき、その中身の図の部品も数える。写し方は placeAt）
-    const visibleRects = (sc, T, inner = []) => {
+    // inner = 数える中身（inside）の図の id の列（中身の中に寄るとき、その中身の図の部品も数える。写し方は placeAt）。
+    // hide(fid, it) = 数えない部品（中身の箱へ寄り切ると消える外の段。frame の insideOut）
+    const visibleRects = (sc, T, inner = [], hide = null) => {
       const vis = new Set();
       for (const a of acts.filter(x => (x.verb === "show" || x.verb === "hide") && x.start <= T).sort((x, y) => x.start - y.start)) {
         for (const k of a.keys) { if (a.verb === "show") vis.add(k); else vis.delete(k); }
@@ -641,6 +642,7 @@
         for (const it of Object.values(F.items)) {
           if (!["box", "frame", "text"].includes(it.kind) || !it.bbox) continue;
           if (!vis.has(it.key) && !(mo && vis.has(`${mo.from}/${it.id}`))) continue;
+          if (hide && hide(fid, it)) continue;
           const b = it.bbox;
           out.push({ x: pl.ox + b.x * pl.s, y: pl.oy + b.y * pl.s, w: b.w * pl.s, h: b.h * pl.s });
         }
@@ -651,9 +653,9 @@
     // 倍率は s0 から下げていき（pan は s0 のまま）、各倍率で、写す範囲の位置を中央（s0 での位置）に近い順に試す。
     // R に重なる部品（寄せ先と、それを囲む枠）は数えない。見つからなければ null（今のまま）。
     // floor = 下げてよい倍率の下限（既定 1）、inner = 数える中身の図。floor まで下げても見つからなければ false
-    function fitCamera(sc, R, s0, fixed, T, pad, floor = 1, inner = []) {
+    function fitCamera(sc, R, s0, fixed, T, pad, floor = 1, inner = [], hide = null) {
       const B = sc.body, tol = 1;
-      const rects = visibleRects(sc, T, inner).filter(r => !(r.x < R.x + R.w - tol && R.x < r.x + r.w - tol && r.y < R.y + R.h - tol && R.y < r.y + r.h - tol));
+      const rects = visibleRects(sc, T, inner, hide).filter(r => !(r.x < R.x + R.w - tol && R.x < r.x + r.w - tol && r.y < R.y + R.h - tol && R.y < r.y + r.h - tol));
       if (!rects.length) return null;
       // 写す範囲（カメラの前の画面座標）: W = { x: (B.x - tx) / s, y: (B.y - ty) / s, w: B.w / s, h: B.h / s }
       const ideal = s => ({ x: clamp(R.x + R.w / 2 - B.w / s / 2, B.x, B.x + B.w - B.w / s), y: clamp(R.y + R.h / 2 - B.h / s / 2, B.y, B.y + B.h - B.h / s) });
@@ -803,8 +805,20 @@
             else if (innerT.length) {
               const floors = innerT.map(t => { const it = !t.whole && figs[t.fig].items[t.id]; return 0.9 / (it && it.inside ? placeAt(sc, it.inside).a : placeAt(sc, t.fig).s); });
               const floor = clamp(Math.max(...floors), 1, s);
-              fit = fitCamera(sc, R, s, false, a.end, a.a.pad ?? CA.pad, floor, [...new Set(innerT.map(t => t.fig))]);
-              if (fit === false) warn(`${where}: 寄せ先の隣の部品が本文の端で切れる（中身が読める倍率 ${floor.toFixed(2)} より下げられない。pad を小さくするか、寄せ先を変える）`);
+              // 中身が読める倍率（floor）以上では、寄せ先から外へたどった段ごとに、残る箱 1 つ以外は消えている（insideOut）。消える部品は数えない
+              const levels = [];   // { fig: 段の図, keep: その段で残る箱 }
+              for (const t of innerT) {
+                let f = t.fig;
+                if (!t.whole && figs[f].items[t.id].inside) levels.push({ fig: f, keep: t.id });
+                while (figs[f].parent && figs[f].parent.kind === "inside") { const P = sc.insideParent[f] || figs[f].parent.fig; levels.push({ fig: P, keep: figs[f].parent.item }); f = P; }
+              }
+              const hide = (fid, it) => {
+                const ls = levels.filter(l => l.fig === fid);
+                return ls.length ? !ls.some(l => l.keep === it.id) : depthOf(fid) === 0 && levels.some(l => depthOf(l.fig) === 0);
+              };
+              fit = fitCamera(sc, R, s, false, a.end, a.a.pad ?? CA.pad, floor, [...new Set(innerT.map(t => t.fig))], hide);
+              // 下限は中身が読める倍率で決まるので、pad では直らない。中身の図の中で、寄せ先の隣の箱が端にかかる
+              if (fit === false) warn(`${where}: 寄せ先の隣の部品が本文の端で切れる（中身が読める倍率 ${floor.toFixed(2)} より下げられない。隣の部品も含めて寄せるか（zoom に id を並べる）、寄せ先を変える）`);
             }
             if (fit) {
               if (fit.s < s - 0.01) warn(`${where}: 寄せ先の隣の部品が body の端で切れるため、倍率を ${fit.s.toFixed(2)} に下げた（${s.toFixed(2)} では収まらない。pad を小さくするか、寄せ先を変える）`);
@@ -876,7 +890,9 @@
     // 一度も出ない図への警告
     // スライドの部品は、そのスライドを使うどの場面でも出ないときだけ知らせる（場面をまたいで少しずつ出すのは普通の使い方）
     // Morph で v1 の表示を引き継ぐ図も、出たものとみなす
-    const shown = fid => acts.some(a => (a.verb === "show" && a.keys.some(k => k.startsWith(fid + "/"))) || (a.verb === "morph" && a.to === fid && a.pairs.length));
+    // space の部品は、板の id（= 板の中の図）を show しても、その板を出したことになる（要素のどれかを show した図と同じ扱い）
+    const shown = fid => acts.some(a => (a.verb === "show" && a.keys.some(k => k.startsWith(fid + "/"))) || (a.verb === "morph" && a.to === fid && a.pairs.length))
+      || UZ.childFigs({ figs }, fid).some(k => isPlate(k) && shown(k));
     for (const sc of scenes) for (const fid of sc.figs) {
       if (figs[fid].autoShow || sc.slide || figs[fid].parent) continue;
       const any = acts.some(a => a.verb === "show" && a.keys.some(k => k.startsWith(fid + "/")) && a.start < sc.end);
@@ -1180,6 +1196,7 @@
     // 子の図（板の図）: 親の部品と一緒に出入りする。置き場所は持たず、親が行列で描く
     for (const [fid, F] of Object.entries(M.figs)) if (F.parent && F.parent.kind === "plate") figsF[fid] = { opacity: figsF[F.parent.fig] ? figsF[F.parent.fig].opacity : 0, place: null, parent: { ...F.parent } };
     insideFrame(M, figsF, get, sc, cam.s > 1.001);
+    const outTop = insideOut(M, figsF, st, sc.body);
     // body の clip: 寄せている間と、寄せたスライドから次のスライドへ移る 0.8 秒の間（前後の body を合わせた範囲）
     const leaving = newRun && prev.camEnd.s > 1.001 && t < sc.start + 0.8;
     const U = leaving ? unionRect(prev.body, sc.body) : sc.body;
@@ -1203,7 +1220,7 @@
     const header = { text: sc.header, opacity: (prev && prev.header !== sc.header ? k : 1) * (1 - endP), prev: prev && prev.header !== sc.header ? { text: prev.header, opacity: 1 - k } : null };
     const stSame = prev && prev.statement.join("\n") === sc.statement.join("\n");
     const statement = { lines: sc.statement, opacity: (prev && !stSame ? k : 1) * (1 - endP), prev: prev && !stSame && prev.statement.length ? { lines: prev.statement, opacity: 1 - k } : null };
-    return { t, st, figs: figsF, camera, scene: sc, statement, captions: sc.captions.map(c => ({ ...c, opacity: (prev && prev.figs.includes(c.fig) && prev.captions.some(x => x.text === c.text) ? 1 : k) * (1 - endP) })), header, sub, badge, customs, values: UZ.valuesAt(M, t), end: endP, dark };
+    return { t, st, figs: figsF, camera, scene: sc, statement, captions: sc.captions.map(c => ({ ...c, opacity: (prev && prev.figs.includes(c.fig) && prev.captions.some(x => x.text === c.text) ? 1 : k) * (1 - endP) * (1 - outTop) })), header, sub, badge, customs, values: UZ.valuesAt(M, t), end: endP, dark };
   };
   // ================= スライドの完成形のコマ =================
   // 完成形 = 宣言した部品がすべて出た状態。完成形に含めない部品（transient）と、動作で足したもの（印・注記・点・戻りの矢印）は出さない。
@@ -1251,6 +1268,47 @@
       if (s) s.inside = cf;
     };
     for (const [fid, F] of Object.entries(M.figs)) if (F.parent && F.parent.kind === "inside") one(fid);
+  }
+  // 箱の中へ入ったら、外の段は「外」になる。中身が現れるのと同じ係数 cf で、寄せ先の箱（と、その箱を含む祖先の箱）以外の、
+  // 同じ段の要素（箱・辺・label など。状態の out = 1 − 不透明度の倍率）と、同じ段のほかの図（スライドのほかの部品と、その子の図）を薄くする。
+  // 段ごとの寄せ先は、中身が出ている（cf > 0）inside の箱のうち、画面上の中心が本文の中心に一番近いもの。そこから中身の段へ下りる。
+  // 中身が出ていなければ（寄っていないとき）何もしない。返すのは一番外の段の cf（図の題を薄くする）
+  function insideOut(M, figsF, st, body) {
+    const fadeFig = (fid, f) => {
+      figsF[fid].opacity *= 1 - f;
+      for (const [k, ff] of Object.entries(figsF)) if (ff.parent && ff.parent.kind === "inside" && ff.parent.fig === fid) fadeFig(k, f);
+    };
+    const kidOf = (fid, it) => { const kf = it.inside && figsF[it.inside]; return kf && kf.parent && kf.parent.fig === fid && kf.parent.item === it.id ? it.inside : null; };
+    const cx = body.x + body.w / 2, cy = body.y + body.h / 2;
+    let level = Object.keys(figsF).filter(f => !M.figs[f].parent && figsF[f].place && figsF[f].opacity > 0), top = 0, depth = 0;
+    while (level.length) {
+      let best = null, bd = Infinity;
+      for (const fid of level) {
+        const pl = figsF[fid].place;
+        if (!pl) continue;
+        for (const it of Object.values(M.figs[fid].items)) {
+          const s = st[it.key], b = it.bbox || it;
+          if (!s || !(s.inside > 0) || !kidOf(fid, it)) continue;
+          const d = (pl.ox + (b.x + b.w / 2) * pl.s - cx) ** 2 + (pl.oy + (b.y + b.h / 2) * pl.s - cy) ** 2;
+          if (d < bd) { bd = d; best = { fid, it, cf: st[it.key].inside }; }
+        }
+      }
+      if (!best) break;
+      const f = best.cf;
+      if (!depth++) top = f;
+      for (const fid of level) {
+        if (fid !== best.fid) { fadeFig(fid, f); continue; }
+        for (const it of Object.values(M.figs[fid].items)) {
+          if (it.id === best.it.id) continue;
+          const s = st[it.key];
+          if (s) s.out = 1 - (1 - (s.out || 0)) * (1 - f);
+          const kid = kidOf(fid, it);
+          if (kid) fadeFig(kid, f);
+        }
+      }
+      level = [best.it.inside];
+    }
+    return top;
   }
   // スライドの完成形の値 = そのスライドを使う最後の場面の終わりの値（完成形のコマで custom の部品に渡す）
   UZ.completeValues = function (M, slideId) {

@@ -195,6 +195,7 @@
           if (!e.label) W(`${where}: 辺 ${id} に label がない（何をするかの動詞句を書く）`);
         }
         if (f.direction && !["right", "down"].includes(f.direction)) E(`${where}: direction は right か down`);
+        if (f.order != null && f.order !== "declared") E(`${where}: order は "declared" だけ（同じ段の箱を宣言の順に並べる。省くと ELK が並べる）`);
       }
       if (f.type === "sequence") {
         for (const p of f.participants || []) { addId(p.id, "参加者"); role(p.role, p.id); }
@@ -271,6 +272,7 @@
         const walk = (n, d) => { if (!n || typeof n !== "object") { E(`${where}: ノードがオブジェクトでない`); return; } addId(n.id, "ノード"); role(n.role, n.id); if (!n.label) E(`${where}: ノード ${n.id} に label がない`); if (d > 4) W(`${where}: 5 段より深い（読み切れない）`); for (const c of n.children || []) walk(c, d + 1); };
         walk(f.root, 0);
         if (f.direction && !["right", "down"].includes(f.direction)) E(`${where}: direction は right か down`);
+        if (f.order != null && f.order !== "declared") E(`${where}: order は "declared" だけ（同じ段の箱を宣言の順に並べる。省くと ELK が並べる）`);
       }
       if (f.type === "chart") {
         const nc = (f.categories || []).length;

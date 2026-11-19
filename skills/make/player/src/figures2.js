@@ -371,6 +371,7 @@
         const y = Y(v);
         const t = T(fmtNum(v, f.decimals) + (v === top && f.unit ? ` ${f.unit}` : ""), axisW - 12, y, 16, { anchor: "end", color: S.muted });
         items.push({ id: `tick${Math.round(v * 1000)}`, kind: "edge", pts: [[axisW, y], [axisW + plotW, y]], stroke: Math.abs(v) < 1e-9 ? S.muted : S.line, width: Math.abs(v) < 1e-9 ? 2 : 1, head: false, dashed: Math.abs(v) >= 1e-9, label: t, deco: true,
+          name: `目盛り「${fmtNum(v, f.decimals)}」`,   // 検査の文に出す名前（id は台本から指せない内部の名前）
           bbox: { x: axisW, y: y - 1, w: plotW, h: 2 } });
         order.push(`tick${Math.round(v * 1000)}`);
       }
