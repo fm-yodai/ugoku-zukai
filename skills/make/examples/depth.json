@@ -1,0 +1,215 @@
+{
+  "format": "ugoku-zukai/6",
+  "title": "奥行きを足すと見えてくるもの",
+  "voice": {
+    "speaker": 8,
+    "speed": 1.1
+  },
+  "values": {
+    "yaw": 25,
+    "pitch": 28,
+    "a": 1.4,
+    "b": -0.9
+  },
+  "figures": {
+    "cover": {
+      "type": "title",
+      "text": "奥行きを足すと\n見えてくるもの"
+    },
+    "system": {
+      "type": "graph",
+      "direction": "right",
+      "nodes": [
+        { "id": "user", "label": "利用者", "role": "actor" },
+        { "id": "server", "label": "注文サーバー", "role": "process", "inside": "server-inside" },
+        { "id": "payment", "label": "決済サービス", "role": "external" }
+      ],
+      "edges": [
+        { "from": "user", "to": "server", "label": "注文する" },
+        { "from": "server", "to": "payment", "label": "代金を請求" }
+      ]
+    },
+    "server-inside": {
+      "type": "graph",
+      "direction": "right",
+      "nodes": [
+        { "id": "web", "label": "Web", "role": "process" },
+        { "id": "app", "label": "アプリ", "role": "process" },
+        { "id": "db", "label": "注文 DB", "role": "store", "inside": "db-inside" }
+      ],
+      "edges": [
+        { "from": "web", "to": "app", "label": "渡す" },
+        { "from": "app", "to": "db", "label": "書く" }
+      ]
+    },
+    "db-inside": {
+      "type": "graph",
+      "direction": "right",
+      "nodes": [
+        { "id": "index", "label": "索引", "role": "process" },
+        { "id": "table", "label": "テーブル", "role": "store" }
+      ],
+      "edges": [
+        { "from": "index", "to": "table", "label": "行の場所" }
+      ]
+    }
+  },
+  "slides": {
+    "tangent-plane": {
+      "title": "曲面と接平面",
+      "statement": "接平面は、曲面の 1 点に接し、その点での曲面の傾きを表す平面です。",
+      "parts": [
+        {
+          "id": "sp",
+          "type": "space",
+          "camera": { "yaw": "yaw", "pitch": "pitch", "scale": 85, "target": [0, 0, 1.1] },
+          "bounds": { "min": [-2.4, -2.4, 0], "max": [2.4, 2.4, 3] },
+          "items": [
+            { "id": "dome", "kind": "surface", "f": "3 - (x*x + y*y)/4", "x": [-2.4, 2.4], "y": [-2.4, 2.4], "grid": 32, "color": "s1", "color2": "s3", "opacity": 0.9 },
+            { "id": "plane", "kind": "surface", "f": "3.05 - (a*a + b*b)/4 - a/2*(x - a) - b/2*(y - b)", "x": ["a - 0.9", "a + 0.9"], "y": ["b - 0.9", "b + 0.9"], "grid": 16, "color": "s2", "opacity": 0.75 },
+            { "id": "rim", "kind": "line", "color": "s2", "points": [
+              ["a - 0.9", "b - 0.9", "3.05 - (a*a + b*b)/4 + 0.45*a + 0.45*b"], ["a + 0.9", "b - 0.9", "3.05 - (a*a + b*b)/4 - 0.45*a + 0.45*b"],
+              ["a + 0.9", "b + 0.9", "3.05 - (a*a + b*b)/4 - 0.45*a - 0.45*b"], ["a - 0.9", "b + 0.9", "3.05 - (a*a + b*b)/4 + 0.45*a - 0.45*b"],
+              ["a - 0.9", "b - 0.9", "3.05 - (a*a + b*b)/4 + 0.45*a + 0.45*b"] ] },
+            { "id": "P", "kind": "point", "at": ["a", "b", "3.05 - (a*a + b*b)/4"], "color": "s4", "label": "P" }
+          ]
+        }
+      ]
+    },
+    "inside-server": {
+      "title": "サーバーの中",
+      "statement": "サーバーの箱 1 つの中に、Web・アプリ・DB が入っています。",
+      "parts": [
+        { "figure": "system" }
+      ]
+    }
+  },
+  "scenes": [
+    {
+      "id": "s1",
+      "chapter": "c1",
+      "figure": "cover",
+      "lines": [
+        {
+          "id": "l1",
+          "text": "平らな図に奥行きを足すと、正面からは分からなかった形や、箱の中身が見えてきます。"
+        }
+      ]
+    },
+    {
+      "id": "s2",
+      "chapter": "c1",
+      "slide": "tangent-plane",
+      "lines": [
+        {
+          "id": "l2",
+          "text": "{a}山のように盛り上がった曲面を描きます。",
+          "do": [
+            { "at": "a", "show": "dome", "draw": true }
+          ]
+        },
+        {
+          "id": "l3",
+          "text": "{a}斜面の上に点 P を取り、{b}そこで曲面に接する平面を置きます。",
+          "read": "{a}斜面の上に点ピーを取り、{b}そこで曲面に接する平面を置きます。",
+          "do": [
+            { "at": "a", "show": "P" },
+            { "at": "b", "show": ["plane", "rim"] }
+          ]
+        },
+        {
+          "id": "l4",
+          "text": "{a}真横から見ると、平面が曲面に触れているのは、点 P の 1 か所だけです。",
+          "read": "{a}真横から見ると、平面が曲面に触れているのは、点ピーのいっかしょだけです。",
+          "do": [
+            { "at": "a", "set": "yaw", "to": -32.7, "dur": 2.4 },
+            { "at": "a", "set": "pitch", "to": 0, "dur": 2.4 }
+          ]
+        },
+        {
+          "id": "l5",
+          "text": "{a}点 P を頂上へ動かすと、接平面は水平になります。",
+          "read": "{a}点ピーを頂上へ動かすと、接平面は水平になります。",
+          "do": [
+            { "at": "a", "set": "a", "to": 0, "dur": 2.0 },
+            { "at": "a", "set": "b", "to": 0, "dur": 2.0 }
+          ]
+        },
+        {
+          "id": "l6",
+          "text": "{a}反対側の斜面へ下りると、接平面は逆向きに傾きます。",
+          "do": [
+            { "at": "a", "set": "a", "to": -1.6, "dur": 2.0 },
+            { "at": "a", "set": "b", "to": 1.03, "dur": 2.0 }
+          ]
+        },
+        {
+          "id": "l7",
+          "text": "{a}斜め上から見直すと、点 P の近くでは、接平面と曲面がほとんど重なっています。",
+          "read": "{a}斜め上から見直すと、点ピーの近くでは、接平面と曲面がほとんど重なっています。",
+          "do": [
+            { "at": "a", "set": "yaw", "to": -155, "dur": 3.0 },
+            { "at": "a", "set": "pitch", "to": 28, "dur": 3.0 }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "s3",
+      "chapter": "c2",
+      "slide": "inside-server",
+      "lines": [
+        {
+          "id": "l8",
+          "text": "{a}利用者の注文は、サーバーを通って、決済サービスに届きます。",
+          "do": [
+            { "at": "a", "show": "system" }
+          ]
+        },
+        {
+          "id": "l9",
+          "text": "{a}サーバーに寄ると、箱の中の部品が見えてきます。",
+          "do": [
+            { "at": "a", "zoom": "server" }
+          ]
+        },
+        {
+          "id": "l10",
+          "text": "{a}Web で受けた注文を、アプリが処理して、DB に書き込みます。",
+          "read": "{a}ウェブで受けた注文を、アプリが処理して、デービーに書き込みます。",
+          "do": [
+            { "at": "a", "trace": ["web", "app", "db"], "label": "注文", "dot": "request" }
+          ]
+        },
+        {
+          "id": "l11",
+          "text": "{a}さらに DB に寄ると、索引とテーブルに分かれています。",
+          "read": "{a}さらにデービーに寄ると、索引とテーブルに分かれています。",
+          "do": [
+            { "hide": "dot:request" },
+            { "at": "a", "zoom": "db" }
+          ]
+        },
+        {
+          "id": "l12",
+          "text": "{a}索引で行の場所を調べてから、テーブルの行を読みます。",
+          "do": [
+            { "at": "a", "trace": ["index", "table"], "label": "検索", "dot": "lookup" }
+          ]
+        },
+        {
+          "id": "l13",
+          "text": "{a}全体に戻ると、ここまで見た部品は、サーバーの箱 1 つに収まっています。",
+          "do": [
+            { "hide": "dot:lookup" },
+            { "at": "a", "zoom": "all" }
+          ]
+        },
+        {
+          "id": "l14",
+          "text": "回り込む、中へ入る。この 2 つの動きで、平らな図では見えなかった形や、箱の中身が見えてきます。"
+        }
+      ]
+    }
+  ]
+}

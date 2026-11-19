@@ -49,21 +49,26 @@
   // 写すときに外す属性（MathJax の内部の印と id。id はページの中で重なりうるので書かない）
   const skipAttr = k => k === "id" || k.startsWith("data-");
 
+  // 色の名前の解決（geo と space が共有する）: テーマのキー、線の並び（s1〜。数が並びを超えると回る）、役割の名前、#rrggbb などの色
+  const seriesOf = S => S.series && S.series.length ? S.series : [S.accent, S.good, S.ink];
+  const seriesColor = (S, c) => { const m = /^s([1-9]\d*)$/.exec(c); if (!m) return null; const sr = seriesOf(S); return sr[(+m[1] - 1) % sr.length]; };
+  UZ.colorOf = function colorOf(S, c, dflt) {
+    if (c == null || c === "") return dflt == null ? S.ink : colorOf(S, dflt);
+    if (KEYS.includes(c)) return S[c];
+    const sc = seriesColor(S, c);
+    if (sc) return sc;
+    if (/^(#|rgb|hsl)/i.test(c) || c === "none") return c;
+    return S.role(c);
+  };
+
   UZ.makeGeo = function (el, S) {
     const geo = { errors: [], S };
 
     // 色: テーマのキー（accent・ink・muted・good・bad・warn・line・bg・surface）、線の並び（s1〜。数が並びを超えると回る）、
     // 役割の名前、#rrggbb などの色
-    const series = S.series && S.series.length ? S.series : [S.accent, S.good, S.ink];
-    const seriesCol = c => { const m = /^s([1-9]\d*)$/.exec(c); return m ? series[(+m[1] - 1) % series.length] : null; };
-    const col = (c, dflt) => {
-      if (c == null || c === "") return dflt == null ? S.ink : col(dflt);
-      if (KEYS.includes(c)) return S[c];
-      const sc = seriesCol(c);
-      if (sc) return sc;
-      if (/^(#|rgb|hsl)/i.test(c) || c === "none") return c;
-      return S.role(c);
-    };
+    const series = seriesOf(S);
+    const seriesCol = c => seriesColor(S, c);
+    const col = (c, dflt) => UZ.colorOf(S, c, dflt);
     // 面の色: fill が true なら線の色、色の名前ならその色、なければ塗らない
     const fillOf = (o, stroke) => o.fill === true ? stroke : o.fill ? col(o.fill) : "none";
     geo.col = c => col(c);
@@ -401,6 +406,46 @@
         else { part(a, M, 1 - p); part(b, M, p); }
       }
       return { w: geo.lerp(PA.w, PB.w, p), h: geo.lerp(PA.h, PB.h, p), el: root };
+    };
+    // ---- 3D（宣言の部品 space と同じ核 UZ.space* を使う）----
+    // 積んで render() で描く。camera = { yaw, pitch, scale?, target?, bounds? }（数）。
+    // bounds を省くと、最初の project() か render() の時点で、積んだ要素の外接箱を求めて凍結する（以後に足した要素でカメラは動かない。
+    // 値で要素が動くときは bounds を渡すと、コマごとに寄ったり縮んだりしない）
+    geo.space = function (g, box, camera) {
+      const cam0 = camera || {}, items = [];
+      const decl = { items, camera: { yaw: cam0.yaw || 0, pitch: cam0.pitch || 0 } };
+      if (cam0.scale != null) decl.camera.scale = cam0.scale;
+      if (cam0.target != null) decl.camera.target = cam0.target;
+      if (cam0.bounds) decl.bounds = cam0.bounds;
+      const freeze = () => { if (!decl.bounds) decl.bounds = UZ.spaceBounds(decl, {}); };
+      const add = (kind, o, props) => {
+        o = o || {};
+        const it = { id: o.id || `g${items.length + 1}`, kind, ...props };
+        for (const k of ["color", "color2", "opacity", "label", "width", "r", "grid", "tex"]) if (o[k] != null) it[k] = o[k];
+        items.push(it);
+        return it.id;
+      };
+      const sp = {
+        point: (p, o) => add("point", o, { at: p }),
+        line: (pts, o) => add("line", o, { points: pts }),
+        arrow: (a, b, o) => add("arrow", o, { from: a, to: b }),
+        polygon: (pts, o) => add("polygon", o, { points: pts }),
+        box: (min, max, o) => add("box", o, { min, max }),
+        surface: (f, xr, yr, o) => add("surface", o, { fn: f, x: xr, y: yr }),
+        text: (p, s, o) => add("text", o, { at: p, text: s }),
+        project: p => {
+          freeze();
+          const q = UZ.spaceView(decl, {}, box.w, box.h).project(p);
+          return [box.x + q[0], box.y + q[1]];
+        },
+        render: () => {
+          freeze();
+          const wrap = el("g", { transform: `translate(${box.x},${box.y})` }, g);
+          const r = UZ.spaceRender(el, wrap, decl, {}, box.w, box.h, null, S);
+          geo.errors.push(...r.errors);
+        },
+      };
+      return sp;
     };
     return geo;
   };

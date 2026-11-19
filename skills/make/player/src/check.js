@@ -36,37 +36,47 @@
     for (const t of [...times].sort((a, b) => a - b)) {
       if (t >= M.endCard) continue;
       const fr = UZ.frame(M, t);
-      const vis = [];
       // 寄せている間は body の clip の外が見えない。はみ出しは調べず、clip の外にある部品は重なりも調べない
       const clip = fr.camera && fr.camera.on ? fr.camera.clip : null;
-      const outside = b => clip && (b.x + b.w <= clip.x || b.y + b.h <= clip.y || b.x >= clip.x + clip.w || b.y >= clip.y + clip.h);
+      const main = [], kids = {};
       for (const [fid, F] of Object.entries(M.figs)) {
         const ff = fr.figs[fid];
-        if (!ff || ff.opacity < 0.9 || !ff.place) continue;
+        // 子の図（板の図など）は置き場所を持たない（親が行列で写す）。配置した区画の中の置き方（F.fit）で、その図の中だけを調べる。
+        // 写したときの文字の小ささは、親の検査（checkSpaces の「文字が小さすぎて読めない」）が見る
+        if (!ff || ff.opacity < 0.9 || (!ff.place && !ff.parent)) continue;
+        const pl = ff.parent ? F.fit : ff.place, list = ff.parent ? (kids[fid] = []) : main;
         for (const it of Object.values(F.items)) {
           if (it.kind === "group" || it.kind === "dot") continue;
           const s = fr.st[it.key];
-          if (!s || s.show < 0.95 || s.dim < 0.5 || s.blur > 0.5) continue;
-          vis.push({ it, pl: ff.place, s });
+          if (!s || s.show < 0.95 || s.dim < 0.5 || s.blur > 0.5 || (s.out || 0) > 0.5) continue;   // out: 箱の中へ入って消えた外の段
+          list.push({ it, pl, s });
         }
       }
+      inspect(main, clip, bounds, t);
+      for (const vis of Object.values(kids)) inspect(vis, null, null, t);
+    }
+    return issues;
+    // 見えている部品の列 vis を、時刻 t のコマで調べる。bounds = はみ出しを調べる範囲（null なら調べない）、clip = カメラの clip
+    function inspect(vis, clip, bounds, t) {
+      const outside = b => clip && (b.x + b.w <= clip.x || b.y + b.h <= clip.y || b.x >= clip.x + clip.w || b.y >= clip.y + clip.h);
       const texts = [], boxes = [];
       for (const v of vis) {
         const off = v.s.off || [0, 0];
         const pl = { ...v.pl, ox: v.pl.ox + off[0] * v.pl.s, oy: v.pl.oy + off[1] * v.pl.s };
-        const name = `${v.it.fig}/${v.it.id}`;
+        // 台本から指せない内部の要素（chart の目盛りなど）は、図が付けた読める名前で出す
+        const name = v.it.name ? `${v.it.fig} の${v.it.name}` : `${v.it.fig}/${v.it.id}`;
         // 大きさを変えた箱（resize）は、変えた後の形と、付いていった文字の位置で調べる
         const rz = v.s.rect || null, tOff = (rz && v.s.textOff) || [0, 0];
-        const bbox = rz || (v.it.kind === "custom" && v.pl.w != null ? { x: 0, y: 0, w: v.pl.w, h: v.pl.h } : v.it.bbox);
+        const bbox = rz || ((v.it.kind === "custom" || v.it.kind === "space" || v.it.kind === "s3") && v.pl.w != null ? { x: 0, y: 0, w: v.pl.w, h: v.pl.h } : v.it.bbox);
         if (bbox && outside(tf(bbox, pl))) continue;
-        if (bbox && v.it.kind !== "band" && !clip) {
+        if (bbox && bounds && v.it.kind !== "band" && !clip) {
           const b = tf(bbox, pl);
           if (b.x < bounds.x || b.y < bounds.y || b.x + b.w > bounds.x + bounds.w || b.y + b.h > bounds.y + bounds.h) add("はみ出し", `${name} が図の区画からはみ出す`, t);
         }
         for (const tb of textBoxes(v.it)) {
           const b = tf(tb.what === "text" ? { ...tb.box, x: tb.box.x + tOff[0], y: tb.box.y + tOff[1] } : tb.box, pl);
           if (tb.size * pl.s < UZ.MIN_FONT - 0.01) add("小さい", `${name} の文字が ${(tb.size * pl.s).toFixed(1)}px（${UZ.MIN_FONT}px 未満）`, t);
-          if (!clip && (b.x < bounds.x || b.y < bounds.y || b.x + b.w > bounds.x + bounds.w || b.y + b.h > bounds.y + bounds.h)) add("はみ出し", `${name} の文字が図の区画からはみ出す`, t);
+          if (!clip && bounds && (b.x < bounds.x || b.y < bounds.y || b.x + b.w > bounds.x + bounds.w || b.y + b.h > bounds.y + bounds.h)) add("はみ出し", `${name} の文字が図の区画からはみ出す`, t);
           texts.push({ name, b, it: v.it, what: tb.what });
         }
         if ((v.it.kind === "box" || v.it.kind === "frame") && bbox) boxes.push({ name, b: tf(bbox, pl), it: v.it, resized: !!rz });
@@ -105,7 +115,6 @@
         }
       }
     }
-    return issues;
   };
   // ---- custom の部品を描いて見る（DOM には触らない。受け取った el で描き、要素の木を読んで調べる） ----
   const mul = (A, B) => [A[0] * B[0] + A[2] * B[1], A[1] * B[0] + A[3] * B[1], A[0] * B[2] + A[2] * B[3], A[1] * B[2] + A[3] * B[3], A[0] * B[4] + A[2] * B[5] + A[4], A[1] * B[4] + A[3] * B[5] + A[5]];
@@ -171,6 +180,65 @@
   }
   const SPILL = 8;
 
+  // space の部品を、custom と同じ時刻で投影して検査する: 描けない（式の誤り・プリミティブの上限）、見えている要素の値が数にならない、
+  // 区画からはみ出す、面が交差して前後が決まらない（警告）、TeX の誤り（文字は値で変わらないので 1 度だけ描いて見る）、
+  // 板（plate）が傾きすぎて読めない（警告。落ち着いた時刻 = 行の終わりで、動いている set がないときだけ。倒している途中は見ない）
+  function checkSpaces(M, el, spaces, times, note, errors, warnings) {
+    const texDone = new Set(), sets = M.acts.filter(a => a.verb === "set");
+    for (const [t, lineId, lineEnd] of times) {
+      if (t >= M.endCard) continue;
+      const fr = UZ.frame(M, t);
+      for (const F of spaces) {
+        const fo = fr.figs[F.id];
+        if (!fo || fo.opacity <= 0.002) continue;
+        const states = UZ.spaceStates(F, fr.st), vis = new Set(Object.keys(states).filter(k => states[k].show > 0.002));
+        // 板は、中の図の要素がどれか出ていれば見えている
+        for (const k of UZ.childFigs(M, F.id)) if (M.figs[k].parent.kind === "plate" && UZ.childShown(M, fr, k)) vis.add(M.figs[k].parent.item);
+        if (!vis.size) continue;
+        const add = (list, body, kind) => note(list, lineId, F.id, body, kind);
+        const S = F.dark ? UZ.darkStyleOf(M.S) : M.S, v = fr.values || {}, decl = F.spec;
+        const W = fo.place && fo.place.w != null ? fo.place.w : F.w, H = fo.place && fo.place.w != null ? fo.place.h : F.h;
+        let prims, cam;
+        try { cam = UZ.spaceView(decl, v, W, H, F.v0); prims = UZ.spacePrims(decl, v, cam, S); }
+        catch (e) { add(errors, `描けない（${String(e && e.message || e)}）`); continue; }
+        const per = {};
+        for (const p of prims) per[p.id] = (per[p.id] || 0) + 1;
+        // 要素が 1 つも描けない = 値が数にならない（一部の網目だけ NaN なのは、定義域の外を描かない書き方なので数えない）
+        for (const o of decl.items || []) if (o && o.id && vis.has(o.id) && !per[o.id])
+          add(errors, `要素「${o.id}」の値が数にならない（NaN か Infinity。式と値の範囲を見直す）`, "nan:" + o.id);
+        const box = UZ.spaceUnionBox(prims.filter(p => vis.has(p.id)).map(UZ.spacePrimBox));
+        if (box && (box.x < -SPILL || box.y < -SPILL || box.x + box.w > W + SPILL || box.y + box.h > H + SPILL)) {
+          const out = [...new Set(prims.filter(p => vis.has(p.id) && (b => b.x < -SPILL || b.y < -SPILL || b.x + b.w > W + SPILL || b.y + b.h > H + SPILL)(UZ.spacePrimBox(p))).map(p => p.id))];
+          add(warnings, `描いたものが部品の区画（0〜${Math.round(W)} × 0〜${Math.round(H)}）からはみ出す（要素 ${out.join("、")}。scale を小さくするか、axes・bounds を広げる）`, "spill");
+        }
+        for (const [a, b] of UZ.spaceIntersections(decl, v)) if (vis.has(a) && vis.has(b))
+          add(warnings, `要素「${a}」と「${b}」の面が交差していて、前後が決まらない（奥から塗るので、奥の面が手前に見える所が出る。面を分けるか、交差しないように置く）`, `x:${a}:${b}`);
+        if (lineEnd && !sets.some(a => t > a.start + 1e-6 && t < a.end - 1e-6)) {
+          for (const o of decl.items || []) {
+            if (!o || o.kind !== "plate" || !vis.has(o.id)) continue;
+            let ang;
+            try { ang = UZ.plateAngle(o, v, cam); } catch (e) { continue; }
+            if (ang > UZ.SPACE.plateMaxAngle) add(warnings, `板「${o.id}」が傾きすぎて読めない（${Math.round(ang)}°）。板の面が視線に対して ${UZ.SPACE.plateMaxAngle}° を超えると、中の文字が潰れる。tilt かカメラの pitch を見直す`, `angle:${o.id}`);
+            // 写した文字の大きさ: 行列の 2 つの列の長さ（図の x・y 方向の倍率）の小さいほう × 図の一番小さい文字
+            const K = M.figs[o.id];
+            if (!K || !K.parent) continue;
+            const sizes = Object.values(K.items).flatMap(it => (it.kind === "mark" ? [] : textBoxes(it).map(b => b.size))).filter(x => x > 0);
+            if (!sizes.length) continue;
+            let m;
+            try { m = UZ.childMatrix(K, o, v, cam); } catch (e) { continue; }
+            const px = Math.min(Math.hypot(m[0], m[1]), Math.hypot(m[2], m[3])) * Math.min(...sizes);
+            if (px < UZ.MIN_FONT - 0.01) add(warnings, `板「${o.id}」の文字が小さすぎて読めない（${px.toFixed(1)}px）。${UZ.MIN_FONT}px 未満になる。板の size かカメラの scale を大きくするか、図の文字を減らす`, `small:${o.id}`);
+          }
+        }
+        if (!texDone.has(F.id) && (decl.items || []).some(o => o && o.kind === "text" && o.tex)) {
+          texDone.add(F.id);
+          try { for (const m of UZ.spaceRender(el, el("g"), decl, v, W, H, null, S, F.v0).errors) add(errors, m); }
+          catch (e) { add(errors, `描けない（${String(e && e.message || e)}）`); }
+        }
+      }
+    }
+  }
+
   // custom の部品を、見えている時刻で描いて検査する。時刻は、部品が見えている各行の終わり・各 set の終わり・set の 1/3 と 2/3。
   // el は svg 要素を作る関数（view_svg.js と同じ形）。返す errors は誤り、warnings は警告
   // opts.call(fn, args) = 関数を呼ぶ口（node の道具は、ここで時間の上限を掛ける。打ち切ったら e.uzTimeout = 上限のミリ秒の例外を投げる）
@@ -186,11 +254,14 @@
       if (f) { f.lines.add(lineId); f.n++; return; }
       found.set(key, { list, partId, body, line: lineId, lines: new Set([lineId]), n: 1 });
     };
-    const parts = [];
-    for (const F of Object.values(M.figs)) for (const it of Object.values(F.items)) if (it.kind === "custom") parts.push({ F, it });
-    if (!parts.length) return { errors, warnings };
+    const parts = [], spaces = [];
+    for (const F of Object.values(M.figs)) {
+      if (F.type === "space") spaces.push(F);
+      for (const it of Object.values(F.items)) if (it.kind === "custom") parts.push({ F, it });
+    }
+    if (!parts.length && !spaces.length) return { errors, warnings };
     const times = [];   // [t, 行の id]
-    for (const l of M.timeline.lines) times.push([l.start + l.dur, l.id]);
+    for (const l of M.timeline.lines) times.push([l.start + l.dur, l.id, true]);   // 3 番目 = 行の終わり（落ち着いた時刻）
     for (const a of M.acts) if (a.verb === "set") {
       const d = a.end - a.start;
       times.push([a.end, a.line], [a.start + d / 3, a.line], [a.start + d * 2 / 3, a.line]);
@@ -230,6 +301,7 @@
           add(warnings, `描いたものが部品の区画（0〜${Math.round(W)} × 0〜${Math.round(H)}）からはみ出す（x ${x0.toFixed(0)}〜${x1.toFixed(0)}、y ${y0.toFixed(0)}〜${y1.toFixed(0)}）`, "spill");
       }
     }
+    if (spaces.length) checkSpaces(M, el, spaces, times, note, errors, warnings);
     for (const [sum, n, figId] of Object.values(cost)) if (n && sum / n > slowMs)
       note(warnings, null, figId, `1 回の描画に平均 ${Math.round(sum / n)}ms かかる（毎コマ呼ばれるので、再生が引っかかる。${slowMs}ms 以下を目安に、分割の数や繰り返しを減らす）`, "slow");
     for (const f of found.values()) {

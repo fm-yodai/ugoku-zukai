@@ -519,13 +519,21 @@
   // 置き換わる辺の経路: 流れの方向に向かい合う辺の中点どうしを、まっすぐ（揃っていれば）か、中ほどで 1 回折れる Z で結ぶ。
   // この図にあるノード（boxes）に重なれば、向きを変えた Z（流れと直交する辺から出る）を試し、どちらも重なればまっすぐにして hit を立てる。
   // ラベルは一番長い区間の中点に置く（横の区間なら上、縦の区間なら右。ELK のラベルと同じく ALWAYS_UP）
-  function routeReplaced(a, b, boxes, dir, lab) {
+  function routeReplaced(a, b, boxes, dir, lab, taken) {
     const down = dir === "down";
     // 流れの方向を x、直交する方向を y として考え、最後に戻す
     const T = r => down ? { x: r.y, y: r.x, w: r.h, h: r.w } : r;
     const P = p => down ? [p[1], p[0]] : p;
+    const T0 = p => down ? [p[1], p[0]] : p;
     const A = T(a), B = T(b);
-    const s = [A.x + A.w, A.y + A.h / 2], t = [B.x, B.y + B.h / 2];
+    const s = [A.x + A.w, A.y + A.h / 2];
+    // 入る位置: 同じ箱の同じ辺にすでに入る矢印（taken）の矢じりと重ならないよう、辺に沿ってずらす（中央から 14 ずつ、交互に）
+    let t = [B.x, B.y + B.h / 2];
+    const tk = (taken || []).map(p => T0(p));
+    for (let n = 1; n <= 6 && tk.some(p => Math.abs(p[1] - t[1]) < 12 && Math.abs(p[0] - t[0]) < 12); n++) {
+      const d = 14 * Math.ceil(n / 2) * (n % 2 ? 1 : -1), y = B.y + B.h / 2 + d;
+      if (y > B.y + 8 && y < B.y + B.h - 8) t = [B.x, y];
+    }
     const cands = [];
     if (Math.abs(s[1] - t[1]) < 0.5) cands.push([s, [t[0], s[1]]]);
     else {
@@ -540,7 +548,12 @@
       const p = pts[i], x0 = Math.min(p[0], q[0]), x1 = Math.max(p[0], q[0]), y0 = Math.min(p[1], q[1]), y1 = Math.max(p[1], q[1]);
       return x0 < r.x + r.w - 0.5 && x1 > r.x + 0.5 && y0 < r.y + r.h - 0.5 && y1 > r.y + 0.5;
     }); });
-    let pts = cands.find(c => !crosses(c)), hit = false;
+    // それでも箱を貫くときは、両端の箱の外側（上か下の空いている側）を回る 5 点の折れ線にする。箱の外へ出たぶんだけ遠い側は選ばない
+    const bs = boxes.map(T), loY = Math.min(A.y, B.y, ...bs.map(r => r.y)) - 28, hiY = Math.max(A.y + A.h, B.y + B.h, ...bs.map(r => r.y + r.h)) + 28;
+    const m = Math.max(6, Math.min(18, (B.x - (A.x + A.w)) / 3));
+    const detour = [[A.x + A.w / 2, A.y, loY], [A.x + A.w / 2, A.y + A.h, hiY]].map(([x0, y0, yo]) => [[x0, y0], [x0, yo], [t[0] - m, yo], [t[0] - m, t[1]], t])
+      .sort((p, q) => Math.abs(p[1][1] - s[1]) - Math.abs(q[1][1] - s[1]));
+    let pts = cands.find(c => !crosses(c)) || detour.find(c => !crosses(c)), hit = false;
     if (!pts) { pts = [s, [t[0], s[1]]]; hit = true; }
     let best = 0;
     pts.forEach((p, i) => { if (i && Math.hypot(p[0] - pts[i - 1][0], p[1] - pts[i - 1][1]) > Math.hypot(pts[best + 1][0] - pts[best][0], pts[best + 1][1] - pts[best][1])) best = i - 1; });
@@ -583,11 +596,15 @@
     // さらに同じノードに出入りする辺の端を 1 か所にまとめる。まとめないと、後の図で辺が加わったノードの入口が中心からずれ、
     // 先の図のノードがその入口に合わせて一段ずれる（UX の評価で、v1 の「ヒアリング」だけが下がった）
     if (series) Object.assign(root.layoutOptions, { "elk.layered.considerModelOrder.strategy": "NODES_AND_EDGES", "elk.layered.mergeEdges": "true" });
+    // order: "declared": 同じ段の箱を、宣言の順に並べる（既定では ELK が交差の少ない順に並べ替える）。系列のキャンバスでは、どれかの図に書けば効く
+    const declared = f.order === "declared";
+    if (declared) Object.assign(root.layoutOptions, { "elk.layered.considerModelOrder.strategy": "NODES_AND_EDGES", "elk.layered.crossingMinimization.forceNodeModelOrder": "true" });
+    const modelOrder = series || declared;
     const frameNode = g => ({ id: g.id, layoutOptions: { "elk.padding": "[top=46,left=22,bottom=22,right=22]",
         ...(bands.length ? { "elk.partitioning.partition": String(Math.max(0, bands.findIndex(b => b.members.includes(g.id)))) } : {}) },
-        children: (series ? f.nodes.map(n => n.id).filter(id => g.members.includes(id)) : g.members.filter(m => nodeSpec[m])).map(elkNode) });
-    if (series) {
-      // 系列のキャンバス: ノードの順（初めて出る図の順）に、枠はその最初のメンバーの場所に置く
+        children: (modelOrder ? f.nodes.map(n => n.id).filter(id => g.members.includes(id)) : g.members.filter(m => nodeSpec[m])).map(elkNode) });
+    if (modelOrder) {
+      // 系列のキャンバスと order: "declared": ノードの順（系列は初めて出る図の順）に、枠はその最初のメンバーの場所に置く
       const placed = new Set();
       for (const n of f.nodes) {
         const g = frames.find(x => x.id === inFrame[n.id]);
@@ -662,7 +679,7 @@
         groups[g.id] = o ? { ...o, members: [...new Set([...o.members, ...g.members])] } : { ...g, members: [...g.members] };
       }
     }
-    const U = { type: "graph", nodes: Object.values(nodes), edges: Object.values(edges), groups: Object.values(groups) };
+    const U = { type: "graph", nodes: Object.values(nodes), edges: Object.values(edges), groups: Object.values(groups), ...(specs.some(f => f.order === "declared") ? { order: "declared" } : {}) };
     const geom = (await layoutGraph(U, S, dir, { sizes })).geom;
     // 置き換わる辺の経路を、辺ごとに 1 回だけ決める（どの図でも同じ経路になる）。避ける箱は、その辺を持つ全図のノードの和集合（両端を除く）。
     // ラベルの大きさは一番長い文言で取る
@@ -672,8 +689,14 @@
       const e = own.map(f => f.edges.find(x => eid(x) === id)).reduce((a, b) => lw(b) > lw(a) ? b : a);
       const avoid = new Set();
       for (const f of own) for (const n of f.nodes) if (n.id !== e.from && n.id !== e.to) avoid.add(n.id);
+      // 同じ箱に入る別の矢印（その辺を持つ図の、置き換わらない辺と、すでに経路を決めた置き換わる辺）の入り口
+      const taken = [];
+      for (const f of own) for (const x of f.edges) {
+        const xid = eid(x), g = x.to === e.to && xid !== id && (geom.edgeGeom[xid] || geom.replaced[xid]);
+        if (g && g.pts) taken.push(g.pts[g.pts.length - 1]);
+      }
       geom.replaced[id] = routeReplaced(geom.abs[e.from], geom.abs[e.to], [...avoid].map(n => geom.abs[n]), dir,
-        e.label ? { w: UZ.textW(e.label, 19) + 10, h: 19 + 8 } : null);
+        e.label ? { w: UZ.textW(e.label, 19) + 10, h: 19 + 8 } : null, taken);
     }
     return geom;
   };

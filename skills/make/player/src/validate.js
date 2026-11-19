@@ -7,9 +7,92 @@
     sequence: ["participants", "messages"], graph: ["nodes", "edges"], canvas: ["shapes"],
     swimlane: ["lanes", "steps"], beforeafter: ["before", "after"], roadmap: ["periods", "items"], tree: ["root"],
     chart: ["categories", "series"], kpi: ["items"], matrix: ["x", "y"], pyramid: ["levels"], cycle: ["steps"], venn: ["sets"],
-    text: ["blocks"], image: ["src"], frame: [], custom: ["draw"],
+    text: ["blocks"], image: ["src"], frame: [], custom: ["draw"], space: ["items"],
   };
+  // 部品 space の要素の種類
+  const S3_KINDS = ["point", "line", "arrow", "polygon", "box", "surface", "curve", "text", "plate"];
   const ROLES = ["actor", "process", "store", "external", "muted", "added", "removed", "good", "bad", "warn", "accent"];
+
+  // 部品 space: 要素の種類・必須の項目・点の形・式（値の名前）を見る。式はコンパイルだけする（値で評価するのは描くとき）
+  // figures = 台本の figures（板の figure が図の id を指すとき）
+  function validateSpace(f, where, E, addId, names, figures) {
+    const expr = (x, what, extra) => {
+      if (typeof x === "number") { if (!Number.isFinite(x)) E(`${where}: ${what} が数でない`); return; }
+      try { UZ.spaceExpr(x, extra ? names.concat(extra) : names); } catch (e) { E(`${where}: ${what}: ${e.message}`); }
+    };
+    const point = (p, what) => {
+      if (!Array.isArray(p) || p.length !== 3) { E(`${where}: ${what} は 3 次元の点 [x, y, z] で書く（今は ${JSON.stringify(p)}）`); return; }
+      p.forEach((x, i) => expr(x, `${what}[${i}]`));
+    };
+    const range = (r, what) => {
+      if (!Array.isArray(r) || r.length !== 2) { E(`${where}: ${what} は範囲 [最小, 最大] で書く（今は ${JSON.stringify(r)}）`); return; }
+      r.forEach((x, i) => expr(x, `${what}[${i}]`));
+    };
+    const cam = f.camera;
+    if (cam != null) {
+      if (typeof cam !== "object" || Array.isArray(cam)) E(`${where}: camera は { yaw, pitch, scale?, target? } で書く`);
+      else {
+        for (const k of ["yaw", "pitch", "scale"]) if (cam[k] != null) expr(cam[k], `camera の ${k}`);
+        if (cam.target != null) point(cam.target, "camera の target");
+      }
+    }
+    if (f.axes != null) {
+      if (typeof f.axes !== "object" || Array.isArray(f.axes)) E(`${where}: axes は { x: [最小, 最大], y, z, labels? } で書く`);
+      else for (const k of ["x", "y", "z"]) if (f.axes[k] != null) range(f.axes[k], `axes の ${k}`);
+    }
+    if (f.bounds != null) {
+      if (!f.bounds || typeof f.bounds !== "object") E(`${where}: bounds は { min: [x, y, z], max: [x, y, z] } で書く`);
+      else { point(f.bounds.min, "bounds の min"); point(f.bounds.max, "bounds の max"); }
+    }
+    if (f.items == null) return;
+    if (!Array.isArray(f.items) || !f.items.length) { E(`${where}: items（要素の列）は 1 つ以上の要素の配列で書く`); return; }
+    for (const o of f.items) {
+      if (!o || typeof o !== "object") { E(`${where}: 要素はオブジェクトで書く`); continue; }
+      if (o.id === "$axes") { E(`${where}: 要素の id「$axes」は軸のために取ってある。別の id にする`); continue; }
+      addId(o.id, "要素");
+      const w = `要素 ${o.id}`;
+      if (!S3_KINDS.includes(o.kind)) { E(`${where}: ${w} の kind は ${S3_KINDS.join(" / ")} のどれか（今は ${o.kind}）`); continue; }
+      const need = (...ks) => { for (const k of ks) if (o[k] == null) E(`${where}: ${w}（${o.kind}）に ${k} がない`); return ks.every(k => o[k] != null); };
+      const pts = (k, min) => {
+        if (!Array.isArray(o[k]) || o[k].length < min) { E(`${where}: ${w} の ${k} は ${min} つ以上の点 [[x, y, z], …] で書く`); return; }
+        o[k].forEach((p, i) => point(p, `${w} の ${k}[${i}]`));
+      };
+      if (o.kind === "point" || o.kind === "text") { if (need("at")) point(o.at, `${w} の at`); if (o.kind === "text" && o.text == null) E(`${where}: ${w}（text）に text がない`); }
+      else if (o.kind === "line") { if (o.points != null) pts("points", 2); else if (need("from", "to")) { point(o.from, `${w} の from`); point(o.to, `${w} の to`); } }
+      else if (o.kind === "arrow") { if (need("from", "to")) { point(o.from, `${w} の from`); point(o.to, `${w} の to`); } }
+      else if (o.kind === "polygon") { if (need("points")) pts("points", 3); }
+      else if (o.kind === "box") { if (need("min", "max")) { point(o.min, `${w} の min`); point(o.max, `${w} の max`); } }
+      else if (o.kind === "surface") {
+        if (need("f", "x", "y")) { expr(o.f, `${w} の f`, ["x", "y"]); range(o.x, `${w} の x`); range(o.y, `${w} の y`); }
+        if (o.grid != null && !(typeof o.grid === "number" && o.grid >= 1)) E(`${where}: ${w} の grid は 1 以上の数で書く`);
+      } else if (o.kind === "curve") {
+        if (need("fn", "t")) {
+          if (!Array.isArray(o.fn) || o.fn.length !== 3) E(`${where}: ${w} の fn は [x(t), y(t), z(t)] で書く`);
+          else o.fn.forEach((x, i) => expr(x, `${w} の fn[${i}]`, ["t"]));
+          range(o.t, `${w} の t`);
+        }
+      } else if (o.kind === "plate") {
+        // 板: figure = figures の図の id か、部品と同じ宣言（type を持つオブジェクト）。origin = 左上の角、size = [幅, 高さ]、tilt = 上辺を軸に手前へ倒す角度（度）
+        if (need("figure", "origin", "size")) {
+          point(o.origin, `${w} の origin`);
+          if (!Array.isArray(o.size) || o.size.length !== 2) E(`${where}: ${w} の size は [幅, 高さ]（ワールドの単位。数か式）で書く（今は ${JSON.stringify(o.size)}）`);
+          else o.size.forEach((x, i) => expr(x, `${w} の size[${i}]`));
+          const fg = o.figure;
+          if (typeof fg === "string") {
+            if (!figures || !Object.prototype.hasOwnProperty.call(figures, fg)) E(`${where}: ${w} の figure「${fg}」が figures にない`);
+            else if (figures[fg] && figures[fg].type === "space") E(`${where}: ${w} の figure に space は置けない（板の中は 2D の図）`);
+          } else if (!fg || typeof fg !== "object" || Array.isArray(fg) || fg.type == null) E(`${where}: ${w} の figure は figures の図の id か、部品と同じ宣言（type を持つオブジェクト）で書く`);
+          else if (fg.type === "space") E(`${where}: ${w} の figure に space は置けない（板の中は 2D の図）`);
+        }
+        if (o.tilt != null) expr(o.tilt, `${w} の tilt`);
+        // fill = 板の面の色（色の名前）、label = 板の上の左に描く名前、labelWidth = 名前の帯の幅（ワールドの単位。省くと名前の幅から決める）
+        if (o.fill != null && (typeof o.fill !== "string" || !o.fill)) E(`${where}: ${w} の fill は色の名前（文字列）で書く（今は ${JSON.stringify(o.fill)}）`);
+        if (o.label != null && typeof o.label !== "string") E(`${where}: ${w} の label は文字列で書く（今は ${JSON.stringify(o.label)}）`);
+        if (o.labelWidth != null && !(typeof o.labelWidth === "number" && o.labelWidth > 0)) E(`${where}: ${w} の labelWidth は正の数（ワールドの単位）で書く`);
+      }
+      if (o.opacity != null && !(typeof o.opacity === "number" && o.opacity >= 0 && o.opacity <= 1)) E(`${where}: ${w} の opacity は 0〜1 の数で書く`);
+    }
+  }
 
   UZ.validate = function (sb) {
     const errors = [], warnings = [];
@@ -31,8 +114,14 @@
         if (h) need(what, `行「${h[0]}」`);
       }
     }
-    // /5 の機能（最上位の values・動作の set・custom の部品）は、/4 以前の format では使えない。種類ごとに 1 件ずつ出す
-    if (UZ.FORMATS.includes(sb.format) && sb.format !== "ugoku-zukai/5") {
+    // /5 の機能（最上位の values・動作の set・custom の部品）は、/4 以前の format では使えない（/5 以上で使える）。種類ごとに 1 件ずつ出す
+    // /6 の機能を使っているときは、必要な format のうち一番高い /6 の誤りだけを出す（「/5 と書く」と「/6 と書く」を両方出さない）
+    const figs6 = [...Object.entries(sb.figures && typeof sb.figures === "object" ? sb.figures : {}).map(([fid, f]) => [`図「${fid}」`, f]),
+      ...Object.entries(sb.slides && typeof sb.slides === "object" ? sb.slides : {}).flatMap(([sid, sl]) => sl && Array.isArray(sl.parts) ? sl.parts.map(p => [`スライド「${sid}」`, p]) : [])];
+    const space6 = figs6.find(([, f]) => f && typeof f === "object" && f.type === "space");
+    const inside6 = figs6.find(([, f]) => f && typeof f === "object" && f.type === "graph" && Array.isArray(f.nodes) && f.nodes.some(n => n && n.inside != null));
+    const uses6 = !!(space6 || inside6);
+    if (UZ.FORMATS.includes(sb.format) && !["ugoku-zukai/5", "ugoku-zukai/6"].includes(sb.format) && !uses6) {
       const need = (what, where) => E(`${where}で ${what} を使っている。使うには format を "ugoku-zukai/5" と書く（今は ${JSON.stringify(sb.format)}）`);
       if (sb.values != null) need("values", "台本の最上位");
       const h = allActs.find(([, a]) => a && typeof a === "object" && Object.prototype.hasOwnProperty.call(a, "set"));
@@ -41,6 +130,12 @@
         ...Object.entries(sb.slides && typeof sb.slides === "object" ? sb.slides : {}).flatMap(([sid, sl]) => sl && Array.isArray(sl.parts) ? sl.parts.map(p => [`スライド「${sid}」`, p]) : [])];
       const c = figs.find(([, f]) => f && typeof f === "object" && f.type === "custom");
       if (c) need("custom の部品", c[0]);
+    }
+    // /6 の機能（space の部品）は、/5 以前の format では使えない。種類ごとに 1 件ずつ出す
+    if (UZ.FORMATS.includes(sb.format) && sb.format !== "ugoku-zukai/6") {
+      const need = (what, where) => E(`${where}で ${what} を使っている。使うには format を "ugoku-zukai/6" と書く（今は ${JSON.stringify(sb.format)}）`);
+      if (space6) need("space の部品", space6[0]);
+      if (inside6) need("inside", inside6[0]);
     }
     // 名前付きの値: { 名前: 数 }
     const values = sb.values == null ? {} : sb.values;
@@ -100,6 +195,7 @@
           if (!e.label) W(`${where}: 辺 ${id} に label がない（何をするかの動詞句を書く）`);
         }
         if (f.direction && !["right", "down"].includes(f.direction)) E(`${where}: direction は right か down`);
+        if (f.order != null && f.order !== "declared") E(`${where}: order は "declared" だけ（同じ段の箱を宣言の順に並べる。省くと ELK が並べる）`);
       }
       if (f.type === "sequence") {
         for (const p of f.participants || []) { addId(p.id, "参加者"); role(p.role, p.id); }
@@ -176,6 +272,7 @@
         const walk = (n, d) => { if (!n || typeof n !== "object") { E(`${where}: ノードがオブジェクトでない`); return; } addId(n.id, "ノード"); role(n.role, n.id); if (!n.label) E(`${where}: ノード ${n.id} に label がない`); if (d > 4) W(`${where}: 5 段より深い（読み切れない）`); for (const c of n.children || []) walk(c, d + 1); };
         walk(f.root, 0);
         if (f.direction && !["right", "down"].includes(f.direction)) E(`${where}: direction は right か down`);
+        if (f.order != null && f.order !== "declared") E(`${where}: order は "declared" だけ（同じ段の箱を宣言の順に並べる。省くと ELK が並べる）`);
       }
       if (f.type === "chart") {
         const nc = (f.categories || []).length;
@@ -257,11 +354,91 @@
           E(`${where}: custom「${f.draw}」の値が文字列でない（関数は "({ g, v, geo, w, h }) => { … }" のように文字列で書く）`);
         addId("draw", "描き場");
       }
+      if (f.type === "space") {
+        addId("draw", "描き場");
+        validateSpace(f, where, E, addId, Object.keys(sb.values && typeof sb.values === "object" ? sb.values : {}), sb.figures);
+      }
       if (f.type === "canvas") {
         for (const s of f.shapes || []) {
           addId(s.id, "図形");
           if (!["rect", "ellipse", "line", "arrow", "text"].includes(s.shape)) E(`${where}: 図形 ${s.id} の shape は rect / ellipse / line / arrow / text`);
         }
+      }
+    }
+
+    // 板（plate）の図は、その space の子の図になり、板の id で引く。板の id は台本全体で 1 つにする。
+    // 板に置いた図は、同じスライドに部品としては置けない（同じ図を 2 か所に描くことになる）
+    {
+      const plates = UZ.platesOf(sb), seenP = new Set();
+      for (const { space, plate } of plates) {
+        const pid = plate.id;
+        if (typeof pid !== "string") continue;
+        if (seenP.has(pid)) E(`図「${space}」: 板の id「${pid}」が、別の space の板と重なる（板の id は台本全体で 1 つにする）`);
+        else W(`板「${pid}」: 板（plate）は保留中で、見せ方の一覧にない（起こすほど板の文字がつぶれ、浅く起こすと層が重なって 1 枚の帯に見える。層の関係は、平らなスライドの段組みや graph で見せる）`);
+        seenP.add(pid);
+        const inline = plate.figure && typeof plate.figure === "object" && FIGS[pid] === plate.figure;
+        if (Object.prototype.hasOwnProperty.call(FIGS, pid) && !inline) E(`図「${space}」: 板の id「${pid}」が、図か部品の id と重なる（板の中の要素は「板の id/要素の id」で指すので、別の id にする）`);
+      }
+      for (const [sid, sl] of Object.entries(sb.slides && typeof sb.slides === "object" ? sb.slides : {})) {
+        const ids = new Set((sl && Array.isArray(sl.parts) ? sl.parts : []).map(UZ.partId).filter(x => x != null));
+        for (const { space, plate } of plates) if (ids.has(space) && typeof plate.figure === "string" && ids.has(plate.figure))
+          E(`スライド「${sid}」: 板「${plate.id}」の図「${plate.figure}」は、同じスライドに部品としても置いている（板に置く図は、部品としては置かない）`);
+      }
+    }
+
+    // 意味のズーム（inside）: graph の箱にだけ書ける。中身の図は figures か部品の図。1 つの図を中身にできる箱は 1 つ。
+    // 入れ子は 3 段まで、循環しない。中身の図は部品や場面の図としては置かない（箱の中に描く）。板に置いた図のノードには効かない
+    {
+      const isObj = o => o && typeof o === "object" && !Array.isArray(o);
+      for (const [fid, f] of Object.entries(FIGS)) {
+        if (!isObj(f)) continue;
+        if (f.type === "venn") continue;   // venn の集合の inside は別の意味（集合の包含）。venn の検査が見る
+        if (f.type !== "graph") {
+          // graph 以外の図の項目（items・rows など、配列の中のオブジェクト）に inside があれば誤り
+          const hit = Object.values(f).some(v => Array.isArray(v) && v.some(o => isObj(o) && Object.prototype.hasOwnProperty.call(o, "inside")));
+          if (hit) E(`図「${fid}」: inside は graph のノードにだけ書ける（${f.type} の項目には書けない）`);
+          continue;
+        }
+        for (const n of Array.isArray(f.nodes) ? f.nodes : []) {
+          if (!isObj(n) || n.inside == null) continue;
+          if (typeof n.inside !== "string" || !Object.prototype.hasOwnProperty.call(FIGS, n.inside)) E(`図「${fid}」: ノード ${n.id} の inside「${n.inside}」が図にない（figures の図の id を書く）`);
+          else if (["space", "custom", "title", "frame", "toc"].includes(FIGS[n.inside] && FIGS[n.inside].type)) E(`図「${fid}」: ノード ${n.id} の inside「${n.inside}」は ${FIGS[n.inside].type}。箱の中身にできない`);
+        }
+      }
+      const ins = UZ.insidesOf(sb).filter(x => Object.prototype.hasOwnProperty.call(FIGS, x.inside));
+      // Morph でつながる graph の組（同じ系列の図は 1 枚のキャンバスに組むので、同じ id の箱は同じ形）
+      const root = {};
+      const find = a => (root[a] == null || root[a] === a ? a : (root[a] = find(root[a])));
+      for (const sl of Object.values(sb.slides && typeof sb.slides === "object" ? sb.slides : {})) for (const p of (sl && Array.isArray(sl.parts) ? sl.parts : [])) {
+        const id = UZ.partId(p);
+        if (p && typeof p.morph === "string" && FIGS[id] && FIGS[p.morph] && FIGS[id].type === "graph" && FIGS[p.morph].type === "graph") root[find(id)] = find(p.morph);
+      }
+      const owner = {};
+      for (const x of ins) {
+        const o = owner[x.inside];
+        if (o && o.node === x.node && find(o.fig) === find(x.fig)) continue;   // 系列の図の同じ箱
+        if (o) E(`図「${x.fig}」: 中身の図「${x.inside}」を、別の箱（${o.fig}/${o.node}）の inside にも使っている（中身の図は 1 つの箱にだけ置く。Morph でつながる系列の同じ id の箱どうしなら書ける）`);
+        else owner[x.inside] = x;
+      }
+      // 循環と深さ: 中身の図から親をたどる
+      const bad = new Set();
+      for (const x of ins) {
+        const seen = [x.inside];
+        let cur = x.fig, depth = 1;
+        while (owner[cur] && !seen.includes(cur)) { seen.push(cur); cur = owner[cur].fig; depth++; }
+        if (owner[cur] && seen.includes(cur)) { if (!bad.has("cycle")) E(`図「${x.fig}」: inside が循環している（${seen.join(" → ")}）`); bad.add("cycle"); }
+        else if (depth > 3 && !bad.has("depth")) { E(`図「${x.inside}」: inside の入れ子が 3 段を超える（${depth} 段。${[...seen].reverse().join(" → ")}）`); bad.add("depth"); }
+      }
+      // 中身の図を、部品や場面の図としても置く
+      const used = new Set();
+      for (const sl of Object.values(sb.slides && typeof sb.slides === "object" ? sb.slides : {})) for (const p of (sl && Array.isArray(sl.parts) ? sl.parts : [])) used.add(UZ.partId(p));
+      for (const sc of sb.scenes) if (sc && sc.slide == null) for (const f of Array.isArray(sc.figure) ? sc.figure : [sc.figure]) used.add(f);
+      for (const { plate } of UZ.platesOf(sb)) if (typeof plate.figure === "string") used.add(plate.figure);
+      for (const id of Object.keys(owner)) if (used.has(id)) E(`中身の図「${id}」は、部品や場面の図としては置けない（板の図も同じ。箱「${owner[id].fig}/${owner[id].node}」に寄ると現れる）`);
+      // 板に置いた図
+      for (const { plate } of UZ.platesOf(sb)) {
+        const pf = typeof plate.figure === "string" ? FIGS[plate.figure] : plate.figure;
+        if (isObj(pf) && pf.type === "graph" && Array.isArray(pf.nodes) && pf.nodes.some(n => isObj(n) && n.inside != null)) E(`板「${plate.id}」: 板に置いた図のノードには inside が効かない（inside は普通のスライドの graph の箱だけ）`);
       }
     }
 

@@ -20,7 +20,7 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 PLAYER = os.path.join(os.path.dirname(HERE), "player")
-CORE = ["util.js", "figures.js", "figures2.js", "figures3.js", "validate.js", "slides.js", "geo.js", "engine.js", "check.js", "view_svg.js"]
+CORE = ["util.js", "figures.js", "figures2.js", "figures3.js", "validate.js", "slides.js", "geo.js", "space.js", "engine.js", "check.js", "view_svg.js"]
 
 
 def load_theme(name):
@@ -130,15 +130,25 @@ def chapter_titles(storyboard_path):
 PAGE_LIMIT = 15 * 1024 * 1024   # Artifact の 1 ページの上限（16MB）より少し手前で止める
 
 
+def font_css_url(theme):
+    """テーマの書体の CSS の URL（なければ None）"""
+    return (theme.get("font") or {}).get("css") or None
+
+
+def font_link(theme):
+    """テーマの書体を読み込む <link>（なければ空）"""
+    url = font_css_url(theme)
+    return f'<link rel="stylesheet" href="{url}">' if url else ""
+
+
 def build(storyboard, theme, timeline=None, audio_b64=None, artifact=False, assets=None, chapters=None):
     tpl = open(os.path.join(PLAYER, "template.html"), encoding="utf-8").read()
     title = storyboard.get("title", "動く図解")
-    font_link = f'<link rel="stylesheet" href="{theme["font"]["css"]}">' if theme.get("font", {}).get("css") else ""
     data = {"storyboard": storyboard, "theme": theme, "timeline": timeline, "audio": audio_b64, "assets": assets or {},
             "artifact": bool(artifact),   # Artifact 用の断片か（再生ページが「直したい箇所を指定する」を出すかどうかの判断に使う）
             "chapters": chapters or {}}   # 構成メモの章の id → 題（チャプター一覧の題）
     esc = title.replace("&", "&amp;").replace("<", "&lt;").replace('"', "&quot;")
-    html = tpl.replace("__TITLE__", esc).replace("__FONT_LINK__", font_link)
+    html = tpl.replace("__TITLE__", esc).replace("__FONT_LINK__", font_link(theme))
     # 置換文字列にバックスラッシュが含まれても壊れないよう、関数で置き換える
     elk, math, core = engine_scripts()
     html = html.replace("/*UZ:ELK*/", "\n" + elk + "\n")

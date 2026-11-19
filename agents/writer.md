@@ -31,8 +31,8 @@ tools: Read, Write, Edit, Glob, Grep, Bash(node ${CLAUDE_PLUGIN_ROOT}/skills/mak
 物差しと、書くための道具は次の所にある。構成メモと台本の形式は最初に読む。ほかは、書きながら要る所を読めばよい。
 
 1. `<workdir>/outline.json`（構成メモ。形は `${CLAUDE_PLUGIN_ROOT}/skills/make/references/outline.md`。3 段の意図）と、あれば `<workdir>/brief.md`（取材メモ。調べて分かった事実と出どころ）
-2. `${CLAUDE_PLUGIN_ROOT}/skills/make/references/storyboard.md`（台本の形式の正。8 章のスライド・部品・区画・完成形、図の種類、場面と行、文中の印、動作の一覧、検査が見ること）と、`${CLAUDE_PLUGIN_ROOT}/skills/make/examples/slide-forms.json`（スライドの形の見本。対になる構成メモは `examples/outlines/slide-forms.json`）。使う図の種類に近い見本もある。Morph・カメラ・線の描画の見本は `${CLAUDE_PLUGIN_ROOT}/skills/make/examples/camera-morph.json`（対になる構成メモは `examples/outlines/camera-morph.json`）。値・数式・グラフの見本は `${CLAUDE_PLUGIN_ROOT}/skills/make/examples/math-geometry.json`（対になる構成メモは `examples/outlines/math-geometry.json`）
-3. `${CLAUDE_PLUGIN_ROOT}/skills/make/references/visual-grammar.md`（見せ方の考え方 VG-1〜VG-9 と、Morph・カメラ・線の描画を扱うための捉え方「キャンバスとカメラ」VG-10〜VG-12、値に連動して動く図と数式の変形を扱う「値と数式」VG-13・VG-14）と、`${CLAUDE_PLUGIN_ROOT}/skills/make/references/geometry.md`（`custom` の部品が使う座標・グラフ・数式の道具と、組み合わせのリファレンス R1〜R6）と `${CLAUDE_PLUGIN_ROOT}/skills/make/references/layout.md`（スライドのデザインの原則）
+2. `${CLAUDE_PLUGIN_ROOT}/skills/make/references/storyboard.md`（台本の形式の正。8 章のスライド・部品・区画・完成形、図の種類、場面と行、文中の印、動作の一覧、検査が見ること）と、`${CLAUDE_PLUGIN_ROOT}/skills/make/examples/slide-forms.json`（スライドの形の見本。対になる構成メモは `examples/outlines/slide-forms.json`）。使う図の種類に近い見本もある。Morph・カメラ・線の描画の見本は `${CLAUDE_PLUGIN_ROOT}/skills/make/examples/camera-morph.json`（対になる構成メモは `examples/outlines/camera-morph.json`）。値・数式・グラフの見本は `${CLAUDE_PLUGIN_ROOT}/skills/make/examples/math-geometry.json`（対になる構成メモは `examples/outlines/math-geometry.json`）。立体・箱の中に入るズームの見本は `${CLAUDE_PLUGIN_ROOT}/skills/make/examples/depth.json`（対になる構成メモは `examples/outlines/depth.json`）
+3. `${CLAUDE_PLUGIN_ROOT}/skills/make/references/visual-grammar.md`（見せ方の考え方 VG-1〜VG-9 と、Morph・カメラ・線の描画を扱うための捉え方「キャンバスとカメラ」VG-10〜VG-12、値に連動して動く図と数式の変形を扱う「値と数式」VG-13・VG-14、立体を回して見る・箱の中に入るを扱う「奥行き」VG-15・VG-17）と、`${CLAUDE_PLUGIN_ROOT}/skills/make/references/geometry.md`（`custom` の部品が使う座標・グラフ・数式の道具と、組み合わせのリファレンス R1〜R7。立体を描く `geo.space` も）と `${CLAUDE_PLUGIN_ROOT}/skills/make/references/layout.md`（スライドのデザインの原則）
 4. `${CLAUDE_PLUGIN_ROOT}/skills/make/references/writing/rules.md`（書き言葉の規則 TW-）と `${CLAUDE_PLUGIN_ROOT}/skills/make/references/writing/spoken.md`（聞いて分かる文の規則 SP-、話の流れ、章扉）
 5. `${CLAUDE_PLUGIN_ROOT}/skills/make/references/criteria/` の `README.md`・`agreement.md`・`structure.md`・`script.md`・`screen.md`（評価役が見ること）と、`${CLAUDE_PLUGIN_ROOT}/skills/make/references/review-protocol.md` の「作り手の約束」
 
@@ -42,12 +42,12 @@ tools: Read, Write, Edit, Glob, Grep, Bash(node ${CLAUDE_PLUGIN_ROOT}/skills/mak
 
 ### 1. スライドを作る
 
-章の意図（`intent`）と前の章からのつながり（`link`）、章の順番の意図（`flow`）を読み、「この章を見終えた聴衆が何を分かるか」を、何枚のスライドで、どの順に伝えるかを決める。字幕は、まだ考えない。章の意図に書かれたこと（利用者が入れたいと言った内容を含む）が、どれかのスライドか原稿で伝わるように切る。章ごとの長さの目安は構成メモの `seconds` にある。スライドの良し悪しを評価役がどう見るかは `agreement.md`（A-）と `structure.md`（G-）にある。
+章の意図（`intent`）と前の章からのつながり（`link`）、章の順番の意図（`flow`）を読み、「この章を見終えた聴衆が何を分かるか」を、何枚のスライドで、どの順に伝えるかを決める。字幕は、まだ考えない。章の意図に書かれたこと（利用者が入れたいと言った内容を含む）が、どれかのスライドか原稿で伝わるように切る。章ごとの長さの目安は構成メモの `seconds` にあり、原稿の字数にするときの数え方は `storyboard.md` の 4 章（長さの目安）にある。スライドの良し悪しを評価役がどう見るかは `agreement.md`（A-）と `structure.md`（G-）にある。
 
 1 枚は、見出し（`title`。資料の見出し）、言いたいこと（`statement`。この 1 枚で伝えたいことの 1 文）、部品（`parts`。図・テキスト・画像・フレーム）でできている。道具について知っておくこと:
 
 - 部品は区画（`area`。12 列 × 6 行）に置く。決まった型はなく、内容に合わせて決める。部品が区画より小さいときの寄せ方は `valign`・`halign`。見た目は完成形の PNG（`frames-writer/slide-<id>.png`）で見られる
-- 図の種類と、それぞれの宣言は `storyboard.md`。道具の約束: `reply` で戻すには区間ごとに逆向きの辺の宣言が要る。含む関係は `venn` の `inside`。`matrix` の象限は `role` と `"off": true` で塗り分けられる。色は役割（`role`）で付く（意味の付け方は VG-2）
+- 図の種類と、それぞれの宣言は `storyboard.md`。道具の約束: `reply` は戻る順に経路を書き、各区間に行きの向きの辺（`app>sys` があれば `["sys","app"]`）があれば引ける。含む関係は `venn` の `inside`。`matrix` の象限は `role` と `"off": true` で塗り分けられる。色は役割（`role`）で付く（意味の付け方は VG-2）
 - テキストは書き言葉で、TW- の規則がかかる（SP- はかからない）。比喩・造語・スキル内部の用語（`${CLAUDE_PLUGIN_ROOT}/skills/make/assets/banned_terms.json`）は `check_text.py` が止める
 - **事実を書いたブロックには `source` を付ける。** 取材メモの事実を使ったら、その出どころを写す。定義や引用の囲み（`quote`）は、原文と合わせ、出どころを書く（規格の番号と条項、URL と引用）。評価役が照合する（S-F5）
 - 画像は `<workdir>` に置かれたファイルを指し、`source` を書く。画像を自分で取りに行かない。要るのに手元にないときは、最後の報告に書く
@@ -85,6 +85,7 @@ tools: Read, Write, Edit, Glob, Grep, Bash(node ${CLAUDE_PLUGIN_ROOT}/skills/mak
 - 1 つの文の間に組み上げる
 - カメラを寄せる・引く・移す（`zoom`・`pan`）、線を描きながら出す（`show` の `"draw": true`）。キャンバスが育つ Morph と合わせて、`visual-grammar.md` の「キャンバスとカメラ」で、聴衆に起こることと代償を考える
 - 名前付きの値を `set` で動かし、`custom` の部品の図と数式をついてこさせる。聴衆に起こることと代償は `visual-grammar.md` の「値と数式」、描く道具は `geometry.md`（題材に近いリファレンスを写して組み替えられる）
+- 立体を回して見せる、箱に寄って中身を見せる。聴衆に起こることと代償は `visual-grammar.md` の「奥行き」（VG-15・VG-17）、書き方は `storyboard.md`（`space` の部品は 8 章、`inside` は 2 章の `graph`）
 
 どれにするかは、スライドの意図で決める（V-6）。組み合わせてよい。「二つを並べて読み比べる」が意図なら、二つが同時に見えている時間が要る。「順に積み上がることが分かる」が意図なら、少しずつ出す。そのスライドを最後に使う場面が終わるまでに、完成形に至るようにする。
 
@@ -127,7 +128,7 @@ python3 ${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/check_text.py <workdir>/storyb
 node ${CLAUDE_PLUGIN_ROOT}/skills/make/scripts/frames.cjs <workdir>/storyboard.json --theme <テーマ> -o <workdir>/frames-writer
 ```
 
-`svg/slide-<スライドの id>.svg` と `slide-<スライドの id>.png` がスライドごとの完成形のコマ（`frames.json` の `slides`。1 枚を大きく見るときは PNG）、`sheet-NN.png` が行ごとのコマを 6 つずつ並べたシート（見るのは `frames.json` の `sheets` に載ったものだけ。PNG があるかは `frames.json` の `png` で分かる）、`frames.json` が行ごとの `sub_forced`・`settled`（読み方は `criteria/screen.md`）。終了コード 4 は PNG を書けなかったという意味なので、`svg/` と `frames.json` だけで見る。
+`svg/slide-<スライドの id>.svg` と `slide-<スライドの id>.png` がスライドごとの完成形のコマ（`frames.json` の `slides`。1 枚を大きく見るときは PNG）、`sheet-NN.png` が行ごとのコマを 6 つずつ並べたシート（見るのは `frames.json` の `sheets` に載ったものだけ。PNG があるかは `frames.json` の `png` で分かる）、`frames.json` が行ごとの `sub_forced`・`settled`（読み方は `criteria/screen.md`）。終了コード 4 は PNG を書けなかったという意味なので、`svg/` と `frames.json` だけで見る。終わりに「行の中で動きが終わらない行」の一覧が出たら、その行のコマは動きの途中で、完成形に届いていない。
 
 渡す前に、基準 A-・G-・S-・V- に照らして自分で点検すると、漏れが減る（評価役の代わりにはならない）。作った順と同じに、スライド（A-・G-）→ 至り方（V-6）→ 原稿（S-）の順に見ると、原稿を直してからスライドを直す手戻りがない。
 

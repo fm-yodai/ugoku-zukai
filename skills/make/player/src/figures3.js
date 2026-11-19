@@ -121,6 +121,19 @@
     },
   };
 
+  // ======== 立体（space）========
+  // custom と同じく区画いっぱいの描き場（draw）を 1 つ持ち、毎コマ区画の大きさで描き直す（space.js の UZ.spaceRender）。
+  // 要素（items の 1 件）ごとに項目 s3 を持ち、動作の対象にする（出し方・薄くする・強調はこの項目の状態で決まる）。
+  // 要素の外接矩形は投影が値で動くので決めず、区画全体にする。軸（$axes）は描き場の項目の状態に従う
+  FIG.space = {
+    async layout(f, S, ctx) {
+      const W = ctx.area.w, H = ctx.area.h, bbox = () => ({ x: 0, y: 0, w: W, h: H });
+      const items = [{ id: "draw", kind: "space", x: 0, y: 0, w: W, h: H, bbox: bbox() }];
+      for (const o of f.items) items.push({ id: o.id, kind: "s3", el: o, x: 0, y: 0, w: W, h: H, bbox: bbox() });
+      return { w: W, h: H, items, order: items.map(it => it.id), maxScale: 1 };
+    },
+  };
+
   // ======== 画像（image）========
   // 画像の大きさ（ctx.assets[src] の w・h）をそのまま図の大きさにし、区画に収まる最大まで伸び縮みさせる
   FIG.image = {

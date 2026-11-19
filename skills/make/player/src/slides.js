@@ -30,7 +30,7 @@
   const partId = p => (p && (p.figure != null ? p.figure : p.id));
   UZ.partId = partId;
 
-  // 図の表: figures に、スライドの中で宣言した部品（id と type を持つもの）を足す
+  // 図の表: figures に、スライドの中で宣言した部品（id と type を持つもの）と、space の板（plate）にその場で宣言した図（板の id で引く）を足す
   const figCache = new WeakMap();
   UZ.figuresOf = function (sb) {
     let m = figCache.get(sb);
@@ -39,8 +39,37 @@
     for (const sl of Object.values(sb.slides || {})) for (const p of asList(sl && sl.parts)) {
       if (p && p.figure == null && p.id != null && p.type != null && !Object.prototype.hasOwnProperty.call(m, p.id)) m[p.id] = p;
     }
+    for (const { plate } of platesIn(m)) {
+      const f = plate.figure;
+      if (f && typeof f === "object" && !Array.isArray(f) && typeof plate.id === "string" && !Object.prototype.hasOwnProperty.call(m, plate.id)) m[plate.id] = f;
+    }
     figCache.set(sb, m);
     return m;
+  };
+  // space の部品の板（plate）の列 [{ space: 部品の id, plate: 板の宣言 }]。板の図は、その space の子の図になる（engine.js）
+  function platesIn(figs) {
+    const out = [];
+    for (const [fid, f] of Object.entries(figs)) if (f && typeof f === "object" && f.type === "space" && Array.isArray(f.items))
+      for (const o of f.items) if (o && typeof o === "object" && o.kind === "plate") out.push({ space: fid, plate: o });
+    return out;
+  }
+  UZ.platesOf = sb => platesIn(UZ.figuresOf(sb));
+  // 子の図の宣言の列 [{ id: 子の図の id, parent: { fig: 親の図の id, kind, item: 親の中の要素の id }, spec: 図の宣言 }]。
+  // 子の図は、親の部品が自分の描き場に描く図（engine.js が場面に加え、view_svg.js が親の描画の中で描く）。
+  // space の板（kind "plate"。子の図の id は板の id）と、graph の箱の中身（kind "inside"。子の図の id は中身の図の id）
+  UZ.childDecls = function (sb) {
+    const FIGS = UZ.figuresOf(sb);
+    const out = UZ.platesOf(sb).map(({ space, plate }) => ({ id: plate.id, parent: { fig: space, kind: "plate", item: plate.id },
+      spec: typeof plate.figure === "string" ? FIGS[plate.figure] : FIGS[plate.id] }));
+    for (const { fig, node, inside } of UZ.insidesOf(sb)) if (FIGS[inside]) out.push({ id: inside, parent: { fig, kind: "inside", item: node }, spec: FIGS[inside] });
+    return out;
+  };
+  // graph の箱の inside の列 [{ fig: graph の図の id, node: 箱の id, inside: 中身の図の id }]
+  UZ.insidesOf = function (sb) {
+    const out = [];
+    for (const [fid, f] of Object.entries(UZ.figuresOf(sb))) if (f && f.type === "graph" && Array.isArray(f.nodes))
+      for (const n of f.nodes) if (n && typeof n.inside === "string") out.push({ fig: fid, node: n.id, inside: n.inside });
+    return out;
   };
 
   // 場面の図の列と区画。figure を指す場面は今までと同じ（図 1 つは全面、2 つは左右）
@@ -57,7 +86,9 @@
     const sl = sb.slides[sc.slide];
     const statement = UZ.statementLines(sl.statement).lines;
     const body = UZ.slideBody(statement.length);
-    const parts = sl.parts.map(p => ({ id: partId(p), transient: !!p.transient, frame: FIGS[partId(p)].type === "frame", area: p.area }));
+    const parts = sl.parts.map(p => ({ id: partId(p), transient: !!p.transient, frame: FIGS[partId(p)].type === "frame", area: p.area,
+      // 部品に書いた fit・valign・halign は、図の宣言の値より優先する
+      over: Object.fromEntries(["fit", "valign", "halign"].filter(k => p[k] != null).map(k => [k, p[k]])) }));
     // フレームの区画の中に入る部品は、枠の内側に余白を取る（枠に題があれば、その下から）
     const frames = parts.filter(p => p.frame);
     const within = (a, b) => !a || !b ? !b : a.col[0] >= b.col[0] && a.col[1] <= b.col[1] && a.row[0] >= b.row[0] && a.row[1] <= b.row[1];

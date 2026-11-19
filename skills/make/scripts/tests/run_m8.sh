@@ -46,7 +46,6 @@ for id in G-D20 G-D21; do
 done
 grep -q 'M8' $c/structure.md && ng "structure.md に内部の語「M8」が残っている"
 for w in 'ugoku-zukai/5' '"values"' '"set"' '"type": "custom"'; do grep -qF -- "$w" references/storyboard.md || ng "storyboard.md に $w がない"; done
-grep -q '^# 台本の形式（ugoku-zukai/5）' references/storyboard.md || ng "storyboard.md の題が ugoku-zukai/5 でない"
 grep -q 'math-geometry.json' $A/writer.md || ng "writer.md に見本 math-geometry.json がない"
 grep -q '^## 数学動画調のテーマ（kuro）' references/themes.md || ng "themes.md に kuro の節がない"
 grep -q '"math-geometry"' ../../tools/build_gallery.py || ng "見本帳（build_gallery.py）に math-geometry がない"

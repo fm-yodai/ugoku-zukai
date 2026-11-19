@@ -95,13 +95,15 @@
       this.figLayer = el("g", null, svg);
       this.figG = {};
       for (const F of Object.values(M.figs)) this.buildFig(F);
-      this.capG = el("g", null, svg);
+      this.capWrap = el("g", null, svg);
+      this.capG = el("g", null, this.capWrap);
       this.capEls = {};
       for (const sc of M.scenes) for (const c of sc.captions) {
         const k = sc.id + c.fig;
         this.capEls[k] = this.text(this.capG, [c.text], c.x, c.y, 21, { weight: 500, color: S.muted });
       }
-      this.customG = el("g", null, svg);
+      this.customWrap = el("g", null, svg);
+      this.customG = el("g", null, this.customWrap);
       this.customs = (M.customs || []);
       // 右上の札
       this.badge = el("g", null, svg);
@@ -151,7 +153,10 @@
     }
 
     buildFig(F) {
-      const S = F.dark ? (this.SD || (this.SD = UZ.darkStyleOf(this.S))) : this.S, g = el("g", null, this.figLayer);   // 暗い地のスライドで組んだ部品は、暗い地の色
+      // 暗い地のスライドで組んだ部品は、暗い地の色。子の図（板の図）の g は層に置かず、親の space が描くときに自分の描き場へ入れる。
+      // inside の中身は普通の図と同じ層に置く（親より後に組むので、親の箱の上に重なる）
+      const plateKid = F.parent && F.parent.kind === "plate";
+      const S = F.dark ? (this.SD || (this.SD = UZ.darkStyleOf(this.S))) : this.S, g = plateKid ? el("g", { "data-plate": F.id }) : el("g", F.parent ? { "data-inside": F.id } : null, this.figLayer);
       const L = { back: el("g", null, g), edge: el("g", null, g), box: el("g", null, g), fx: el("g", null, g) };
       this.figG[F.id] = g;
       const glow = this.M.theme.shape.glow, shadow = this.M.theme.shape.shadow;
@@ -161,10 +166,18 @@
           E.g = el("g", null, L.box);
           // 点がいる箱の強調（trace）: 外側に、点の色の薄い輪（四角と楕円。ひし形などは枠だけ）
           if (it.dotAt && !["diamond", "poly", "store"].includes(it.shape)) {
-            E.hereR = it.shape === "ellipse" ? el("ellipse", { cx: it.x + it.w / 2, cy: it.y + it.h / 2, rx: it.w / 2 + 6, ry: it.h / 2 + 6, fill: "none", "stroke-width": 5, opacity: 0 }, E.g)
-              : el("rect", { x: it.x - 6, y: it.y - 6, width: it.w + 12, height: it.h + 12, rx: it.r + 6, fill: "none", "stroke-width": 5, opacity: 0 }, E.g);
+            E.hereR = it.shape === "ellipse" ? el("ellipse", { cx: it.x + it.w / 2, cy: it.y + it.h / 2, rx: it.w / 2 + 6, ry: it.h / 2 + 6, fill: "none", "stroke-width": 5 }, E.g)
+              : el("rect", { x: it.x - 6, y: it.y - 6, width: it.w + 12, height: it.h + 12, rx: it.r + 6, fill: "none", "stroke-width": 5 }, E.g);
+            // 不透明度は style で持つ（0 のとき SVG の書き出しから省かれる。属性の opacity="0" を深く寄せた座標で残すと、resvg が止まることがある）
+            E.hereR.style.opacity = 0;
           }
           const sw = S.stroke;
+          // 中身（inside）のある箱: 寄る前は、箱の後ろにもう 1 枚の縁を重ねて「中がある」とだけ示す（縮めた中身の文字は描かない）
+          if (it.inside && !["diamond", "poly", "store"].includes(it.shape)) {
+            const o = 5;
+            E.stack = it.shape === "ellipse" ? el("ellipse", { cx: it.x + it.w / 2 + o, cy: it.y + it.h / 2 + o, rx: it.w / 2, ry: it.h / 2, fill: S.bg, stroke: it.stroke, "stroke-width": 1.2 }, E.g)
+              : el("rect", { x: it.x + o, y: it.y + o, width: it.w, height: it.h, rx: it.r, fill: S.bg, stroke: it.stroke, "stroke-width": 1.2 }, E.g);
+          }
           const mk = (fill, stroke, extra) => {
             if (it.shape === "diamond") return el("path", { d: `M${it.x + it.w / 2},${it.y} L${it.x + it.w},${it.y + it.h / 2} L${it.x + it.w / 2},${it.y + it.h} L${it.x},${it.y + it.h / 2} Z`, fill, stroke, "stroke-width": sw, "stroke-linejoin": "round", ...extra }, E.g);
             if (it.shape === "poly") return el("path", { d: ptsD(it.poly) + "Z", fill, stroke, "stroke-width": sw, "stroke-linejoin": "round", ...extra }, E.g);
@@ -222,7 +235,7 @@
           E.texts = (it.texts || []).map(T => this.textSpec(E.g, T));
         } else if (it.kind === "band") {
           E.g = el("g", null, L.back);
-          el("rect", { x: it.x, y: it.y, width: it.w, height: it.h, rx: it.r, fill: C.rgba(S.ink, 0.03), stroke: S.line, "stroke-width": 1.2 }, E.g);
+          E.bandR = el("rect", { x: it.x, y: it.y, width: it.w, height: it.h, rx: it.r, fill: C.rgba(S.ink, 0.03), stroke: S.line, "stroke-width": 1.2 }, E.g);
           E.texts = (it.texts || []).map(T => this.textSpec(E.g, T));
         } else if (it.kind === "frame") {
           E.g = el("g", null, L.back);
@@ -236,6 +249,12 @@
           E.S = S;
           E.geo = UZ.makeGeo(el, S);   // 部品ごとに 1 つ（地の色ごとの S を持つ）。geo.errors は描くたびに空にする
           try { E.fn = new Function("return (" + this.M.sb.custom[it.fn] + ")")(); } catch (e) { E.fn = null; console.error("custom の読み込みに失敗", it.fn, e); }
+        } else if (it.kind === "space") {
+          // 立体の部品: 描き場を毎コマ空にして UZ.spaceRender で描く。要素（s3）ごとの見え方は、描くときに各要素の状態から作る
+          E.g = el("g", null, L.box);
+          E.inner = el("g", null, E.g);
+          E.S = S; E.F = F;
+          E.kids = UZ.childFigs(this.M, F.id);
         } else if (it.kind === "mark") {
           E.g = el("g", null, L.fx);
           E.bgc = el("circle", { cx: 0, cy: 0, r: 15, fill: S.bg, stroke: S.good, "stroke-width": 2.4 }, E.g);
@@ -301,16 +320,36 @@
       const cam = fr.camera, c = cam && cam.on ? cam.clip : null;
       const cid = c ? `uz-body-${[c.x, c.y, c.w, c.h].map(v => Math.round(v * 10) / 10).join("-").replace(/\./g, "_")}` : "";
       if (c && !this.clips[cid]) this.clips[cid] = el("rect", { x: c.x, y: c.y, width: c.w, height: c.h }, el("clipPath", { id: cid }, this.defs));
-      if (this._clip !== cid) { this._clip = cid; if (cid) this.figLayer.setAttribute("clip-path", `url(#${cid})`); else this.figLayer.removeAttribute("clip-path"); }
+      if (this._clip !== cid) { this._clip = cid; for (const g of [this.figLayer, this.capWrap, this.customWrap]) { if (cid) g.setAttribute("clip-path", `url(#${cid})`); else g.removeAttribute("clip-path"); } }
+      // 図の題と custom の動作の描画（図だけの場面）も、図と同じカメラで動かす（clip は外側の層、transform は内側の g に掛ける。clip を transform の g に掛けると clip も動く）
+      const ct = cam && cam.on ? `translate(${cam.tx.toFixed(2)},${cam.ty.toFixed(2)}) scale(${cam.s.toFixed(4)})` : "";
+      if (this._camTf !== ct) { this._camTf = ct; for (const g of [this.capG, this.customG]) { if (ct) g.setAttribute("transform", ct); else g.removeAttribute("transform"); } }
       for (const [fid, g] of Object.entries(this.figG)) {
         const f = fr.figs[fid];
+        if (f.parent && f.parent.kind === "plate") continue;   // 子の図（板の図）は親の space が描く（親の g の中にあるので、出入りの不透明度も親に掛かる）
         g.style.opacity = f.opacity;
         g.style.display = f.opacity < 0.002 ? "none" : "";
         if (f.place) g.setAttribute("transform", `translate(${f.place.ox.toFixed(2)},${f.place.oy.toFixed(2)}) scale(${f.place.s.toFixed(4)})`);
       }
       for (const [key, E] of Object.entries(this.els)) {
         const it = E.it, s = fr.st[key] || { show: 0, dim: 1, pulse: 0, off: [0, 0] };
-        const show = s.show, blur = s.blur || 0, dim = s.dim * (1 - 0.35 * blur);
+        // 深く寄せている間（倍率 2 を超える）、画面（clip）から遠く外れた要素は描かない（外れた要素の座標が数千 px になり、resvg が止まることがある）。
+        // 経路を描き直している辺（Morph の s.pts）は、外接矩形が今の形と違うので外さない
+        if (E.g && cam && cam.on && cam.s > 2 && c && it.bbox && !s.pts && !["custom", "space", "s3", "dot"].includes(it.kind)) {
+          const fp = fr.figs[it.fig] && fr.figs[it.fig].place;
+          let far = false;
+          if (fp) {
+            const o = s.off || [0, 0], bs = [it.bbox, s.rect, it.label && it.label.bbox].filter(Boolean), m = 200;
+            far = bs.every(b => {
+              const x0 = fp.ox + (b.x + o[0]) * fp.s, y0 = fp.oy + (b.y + o[1]) * fp.s, x1 = x0 + b.w * fp.s, y1 = y0 + b.h * fp.s;
+              return x1 < c.x - m || y1 < c.y - m || x0 > c.x + c.w + m || y0 > c.y + c.h + m;
+            });
+          }
+          const d = far ? "none" : "";
+          if (E._far !== d) { E._far = d; E.g.style.display = d; if (E.label && E.label.parentNode !== E.g) E.label.style.display = d; }
+          if (far) continue;
+        } else if (E._far) { E._far = ""; E.g.style.display = ""; if (E.label && E.label.parentNode !== E.g) E.label.style.display = ""; }
+        const show = s.show, blur = s.blur || 0, dim = s.dim * (1 - 0.35 * blur) * (1 - (s.out || 0));   // out = 箱の中へ入って「外」になった分（engine の insideOut）
         // ぼかし（blur）: 部品ごとのフィルタを、初めてぼかすときに作る。範囲は部品の外枠から座標で決める
         // （外枠の割合で取ると、水平な線は高さ 0 で消える。広く取りすぎると PNG にするのが遅い）
         const bl = blur > 0.02 && E.g && it.bbox ? +(blur * 4).toFixed(2) : 0;
@@ -329,8 +368,8 @@
             for (const g of blurEls) g.setAttribute("filter", `url(#${E.blurId})`);
           } else for (const g of blurEls) g.removeAttribute("filter");
         }
-        // custom の部品は、描き場の大きさが場面ごとに変わるので、ぼかす範囲もそのコマの区画にする
-        const bfo = bl && it.kind === "custom" && E.blurBox && fr.figs[it.fig] && fr.figs[it.fig].place;
+        // custom と space の部品は、描き場の大きさが場面ごとに変わるので、ぼかす範囲もそのコマの区画にする
+        const bfo = bl && (it.kind === "custom" || it.kind === "space") && E.blurBox && fr.figs[it.fig] && fr.figs[it.fig].place;
         if (bfo && bfo.w != null) for (const [k, v] of [["x", -28], ["y", -28], ["width", bfo.w + 56], ["height", bfo.h + 56]]) E.blurBox.setAttribute(k, v.toFixed(1));
         const op = (x) => (x * dim).toFixed(3);
         const off = s.off || [0, 0];
@@ -341,8 +380,11 @@
           E.stroke.style.opacity = op(show > 0 ? 1 : 0);
           const fillO = smooth((show - dr.fill[0]) / dr.fill[1]);
           E.fill.style.opacity = op(fillO); if (E.head) E.head.style.opacity = op(fillO);
-          for (const tx of E.texts) tx.style.opacity = op(smooth((show - dr.text[0]) / dr.text[1]));
-          if (E.label) E.label.style.opacity = op(smooth((show - dr.label[0]) / dr.label[1]));
+          // 中身（inside）が現れるほど、箱の名前と重ねた縁は薄れる（s.inside = 中身の不透明度）
+          const kin = 1 - (s.inside || 0);
+          for (const tx of E.texts) tx.style.opacity = op(smooth((show - dr.text[0]) / dr.text[1]) * kin);
+          if (E.label) E.label.style.opacity = op(smooth((show - dr.label[0]) / dr.label[1]) * kin);
+          if (E.stack) E.stack.style.opacity = op(s.rect ? 0 : fillO * kin);   // 大きさを変えた箱には付いていかないので消す
           if (E.smark) E.smark.style.opacity = op(smooth((show - dr.smark[0]) / dr.smark[1]));
           if (it.count && E.texts[it.count.index]) {
             const c = it.count, v = c.to * ease(clamp((show - 0.3) / 0.7));
@@ -377,7 +419,7 @@
           const here = s.here || 0;
           E.stroke.setAttribute("stroke", here > 0.01 ? C.mix(col, s.hereColor || S.warn, here) : col);
           E.stroke.setAttribute("stroke-width", S.stroke + 1.6 * (s.pulse || 0) + 2.4 * here);
-          if (E.hereR) { E.hereR.setAttribute("stroke", s.hereColor || S.warn); E.hereR.setAttribute("opacity", (0.3 * here).toFixed(3)); }
+          if (E.hereR) { E.hereR.setAttribute("stroke", s.hereColor || S.warn); E.hereR.style.opacity = (0.3 * here).toFixed(3); }
           if (s.text != null && E.texts[0]) this.relabel(E.texts[0], it.texts[0], s); else if (E.texts[0]) this.unlabel(E.texts[0], it.texts[0]);
         } else if (it.kind === "edge") {
           // 経路の書き換え（Morph で両端が動くとき）。矢じりも描き直す
@@ -413,6 +455,9 @@
           if (E.hl) E.hl.setAttribute("opacity", (s.pulse || 0).toFixed(3));
           if (s.text != null && E.texts[0]) this.relabel(E.texts[0], it.texts[0], s); else if (E.texts[0] && this.unlabel(E.texts[0], it.texts[0])) E.texts[0].style.opacity = "";
           if (s.tint && E.texts[0]) E.texts[0].setAttribute("fill", C.mix(it.texts[0].color || S.ink, s.tint, s.tintP));
+          // 文字の大きさ（Morph で区画の大きさが変わるとき）。0.01 刻みで書き換え、終われば元の大きさ
+          const fk = s.fontK != null && s.fontK !== 1 ? Math.round(s.fontK * 100) / 100 : 1;
+          if (E._fk !== fk) { E._fk = fk; (it.texts || []).forEach((T, i) => { if (E.texts[i]) E.texts[i].setAttribute("font-size", +(T.size * fk).toFixed(2)); }); }
         } else if (it.kind === "bar") {
           const g = ease(clamp(show / 0.85));
           if (it.grow === "right") { E.rect.setAttribute("width", Math.max(0.01, it.w * g)); }
@@ -429,6 +474,9 @@
         } else if (it.kind === "rect") {
           E.g.style.opacity = op(smooth(show));
           this.offset(E.g, off);
+          this.areaGeo(E, it, s, [E.bg, E.tintR]);
+          if (E.rule) { const R = s.rect || it; E.rule.setAttribute("d", `M${R.x},${R.y + R.h} H${R.x + R.w}`); }
+          this.relabelAll(E, it, s);
           if (it.fill === "none") E.bg.setAttribute("fill", C.rgba(s.tint || S.accent, 0.16 * Math.max(s.pulse || 0, s.tint ? s.tintP : 0)));
           if (E.tintR) {
             // 塗り替えは、元の面を消しながら新しい面を重ねる。題の色も、塗りに合わせる
@@ -446,11 +494,15 @@
           E.fill.style.opacity = smooth((show - 0.65) / 0.35).toFixed(3);
           for (const tx of E.texts) tx.style.opacity = smooth((show - 0.7) / 0.3).toFixed(3);
           this.offset(E.g, off);
+          this.areaGeo(E, it, s, [E.fill, E.stroke]);
         } else if (it.kind === "band" || it.kind === "frame" || it.kind === "image") {
           if (E.dm) this.dashMask(E, key, it, 1, false);
           if (it.kind === "frame") { E.fill.style.opacity = ""; for (const tx of E.texts) tx.style.opacity = ""; }
           E.g.style.opacity = op(smooth(show));
           this.offset(E.g, off);
+          if (it.kind === "band") this.areaGeo(E, it, s, [E.bandR]);
+          else if (it.kind === "frame") this.areaGeo(E, it, s, [E.fill, E.stroke]);
+          if (it.kind !== "image") this.relabelAll(E, it, s);
         } else if (it.kind === "custom") {
           const o = smooth(show);
           E.g.style.opacity = op(o);
@@ -472,6 +524,49 @@
               while (E.inner.firstChild) E.inner.removeChild(E.inner.firstChild);
               const msg = String(e && e.message || e);
               if (E._err !== msg) { E._err = msg; console.error("custom の部品の描画に失敗", it.key, e); }
+            }
+          }
+        } else if (it.kind === "space") {
+          // 要素ごとの出し方・薄くする・強調は spaceRender の中で掛ける（描き場の g には掛けない。掛けるのはぼかしだけ）
+          while (E.inner.firstChild) E.inner.removeChild(E.inner.firstChild);
+          const fo = fr.figs[it.fig];
+          if (fo && fo.opacity > 0.002) {
+            const states = UZ.plateKidStates(this.M, fr, E.F, UZ.spaceStates(E.F, fr.st));
+            // 板の中の図は、その要素がどれか出ていれば描く（板の要素自身を出していなくても）
+            const kidOn = E.kids.some(k => UZ.childShown(this.M, fr, k));
+            if (kidOn || Object.values(states).some(x => x.show > 0.002)) {
+              const pw = fo.place && fo.place.w != null ? fo.place.w : it.w, ph = fo.place && fo.place.w != null ? fo.place.h : it.h;
+              const v = fr.values || {};
+              // 板: 子の図の g を、奥から塗る順の位置に入れ、図のローカル座標 → 部品の座標の行列を掛ける
+              const plate = (p, g, cam) => {
+                const K = this.M.figs[p.id], kg = this.figG[p.id];
+                if (!K || !kg || !K.parent) return;
+                const m = UZ.childMatrix(K, p.plate, v, cam);
+                if (!m.every(Number.isFinite)) return;
+                const mat = `matrix(${m.slice(0, 4).map(x => x.toFixed(5)).join(",")},${m[4].toFixed(2)},${m[5].toFixed(2)})`;
+                kg.setAttribute("transform", mat);
+                g.appendChild(kg);
+                // 板の名前（label）: 板の面の上、左の帯に、中の図と同じ行列で描く（板と一緒に傾く。正面を向き直さない）
+                const o = p.plate, st = states[p.id];
+                if (o.label != null && String(o.label) !== "" && K.fit && st) {
+                  const op = st.opacity * st.dim;
+                  if (op > 0.002) {
+                    const L = UZ.plateLabelPlace(o, v, K.fit);
+                    const lg = el("g", { "data-s3": `${p.id}:label`, transform: mat }, g);
+                    const t = el("text", { x: L.x.toFixed(2), y: L.y.toFixed(2), "font-size": L.size.toFixed(2), "font-family": E.S.font, "font-weight": 500,
+                      fill: E.S.ink, "text-anchor": "start", "dominant-baseline": "central", opacity: op.toFixed(3) }, lg);
+                    t.textContent = String(o.label);
+                  }
+                }
+              };
+              try {
+                const r = UZ.spaceRender(el, E.inner, E.F.spec, v, pw, ph, states, E.S, E.F.v0, { plate });
+                if (r.errors.length) { const msg = r.errors.join(" / "); if (E._err !== msg) { E._err = msg; console.error("space の部品の数式に誤り", it.key, msg); } }
+              } catch (e) {   // 式の誤りなどは、その部品だけ描かずに知らせる（プレーヤーは止めない。同じ誤りは 1 回だけ出す）
+                while (E.inner.firstChild) E.inner.removeChild(E.inner.firstChild);
+                const msg = String(e && e.message || e);
+                if (E._err !== msg) { E._err = msg; console.error("space の部品の描画に失敗", it.key, e); }
+              }
             }
           }
         } else if (it.kind === "mark") {
@@ -553,6 +648,25 @@
       const want = s.textP < 0.5 ? (s.textFrom != null ? s.textFrom : spec.lines.join("\n")) : s.text;
       if (tEl._cur !== want) { tEl._cur = want; this.setLines(tEl, String(want).split("\n")); }
       tEl.style.opacity = (Math.abs(s.textP - 0.5) * 2).toFixed(3);
+    }
+    // 面（rect・band・frame）の大きさの書き換え（Morph の補間）。文字は面の左上に付いていく。els = 形を書き換える要素
+    areaGeo(E, it, s, els) {
+      const R = s.rect || it, geo = s.rect ? [R.x, R.y, R.w, R.h].map(v => v.toFixed(2)).join(",") : "";
+      if ((E._geo || "") === geo) return;
+      E._geo = geo;
+      for (const e of els) if (e) { e.setAttribute("x", R.x); e.setAttribute("y", R.y); e.setAttribute("width", R.w); e.setAttribute("height", R.h); }
+      const to = s.rect && s.textOff ? `translate(${s.textOff[0].toFixed(2)},${s.textOff[1].toFixed(2)})` : null;
+      for (const tx of E.texts || []) { if (to) tx.setAttribute("transform", to); else tx.removeAttribute("transform"); }
+    }
+    // 面の文字を全部入れ替える（Morph で表の見出しが違うとき）。文が同じ文字は触らない
+    relabelAll(E, it, s) {
+      const on = s.texts && s.textsFrom;
+      (E.texts || []).forEach((tx, i) => {
+        const T = it.texts[i];
+        if (!T) return;
+        if (on && s.textsFrom[i] !== s.texts[i]) this.relabel(tx, T, { textFrom: s.textsFrom[i], text: s.texts[i], textP: s.textP });
+        else if (this.unlabel(tx, T)) tx.style.opacity = "";
+      });
     }
     // 入れ替えた文を元に戻す（入れ替えより前へ戻ったときと、Morph が終わったとき）。戻したら true
     unlabel(tEl, spec) {

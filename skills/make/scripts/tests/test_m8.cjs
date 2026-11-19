@@ -420,8 +420,8 @@ const tests = {
     const r = UZ.checkCustoms(M, fakeEl);
     assert.deepStrictEqual(r, { errors: [], warnings: [] });
   },
-  async geometry_md_references_run() {   // geometry.md のリファレンス R1〜R6 は、写せばそのまま誤りも警告もなく描ける
-    const refs = geometryRefs();
+  async geometry_md_references_run() {   // geometry.md のリファレンス R1〜R6 は、写せばそのまま誤りも警告もなく描ける（R7 からは test_m9.cjs）
+    const refs = geometryRefs().filter(r => /^R[1-6]$/.test(r.id));
     assert.deepStrictEqual(refs.map(r => r.id), ["R1", "R2", "R3", "R4", "R5", "R6"]);
     for (const r of refs) {
       const sb = deck5({ a: { title: "A", parts: [{ id: "p", type: "custom", draw: "r" }] } },
