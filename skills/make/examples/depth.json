@@ -9,41 +9,12 @@
     "yaw": 25,
     "pitch": 28,
     "a": 1.4,
-    "b": -0.9,
-    "rise": 0,
-    "look": 0,
-    "turn": 0,
-    "gap": 1.4,
-    "zoom": 92
+    "b": -0.9
   },
   "figures": {
     "cover": {
       "type": "title",
       "text": "奥行きを足すと\n見えてくるもの"
-    },
-    "screens": {
-      "type": "compare",
-      "items": [
-        { "id": "page", "label": "商品ページ", "role": "actor" },
-        { "id": "cart", "label": "カート", "role": "actor" },
-        { "id": "order", "label": "注文画面", "role": "actor" }
-      ]
-    },
-    "services": {
-      "type": "compare",
-      "items": [
-        { "id": "stock", "label": "在庫の確保", "role": "process" },
-        { "id": "charge", "label": "代金の請求", "role": "process" },
-        { "id": "ship", "label": "発送の依頼", "role": "process" }
-      ]
-    },
-    "stores": {
-      "type": "compare",
-      "items": [
-        { "id": "items", "label": "商品と在庫", "role": "store" },
-        { "id": "orders", "label": "注文", "role": "store" },
-        { "id": "payments", "label": "支払い", "role": "store" }
-      ]
     },
     "system": {
       "type": "graph",
@@ -105,24 +76,6 @@
         }
       ]
     },
-    "layers": {
-      "title": "Web サービスの 3 つの層",
-      "statement": "画面・処理・データの 3 つの層が重なり、上の層は 1 つ下の層を使います。",
-      "parts": [
-        {
-          "id": "stack",
-          "type": "space",
-          "camera": { "yaw": "turn", "pitch": "look", "scale": "zoom", "target": [0.3, -0.2, 1.8] },
-          "items": [
-            { "id": "screen-layer", "kind": "plate", "figure": "screens", "label": "画面", "labelWidth": 1.4, "fill": "muted", "opacity": 0.25, "origin": [-5.6, 0, "2 + gap"], "size": [11.8, 1.0], "tilt": "rise" },
-            { "id": "service-layer", "kind": "plate", "figure": "services", "label": "処理", "labelWidth": 1.4, "fill": "muted", "opacity": 0.25, "origin": [-5.6, 0, 2], "size": [11.8, 1.0], "tilt": "rise" },
-            { "id": "data-layer", "kind": "plate", "figure": "stores", "label": "データ", "labelWidth": 1.4, "fill": "muted", "opacity": 0.25, "origin": [-5.6, 0, "2 - gap"], "size": [11.8, 1.0], "tilt": "rise" },
-            { "id": "call1", "kind": "arrow", "from": [-4.5, -1.15, "2 + gap - 0.15"], "to": [-4.5, -1.15, 2.15], "color": "s2" },
-            { "id": "call2", "kind": "arrow", "from": [-4.5, -1.15, 1.85], "to": [-4.5, -1.15, "2.15 - gap"], "color": "s2" }
-          ]
-        }
-      ]
-    },
     "inside-server": {
       "title": "サーバーの中",
       "statement": "サーバーの箱 1 つの中に、Web・アプリ・DB が入っています。",
@@ -139,7 +92,7 @@
       "lines": [
         {
           "id": "l1",
-          "text": "平らな図に奥行きを足すと、正面からは分からなかった形や重なりが見えてきます。"
+          "text": "平らな図に奥行きを足すと、正面からは分からなかった形や、箱の中身が見えてきます。"
         }
       ]
     },
@@ -204,68 +157,24 @@
     {
       "id": "s3",
       "chapter": "c2",
-      "slide": "layers",
-      "lines": [
-        {
-          "id": "l8",
-          "text": "{a}通販サイトの仕組みを、画面・処理・データの 3 段に分けて書きました。",
-          "do": [
-            { "at": "a", "show": ["screen-layer", "service-layer", "data-layer"] }
-          ]
-        },
-        {
-          "id": "l9",
-          "text": "{a}この 3 段を起こして斜め上から見ると、上下に重なった層だと分かります。",
-          "do": [
-            { "at": "a", "set": "rise", "to": 90, "dur": 2.6 },
-            { "at": "a", "set": "look", "to": 60, "dur": 2.6 },
-            { "at": "a", "set": "turn", "to": -8, "dur": 2.6 },
-            { "at": "a", "set": "gap", "to": 2.4, "dur": 2.6 },
-            { "at": "a", "set": "zoom", "to": 80, "dur": 2.6 }
-          ]
-        },
-        {
-          "id": "l10",
-          "text": "{a}画面は処理を呼び、{b}処理はデータを読み書きします。",
-          "do": [
-            { "at": "a", "show": "call1", "draw": true },
-            { "at": "b", "show": "call2", "draw": true }
-          ]
-        },
-        {
-          "id": "l11",
-          "text": "{a}ここで、処理の層だけを作り直すとします。",
-          "do": [
-            { "at": "a", "focus": "service-layer" }
-          ]
-        },
-        {
-          "id": "l12",
-          "text": "上下の層とやり取りする形が同じなら、ほかの層は変えずに済みます。"
-        }
-      ]
-    },
-    {
-      "id": "s4",
-      "chapter": "c3",
       "slide": "inside-server",
       "lines": [
         {
-          "id": "l13",
+          "id": "l8",
           "text": "{a}利用者の注文は、サーバーを通って、決済サービスに届きます。",
           "do": [
             { "at": "a", "show": "system" }
           ]
         },
         {
-          "id": "l14",
+          "id": "l9",
           "text": "{a}サーバーに寄ると、箱の中の部品が見えてきます。",
           "do": [
             { "at": "a", "zoom": "server" }
           ]
         },
         {
-          "id": "l15",
+          "id": "l10",
           "text": "{a}Web で受けた注文を、アプリが処理して、DB に書き込みます。",
           "read": "{a}ウェブで受けた注文を、アプリが処理して、デービーに書き込みます。",
           "do": [
@@ -273,7 +182,7 @@
           ]
         },
         {
-          "id": "l16",
+          "id": "l11",
           "text": "{a}さらに DB に寄ると、索引とテーブルに分かれています。",
           "read": "{a}さらにデービーに寄ると、索引とテーブルに分かれています。",
           "do": [
@@ -282,14 +191,14 @@
           ]
         },
         {
-          "id": "l17",
+          "id": "l12",
           "text": "{a}索引で行の場所を調べてから、テーブルの行を読みます。",
           "do": [
             { "at": "a", "trace": ["index", "table"], "label": "検索", "dot": "lookup" }
           ]
         },
         {
-          "id": "l18",
+          "id": "l13",
           "text": "{a}全体に戻ると、ここまで見た部品は、サーバーの箱 1 つに収まっています。",
           "do": [
             { "hide": "dot:lookup" },
@@ -297,8 +206,8 @@
           ]
         },
         {
-          "id": "l19",
-          "text": "回り込む、起こす、中へ入る。この 3 つの動きで、平らな図では見えなかった形や重なり、箱の中身が見えてきます。"
+          "id": "l14",
+          "text": "回り込む、中へ入る。この 2 つの動きで、平らな図では見えなかった形や、箱の中身が見えてきます。"
         }
       ]
     }

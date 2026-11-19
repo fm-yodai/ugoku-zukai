@@ -1078,9 +1078,10 @@ const tests = {
     const F = id => M.figs[id];
     assert.ok(F("w").w > F("n").w * 1.5, `list の板が幅に合わせて組まれない: ${F("w").w} / ${F("n").w}`);
     assert.strictEqual(F("cw").w, F("cn").w, "compare は自然な大きさで組む（板の幅で組み直さない）");
-    const doc = require("fs").readFileSync(require("path").join(__dirname, "../../references/storyboard.md"), "utf8");
-    const line = doc.slice(doc.indexOf("**板（`plate`）**")).split("\n").find(l => l.startsWith("- 中の図は、板の大きさに合わせて 1 回だけ組"));
-    assert.ok(line && /`list`/.test(line) && /`compare`/.test(line), "storyboard.md の板の節に、図の種類による組み方の違いがない");
+    // 板は保留中なので、組み方の違いは storyboard.md から設計書の「板を保留にした」へ移した
+    const doc = require("fs").readFileSync(require("path").join(__dirname, "../../../../docs/design.md"), "utf8");
+    const line = doc.slice(doc.indexOf("板を保留にした（")).split("\n").find(l => l.startsWith("- **`storyboard.md` の板の節"));
+    assert.ok(line && /箇条/.test(line) && /`compare`/.test(line), "設計書の「板を保留にした」に、図の種類による組み方の違いがない");
   },
   async chart_tick_readable_name() {   // 配置の検査の文に、目盛りの内部の名前（tick25000）を出さない
     const chart = { id: "lat", type: "chart", kind: "bar", unit: " ns", categories: ["L1", "L2", "L3", "メモリ"],
@@ -1108,6 +1109,14 @@ const tests = {
     const M2 = await build(seriesDeck({ v1: G({ order: "declared" }), v2: G2b }, [["v1"], ["v2", "v1"]]));
     assert.deepStrictEqual(M2.errors, []);
     for (const f of ["v1", "v2"]) { const a = [0, 1, 2, 3].map(i => M2.figs[f].items[`core${i}`].x); assert.ok(sorted(a), `系列の ${f} が宣言の順に並ばない: ${a}`); }
+  },
+  async plate_shelved_warn() {   // 板は保留中。書けば警告（誤りにはしない）。板のない space には出ない
+    const M = await build(plateDeck([PL("layer1", "g1", 2)], [LN("l1", "{a}出します。", { show: "sp" })]));
+    assert.deepStrictEqual(M.errors, []);
+    hasWarn(M, /板「layer1」: 板（plate）は保留中で、見せ方の一覧にない（/);
+    assert.strictEqual(M.warnings.filter(w => /保留中/.test(w)).length, 1, JSON.stringify(M.warnings));
+    const M2 = await build(spaceDeck());
+    assert.ok(!(M2.warnings || []).some(w => /保留中/.test(w)), JSON.stringify(M2.warnings));
   },
 };
 

@@ -374,6 +374,7 @@
         const pid = plate.id;
         if (typeof pid !== "string") continue;
         if (seenP.has(pid)) E(`図「${space}」: 板の id「${pid}」が、別の space の板と重なる（板の id は台本全体で 1 つにする）`);
+        else W(`板「${pid}」: 板（plate）は保留中で、見せ方の一覧にない（起こすほど板の文字がつぶれ、浅く起こすと層が重なって 1 枚の帯に見える。層の関係は、平らなスライドの段組みや graph で見せる）`);
         seenP.add(pid);
         const inline = plate.figure && typeof plate.figure === "object" && FIGS[pid] === plate.figure;
         if (Object.prototype.hasOwnProperty.call(FIGS, pid) && !inline) E(`図「${space}」: 板の id「${pid}」が、図か部品の id と重なる（板の中の要素は「板の id/要素の id」で指すので、別の id にする）`);
