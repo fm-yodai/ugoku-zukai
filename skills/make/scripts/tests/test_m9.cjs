@@ -1118,6 +1118,29 @@ const tests = {
     const M2 = await build(spaceDeck());
     assert.ok(!(M2.warnings || []).some(w => /保留中/.test(w)), JSON.stringify(M2.warnings));
   },
+  async reply_clears_middle_boxes() {   // 横一列の graph の戻りの矢印が、途中の箱の中を通らない（CPU のキャッシュの初稿の s4）
+    const G = { type: "graph", direction: "right", order: "declared",
+      nodes: [{ id: "pl1", label: "L1" }, { id: "pl2", label: "L2" }, { id: "pl3", label: "L3" }, { id: "pmem", label: "メモリ", role: "store" }],
+      edges: [["pl1", "pl2"], ["pl2", "pl3"], ["pl3", "pmem"]].map(([from, to]) => ({ from, to, label: "なければ探す" })) };
+    const M = await build(deck6({ a: { title: "A", parts: [{ figure: "path" }] } },
+      [SC("s1", "a", [LN("l1", "{a}出します。", { show: "path" }), { id: "l2", text: "{a}データは上の層にも置かれます。", do: [{ at: "a", reply: ["pmem", "pl3", "pl2", "pl1"], label: "データ", as: "added" }] }])], { path: G }));
+    assert.deepStrictEqual(M.errors, []);
+    const F = M.figs.path, r = Object.values(F.items).find(it => it.isReply);
+    assert.ok(r, "戻りの矢印がない");
+    for (const id of ["pl1", "pl2", "pl3", "pmem"]) {
+      const b = F.items[id].bbox;
+      for (let i = 1; i < r.pts.length; i++) assert.ok(!segHitsRect(r.pts[i - 1], r.pts[i], b), `戻りの矢印が箱 ${id} の中を通る: ${JSON.stringify(r.pts.map(p => p.map(Math.round)))} / ${JSON.stringify(b)}`);
+    }
+    // 両端は、出る箱（メモリ）と着く箱（L1）の縁に付いている（矢じりは L1 を指す）
+    const near = (p, b) => p[0] >= b.x - 12 && p[0] <= b.x + b.w + 12 && p[1] >= b.y - 12 && p[1] <= b.y + b.h + 12;
+    assert.ok(near(r.pts[0], F.items.pmem.bbox), `始まりがメモリの縁にない: ${r.pts[0]}`);
+    assert.ok(near(r.pts[r.pts.length - 1], F.items.pl1.bbox), `終わりが L1 の縁にない: ${r.pts[r.pts.length - 1]}`);
+    // 途中の箱を通らない 2 つの箱の戻り（見本 graph-flow の形）は、これまでどおり辺の横を 16px ずらして戻る
+    const M2 = await build(deck6({ a: { title: "A", parts: [{ figure: "path" }] } },
+      [SC("s1", "a", [LN("l1", "{a}出します。", { show: "path" }), { id: "l2", text: "{a}戻します。", do: [{ at: "a", reply: ["pl2", "pl1"] }] }])], { path: G }));
+    const r2 = Object.values(M2.figs.path.items).find(it => it.isReply);
+    assert.strictEqual(r2.pts.length, 2, JSON.stringify(r2.pts));
+  },
 };
 
 (async () => {

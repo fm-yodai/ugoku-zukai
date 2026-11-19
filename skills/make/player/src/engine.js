@@ -472,19 +472,24 @@
             if (!fid) { err(`${where}: 経路 ${path.join("→")} のノードが 1 つの図にそろっていない`); return; }
             const F = figs[fid];
             let pts = [], ok = true;
+            const legs = [];
             for (let i = 1; i < path.length; i++) {
               const e = F.items[`${path[i]}>${path[i - 1]}`];
               if (!e) { err(`${where}: 戻りの経路 ${path[i - 1]}→${path[i]} には辺 ${path[i]}>${path[i - 1]} が要る`); ok = false; break; }
               const rev = e.pts.slice().reverse();
+              legs.push(dedupe(rev));
               pts = pts.length ? pts.concat(rev.slice(1)) : rev;
             }
             if (!ok) return;
             const n = extras.replies.length;
             const key = `${fid}/reply:${a.id || n}`;
             const colr = a.as ? S.role(a.as) : S.accent;
-            const off = pickOffset(F, pts, path);
-            const poly = UZ.trimPoly(UZ.offsetPoly(dedupe(pts), off), 4, 8);
-            const label = a.label ? placeReplyLabel(F, poly, off, a.label, colr) : null;
+            let off = pickOffset(F, pts, path);
+            let poly = UZ.trimPoly(UZ.offsetPoly(dedupe(pts), off), 4, 8);
+            // 辺の横を 16px ずらした線が箱の中を通る（横一列の途中の箱など）なら、箱の外を回る道に替える
+            let around = false;
+            if (replyHitsBox(F, poly)) { const r = replyAround(F, legs, path, off); if (r) { poly = r.poly; off = r.off; around = true; } }
+            const label = a.label ? placeReplyLabel(F, poly, off, a.label, colr, around) : null;
             extras.replies.push({ key, fig: fid, kind: "edge", pts: poly, stroke: colr, width: S.edgeW + 0.6, head: true, label, id: `reply:${a.id || n}`, isReply: true });
             act.key = key;
             dur = a.dur ?? (DUR.reply * (path.length - 1) + 0.4);
@@ -983,24 +988,87 @@
     const score = d => { const op = UZ.offsetPoly(pts, d); const m = UZ.along(UZ.withLengths(op), 0.5); return Math.min(...labels.map(l => Math.hypot(l[0] - m[0], l[1] - m[1])), 1e9); };
     return score(16) >= score(-16) ? 16 : -16;
   }
-  // 戻りの矢印のラベル: 各区間の中点の外側を候補にし、箱やラベルと重ならない所を選ぶ
-  function placeReplyLabel(F, poly, off, text, color) {
+  // 線分 p-q が矩形 r の内側（縁から m 内へ縮めた範囲）を通るか（Liang–Barsky）
+  function segCrossesRect(p, q, r, m = 1) {
+    const x0 = r.x + m, x1 = r.x + r.w - m, y0 = r.y + m, y1 = r.y + r.h - m;
+    if (x1 <= x0 || y1 <= y0) return false;
+    const dx = q[0] - p[0], dy = q[1] - p[1];
+    let t0 = 0, t1 = 1;
+    for (const [pp, qq] of [[-dx, p[0] - x0], [dx, x1 - p[0]], [-dy, p[1] - y0], [dy, y1 - p[1]]]) {
+      if (Math.abs(pp) < 1e-9) { if (qq < 0) return false; continue; }
+      const t = qq / pp;
+      if (pp < 0) { if (t > t1) return false; if (t > t0) t0 = t; } else { if (t < t0) return false; if (t < t1) t1 = t; }
+    }
+    return t1 - t0 > 1e-6;
+  }
+  const replyBoxes = F => Object.values(F.items).filter(it => it.kind === "box" && it.bbox);
+  function replyHitsBox(F, poly) {
+    const boxes = replyBoxes(F);
+    for (let i = 1; i < poly.length; i++) for (const b of boxes) if (segCrossesRect(poly[i - 1], poly[i], b.bbox)) return true;
+    return false;
+  }
+  // 戻りの矢印を、途中の箱の外を回る道にする。区間（逆向きにたどる辺）ごとに辺の横へ |off| ずらし、
+  // 途中の箱をまっすぐ横切ってしまうつなぎ目だけ、ずらした側へ箱の外（縁から 10px）まで出て回り込む。
+  // まっすぐの区間でつながった箱が続くとき（横一列など）は、まとめて 1 本の線で下（上）を通る。
+  // ずらす向きは pickOffset の向きを先に試す。どちらも箱を通るなら null（これまでの線のまま）
+  function replyAround(F, legs, path, off) {
+    const unit = (a, b) => { const L = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1; return [(b[0] - a[0]) / L, (b[1] - a[1]) / L]; };
+    const len = (a, b) => Math.hypot(b[0] - a[0], b[1] - a[1]);
+    const M = 10;
+    if (legs.some(l => l.length < 2)) return null;
+    for (const o of [off, -off]) {
+      const L = legs.map(l => UZ.offsetPoly(l, o));
+      const tail = l => l[l.length - 1];
+      const need = k => segCrossesRect(tail(L[k - 1]), L[k][0], F.items[path[k]].bbox, -4);
+      const out = L[0].slice();
+      let k = 1;
+      while (k < L.length) {
+        if (!need(k)) { out.push(...L[k]); k++; continue; }
+        const t = unit(out[out.length - 2], out[out.length - 1]);
+        let k2 = k;
+        while (k2 + 1 < L.length && L[k2].length === 2 && Math.abs(unit(L[k2][0], L[k2][1])[0] * t[0] + unit(L[k2][0], L[k2][1])[1] * t[1] - 1) < 1e-3 && need(k2 + 1)) k2++;
+        const n = [t[1] * Math.sign(o), -t[0] * Math.sign(o)];   // offsetPoly と同じ、ずらした側
+        const boxes = path.slice(k, k2 + 1).map(id => F.items[id].bbox);
+        const a = out[out.length - 1], ga = Math.min(8, len(out[out.length - 2], a) / 2);
+        const nx = L[k2], b = nx[0], tb = unit(nx[0], nx[1]), gb = Math.min(8, len(nx[0], nx[1]) / 2);
+        const aa = [a[0] - t[0] * ga, a[1] - t[1] * ga], bb = [b[0] + tb[0] * gb, b[1] + tb[1] * gb];
+        out[out.length - 1] = aa;
+        if (Math.abs(n[1]) >= Math.abs(n[0])) {
+          const Y = n[1] > 0 ? Math.max(...boxes.map(r => r.y + r.h)) + M : Math.min(...boxes.map(r => r.y)) - M;
+          out.push([aa[0], Y], [bb[0], Y], bb);
+        } else {
+          const X = n[0] > 0 ? Math.max(...boxes.map(r => r.x + r.w)) + M : Math.min(...boxes.map(r => r.x)) - M;
+          out.push([X, aa[1]], [X, bb[1]], bb);
+        }
+        out.push(...nx.slice(1));
+        k = k2 + 1;
+      }
+      const poly = UZ.trimPoly(dedupe(out), 4, 8);
+      if (!replyHitsBox(F, poly)) return { poly, off: o };
+    }
+    return null;
+  }
+  // 戻りの矢印のラベル: 各区間の中点の外側を候補にし、箱やラベルと重ならない所を選ぶ。
+  // 箱の外を回った線（around）は、辺から離れているので内側（箱の並びとの間）も候補にする
+  function placeReplyLabel(F, poly, off, text, color, around) {
     const w = UZ.textW(text, 18, 700), h = 25;
     const obst = Object.values(F.items).filter(it => it.kind === "box" || (it.kind === "edge" && it.label));
     let best = null, bestS = Infinity;
     for (let i = 1; i < poly.length; i++) {
       const a = poly[i - 1], b = poly[i], L = Math.hypot(b[0] - a[0], b[1] - a[1]);
       if (L < 30) continue;
-      const nx = (b[1] - a[1]) / L * Math.sign(off), ny = -(b[0] - a[0]) / L * Math.sign(off);
-      for (const f of [0.5, 0.3, 0.7]) {
-        const mx = a[0] + (b[0] - a[0]) * f, my = a[1] + (b[1] - a[1]) * f;
-        const dist = Math.abs(nx) > 0.5 ? w / 2 + 10 : h / 2 + 6;
-        const cx = mx + nx * dist, cy = my + ny * dist;
-        const box = { x: cx - w / 2, y: cy - h / 2, w, h };
-        let sc = (f === 0.5 ? 0 : 3) - L * 0.01;
-        for (const o of obst) { sc += UZ.rectOverlap(box, o.kind === "box" ? o.bbox : o.label.bbox, 8) * 5; }
-        if (box.x < (F.extra.x0 ?? 0) || box.y < (F.extra.y0 ?? 0) || box.x + w > F.w || box.y + h > F.h) sc += 40;
-        if (sc < bestS) { bestS = sc; best = [cx, cy]; }
+      for (const side of around ? [1, -1] : [1]) {
+        const nx = (b[1] - a[1]) / L * Math.sign(off) * side, ny = -(b[0] - a[0]) / L * Math.sign(off) * side;
+        for (const f of [0.5, 0.3, 0.7]) {
+          const mx = a[0] + (b[0] - a[0]) * f, my = a[1] + (b[1] - a[1]) * f;
+          const dist = Math.abs(nx) > 0.5 ? w / 2 + 10 : h / 2 + 6;
+          const cx = mx + nx * dist, cy = my + ny * dist;
+          const box = { x: cx - w / 2, y: cy - h / 2, w, h };
+          let sc = (f === 0.5 ? 0 : 3) + (side < 0 ? 2 : 0) - L * 0.01;
+          for (const o of obst) { sc += UZ.rectOverlap(box, o.kind === "box" ? o.bbox : o.label.bbox, 8) * 5; }
+          if (box.x < (F.extra.x0 ?? 0) || box.y < (F.extra.y0 ?? 0) || box.x + w > F.w || box.y + h > F.h) sc += 40;
+          if (sc < bestS) { bestS = sc; best = [cx, cy]; }
+        }
       }
     }
     if (!best) best = UZ.along(UZ.withLengths(poly), 0.5);

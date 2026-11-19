@@ -578,9 +578,10 @@ const tests = {
     }
   },
   async non_series_graph_unchanged() {
-    // 系列に入らない graph は、この変更の前と同じ座標（examples の見本）
+    // 系列に入らない graph は、この変更の前と同じ座標（examples の見本）。
+    // graph-flow は M9 で、戻りの矢印（差し戻し）が途中の箱「入力チェック」の中を通らず外を回るようにしたので、その線の座標だけ変わった
     const fs = require("fs"), path = require("path");
-    for (const [name, want] of [["graph-flow.json", "51afd16b04f39b48f53f1839bae1795a683f41c2"], ["graph-state.json", "e909c63a9ebfa6049d40fc96e4e07aa2d452011e"], ["mixed.json", "b025d228599406535197115dd408b891192025f0"]]) {
+    for (const [name, want] of [["graph-flow.json", "799e7e20abbc426fab155365d52ca6649a268dd6"], ["graph-state.json", "e909c63a9ebfa6049d40fc96e4e07aa2d452011e"], ["mixed.json", "b025d228599406535197115dd408b891192025f0"]]) {
       const M = await build(JSON.parse(fs.readFileSync(path.join(__dirname, "../../examples", name), "utf8")));
       assert.strictEqual(graphPrint(M), want, `${name} の graph の座標が変わった`);
     }
