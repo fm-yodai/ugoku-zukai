@@ -272,10 +272,10 @@ python3 scripts/build_player.py storyboard.json -o preview.html     # 音声な�
 
 ```json
 { "type": "pyramid", "kind": "funnel", "unit": " 社",
-  "levels": [ { "id": "f1", "label": "案内した", "value": 120 }, { "id": "f2", "label": "登録した", "value": 84, "sub": "（任意）" } ] }
+  "levels": [ { "id": "f1", "label": "案内した", "value": 120 }, { "id": "f2", "label": "登録した", "value": 84, "sub": "（任意）", "role": "accent" } ] }
 ```
 
-`levels` は上から。`kind` は `pyramid`（上が細い。土台から積むなら下の段から `show`）か `funnel`（上が太い）。ファネルで `value` があれば、段の間に前の段からの率（`段.rate`）が出る。6 段まで。
+`levels` は上から。`kind` は `pyramid`（上が細い。土台から積むなら下の段から `show`）か `funnel`（上が太い）。ファネルで `value` があれば、段の間に前の段からの率（`段.rate`）が出る。6 段まで。段の色は、書かなければ上の段から順に `actor`・`process`・`store`・`external` の役割の色を繰り返す。段に `role` を書くと、その段はほかの図の箱と同じ役割の色になる（書ける役割は `graph` の `role` と同じ。主役の段だけ `accent` にする、など）。
 
 #### cycle
 

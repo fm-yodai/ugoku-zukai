@@ -1159,6 +1159,23 @@ const tests = {
     assert.ok(!/完成形に届いていない/.test(r2.stderr), r2.stderr);
     fs.rmSync(d, { recursive: true, force: true });
   },
+  async pyramid_level_role() {   // pyramid の段ごとに role を書ける（既定の色は段の順で変わらない）
+    const P = levels => deck6({ a: { title: "A", parts: [{ figure: "p" }] } }, [SC("s1", "a", [LN("l1", "{a}出します。", { show: "p" })])], { p: { type: "pyramid", levels } });
+    const lv = [{ id: "a1", label: "上" }, { id: "a2", label: "中" }, { id: "a3", label: "下" }];
+    const S = UZ.styleOf(TH);
+    const M0 = await build(P(lv));
+    assert.deepStrictEqual(M0.errors, []);
+    ["actor", "process", "store"].forEach((ro, i) => assert.strictEqual(M0.figs.p.items[`a${i + 1}`].fill, S.fill(ro), `既定の色が変わった: a${i + 1}`));
+    const M1 = await build(P([{ ...lv[0], role: "accent" }, { ...lv[1], role: "muted" }, lv[2]]));
+    assert.deepStrictEqual(M1.errors, []);
+    assert.strictEqual(M1.figs.p.items.a1.fill, S.fill("accent"));
+    assert.strictEqual(M1.figs.p.items.a2.stroke, S.border("muted"));
+    hasErr(await build(P([{ ...lv[0], role: "gold" }, lv[1]])), /a1 の role「gold」/);
+    // storyboard.md の pyramid の節に role が書いてある
+    const md = require("fs").readFileSync(require("path").join(__dirname, "../../references/storyboard.md"), "utf8");
+    const sec = md.split("#### pyramid")[1].split("\n#### ")[0];
+    assert.ok(/role/.test(sec), "storyboard.md の pyramid の節に role がない");
+  },
 };
 
 (async () => {
